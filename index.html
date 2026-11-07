@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Actually Free Taxes — Visual, Transparent, Single-Page Tax Return</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Dynamic SVG Arrow Connection Overlay -->
+  <svg id="arrow-canvas"></svg>
+
+  <!-- Sticky Top Header & Live Status Bar -->
+  <header class="sticky-header">
+    <div class="header-container">
+      <div class="logo-area">
+        <div class="logo-icon">§</div>
+        <div>
+          <span class="logo-title">ActuallyFreeTaxes<span style="color: #10b981;">.com</span></span>
+          <span class="logo-badge">Visual & Transparent</span>
+        </div>
+      </div>
+
+      <!-- Live Quick Stats -->
+      <div class="quick-stats-bar">
+        <div class="stat-pill">
+          <span class="label">Gross Income</span>
+          <span class="value" id="header-gross-income">$0</span>
+        </div>
+        <div class="stat-pill">
+          <span class="label">Taxable Income</span>
+          <span class="value" id="header-taxable-income">$0</span>
+        </div>
+        <div class="stat-pill">
+          <span class="label">Total Withheld</span>
+          <span class="value" id="header-total-withholding" style="color: #0284c7;">$0</span>
+        </div>
+        <div class="stat-pill verdict is-refund" id="header-verdict-pill">
+          <span class="label" id="header-verdict-lbl">EST. REFUND</span>
+          <span class="value" id="header-verdict-val">$0</span>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="header-controls">
+        <label class="toggle-switch-label" title="Toggle visible dependency lines connecting all inputs to downstream calculations">
+          <input type="checkbox" id="toggle-all-arrows" checked>
+          <span>Dependency Arrows</span>
+        </label>
+        <button type="button" class="btn btn-primary" id="btn-add-w2">
+          + Add W-2
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Scrollable Content -->
+  <main class="main-content">
+
+    <!-- Hero Introduction -->
+    <section class="hero-banner">
+      <h1>Transparent Single-Page Taxes</h1>
+      <p>
+        No hidden black-box math. As you type into your W-2, colored arrows show exactly where each dollar flows,
+        and every calculation card reveals the exact formula with your plugged-in numbers.
+      </p>
+
+      <div class="hero-controls">
+        <div class="select-control">
+          <label for="select-tax-year">Tax Year</label>
+          <select id="select-tax-year">
+            <option value="2024" selected>2024 (Filed in 2025)</option>
+            <option value="2025">2025 (Projected)</option>
+          </select>
+        </div>
+
+        <div class="select-control">
+          <label for="select-filing-status">Filing Status</label>
+          <select id="select-filing-status">
+            <option value="single" selected>Single</option>
+            <option value="married_joint">Married Filing Jointly</option>
+            <option value="married_separate">Married Filing Separately</option>
+            <option value="head_of_household">Head of Household</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="presets-container">
+        <span>Try a sample scenario:</span>
+        <button type="button" class="preset-chip" data-preset="single-75k">Single ($75k)</button>
+        <button type="button" class="preset-chip" data-preset="married-dual-140k">Dual-Income Married ($140k + 1 Kid)</button>
+        <button type="button" class="preset-chip" data-preset="student-grad">College Grad with Student Loans</button>
+        <button type="button" class="preset-chip" data-preset="blank">Blank Slate</button>
+      </div>
+    </section>
+
+    <!-- SECTION 1: W-2 FORMS (THE TOP INPUTS) -->
+    <section id="section-w2-inputs">
+      <div class="w2-section-header">
+        <div class="w2-section-title">
+          <h2>1. Your W-2 Wage & Tax Statement(s)</h2>
+        </div>
+        <div style="font-size: 0.85rem; color: #64748b;">
+          Enter the numbers from your physical or PDF Form W-2.
+        </div>
+      </div>
+
+      <!-- Container where W-2s are injected -->
+      <div id="w2-list-container"></div>
+    </section>
+
+    <!-- SECTION 2: OTHER INCOME & ADJUSTMENTS (OPTIONAL ABOVE-THE-LINE) -->
+    <section id="section-other-inputs">
+      <div class="w2-section-header">
+        <div class="w2-section-title">
+          <h2>2. Adjustments & Other Common Incomes</h2>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+        <!-- Taxable Interest -->
+        <div class="calc-card" style="padding: 1.25rem;">
+          <div class="step-indicator">Form 1099-INT</div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Taxable Interest</div>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-other-interest" value="0" placeholder="0">
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Bank savings interest reported on 1099-INT.</div>
+        </div>
+
+        <!-- Student Loan Interest -->
+        <div class="calc-card" style="padding: 1.25rem;">
+          <div class="step-indicator">Schedule 1 Line 21</div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Student Loan Interest</div>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-adj-student-loan" value="0" placeholder="0">
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Deductible interest paid on student loans (up to $2,500).</div>
+        </div>
+
+        <!-- Traditional IRA Deduction -->
+        <div class="calc-card" style="padding: 1.25rem;">
+          <div class="step-indicator">Schedule 1 Line 20</div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Traditional IRA Deduction</div>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-adj-ira" value="0" placeholder="0">
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Pre-tax contributions made to traditional IRAs.</div>
+        </div>
+
+        <!-- Qualifying Children -->
+        <div class="calc-card" style="padding: 1.25rem;">
+          <div class="step-indicator">Tax Credits</div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Qualifying Children under 17</div>
+          <div class="w2-input-wrapper">
+            <input type="number" min="0" max="10" step="1" class="w2-input" id="input-children-count" value="0" style="padding-left: 0.75rem; text-align: left;">
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">$2,000 Child Tax Credit per eligible child.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: DOWNSTREAM STEP-BY-STEP CALCULATIONS & EQUATIONS -->
+    <section class="step-container">
+      <div class="w2-section-header">
+        <div class="w2-section-title">
+          <h2>3. Step-by-Step Calculation Engine</h2>
+        </div>
+        <div style="font-size: 0.85rem; color: #64748b;">
+          Every step reveals both the mathematical law and your exact plugged-in numbers.
+        </div>
+      </div>
+
+      <!-- Step 1: Total W-2 Wages -->
+      <div class="calc-card" id="calc-total-w2-wages">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">1</span> Income Aggregation</div>
+            <h3 class="calc-card-title">Total W-2 Wages</h3>
+          </div>
+          <span class="irs-line-tag">Form 1040 Line 1a</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Total Wages = ∑(W-2 Box 1)</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Total Wages = $0</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Total Taxable Wages & Tips:</span>
+          <span class="calc-output-value highlight-green">$0</span>
+        </div>
+      </div>
+
+      <!-- Step 2: Total Gross Income -->
+      <div class="calc-card" id="calc-gross-income">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">2</span> Total Incomes</div>
+            <h3 class="calc-card-title">Total Gross Income</h3>
+          </div>
+          <span class="irs-line-tag">Form 1040 Line 9</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Gross Income = Total W-2 Wages + Other Incomes</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Gross Income = $0</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Gross Income:</span>
+          <span class="calc-output-value highlight-green">$0</span>
+        </div>
+      </div>
+
+      <!-- Step 3: Total Adjustments -->
+      <div class="calc-card" id="calc-total-adjustments">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">3</span> Above-the-Line Deductions</div>
+            <h3 class="calc-card-title">Total Adjustments to Income</h3>
+          </div>
+          <span class="irs-line-tag">Schedule 1 Line 26 / 1040 Line 10</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Adjustments = Student Loan Interest + IRA + HSA</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Adjustments = $0</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Total Adjustments to Income:</span>
+          <span class="calc-output-value">$0</span>
+        </div>
+      </div>
+
+      <!-- Step 4: Adjusted Gross Income (AGI) -->
+      <div class="calc-card" id="calc-agi">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">4</span> Core Tax Metric</div>
+            <h3 class="calc-card-title">Adjusted Gross Income (AGI)</h3>
+          </div>
+          <span class="irs-line-tag">Form 1040 Line 11</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Adjusted Gross Income (AGI) = Gross Income − Adjustments</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">AGI = $0</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Your Adjusted Gross Income:</span>
+          <span class="calc-output-value highlight-green">$0</span>
+        </div>
+      </div>
+
+      <!-- Step 5: Standard Deduction -->
+      <div class="calc-card" id="calc-standard-deduction">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">5</span> Statutory Protection</div>
+            <h3 class="calc-card-title">Standard Deduction</h3>
+          </div>
+          <span class="irs-line-tag">Form 1040 Line 12</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Standard Deduction based on filing status and tax year</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Standard Deduction = $14,600</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Standard Deduction Amount:</span>
+          <span class="calc-output-value">$14,600</span>
+        </div>
+      </div>
+
+      <!-- Step 6: Taxable Income -->
+      <div class="calc-card" id="calc-taxable-income">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">6</span> Tax Base</div>
+            <h3 class="calc-card-title">Taxable Income</h3>
+          </div>
+          <span class="irs-line-tag">Form 1040 Line 15</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Taxable Income = max(0, AGI − Standard Deduction)</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Taxable Income = $0</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Net Taxable Income (Subject to Brackets):</span>
+          <span class="calc-output-value highlight-green">$0</span>
+        </div>
+      </div>
+
+      <!-- Step 7: Marginal Tax Brackets Engine -->
+      <div class="calc-card" id="calc-tax-before-credits">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">7</span> Progressive Bracket Ladder</div>
+            <h3 class="calc-card-title">Tentative Federal Income Tax</h3>
+          </div>
+          <span class="irs-line-tag">Form 1040 Line 16</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Tentative Tax = ∑(Taxable Income in Bracket i × Bracket Rate i)</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Tentative Tax = $0.00</span>
+          </div>
+        </div>
+
+        <!-- Visual Bracket Ladder -->
+        <div style="margin-top: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <span style="font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase;">Bracket Utilization</span>
+            <span style="font-size: 0.75rem; color: #64748b;">Progressive Marginal Rates</span>
+          </div>
+          <div class="bracket-visual-bar" id="bracket-progress-bar"></div>
+        </div>
+
+        <table class="brackets-table">
+          <thead>
+            <tr>
+              <th>Rate</th>
+              <th>Income Range</th>
+              <th>Your Taxable Dollars</th>
+              <th>Bracket Calculation Formula</th>
+            </tr>
+          </thead>
+          <tbody id="tax-brackets-tbody"></tbody>
+        </table>
+
+        <div class="calc-output-row" style="margin-top: 1.25rem;">
+          <span class="calc-output-label">Total Tentative Tax (Before Credits):</span>
+          <span class="calc-output-value" style="color: #f97316;">$0.00</span>
+        </div>
+      </div>
+
+      <!-- Step 8: Tax Credits -->
+      <div class="calc-card" id="calc-total-credits">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">8</span> Direct Reductions</div>
+            <h3 class="calc-card-title">Tax Credits (Child Tax Credit)</h3>
+          </div>
+          <span class="irs-line-tag">Form 1040 Line 19</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Tax Credits = min(Tentative Tax, Qualifying Children × $2,000 − Phaseout)</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Credits = $0</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Total Credits Applied:</span>
+          <span class="calc-output-value" style="color: #14b8a6;">$0</span>
+        </div>
+      </div>
+
+      <!-- Step 9: Total Federal Tax Liability -->
+      <div class="calc-card" id="calc-total-tax-liability">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">9</span> Obligation</div>
+            <h3 class="calc-card-title">Total Federal Tax Liability</h3>
+          </div>
+          <span class="irs-line-tag">Form 1040 Line 24</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Total Tax Liability = max(0, Tentative Tax − Total Credits)</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Total Tax Liability = $0.00</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Your Final Tax Bill to the US Government:</span>
+          <span class="calc-output-value" style="color: #f97316;">$0.00</span>
+        </div>
+      </div>
+
+      <!-- Step 10: Total Tax Payments & Withholding -->
+      <div class="calc-card" id="calc-total-withholding">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">10</span> Pre-payments</div>
+            <h3 class="calc-card-title">Total Federal Income Tax Withheld</h3>
+          </div>
+          <span class="irs-line-tag">Form 1040 Line 25d</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Total Withholding = ∑(W-2 Box 2)</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Total Withholding = $0.00</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Federal Taxes Already Paid via Paychecks:</span>
+          <span class="calc-output-value highlight-blue">$0.00</span>
+        </div>
+      </div>
+
+      <!-- Step 11: The Ultimate Verdict (Refund or Amount Owed) -->
+      <div class="verdict-card is-refund" id="calc-final-verdict">
+        <div class="verdict-header">🎉 Your Estimated Federal Tax Refund</div>
+        <div class="verdict-amount">$0.00</div>
+        <div class="verdict-subtitle">
+          The mathematical difference between what was taken out of your paychecks and your legal tax obligation.
+        </div>
+
+        <div class="formula-box" style="text-align: left; max-width: 800px; margin: 0 auto 1.5rem;">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Refund = Total Payments (Withholding) − Total Tax Liability</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Refund = $0.00</span>
+          </div>
+        </div>
+
+        <!-- Withheld vs Tax Liability Interactive Bar -->
+        <div class="comparison-container">
+          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 0.5rem; color: #0f172a;">
+            Payments vs. Tax Liability Scale:
+          </div>
+          <div class="comp-bar-wrapper">
+            <div class="comp-bar-labels">
+              <span>Federal Withholding (You Paid): <strong id="comp-val-withheld" style="color: #0284c7;">$0.00</strong></span>
+              <span>Total Tax Liability (You Owe): <strong id="comp-val-tax" style="color: #f97316;">$0.00</strong></span>
+            </div>
+            <div class="comp-bar-track">
+              <div class="comp-bar-fill-withholding" id="comp-bar-withheld" style="width: 50%;"></div>
+              <div class="comp-bar-fill-tax" id="comp-bar-tax" style="width: 50%;"></div>
+            </div>
+          </div>
+          <div style="font-size: 0.75rem; color: #64748b;">
+            When Blue (Withholding) exceeds Orange (Tax Liability), the green difference is returned directly to your bank account.
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 12: FICA & Payroll Tax Transparency -->
+      <div class="calc-card" id="calc-fica-breakdown">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">12</span> Payroll Taxes</div>
+            <h3 class="calc-card-title">FICA: Social Security & Medicare Withheld</h3>
+          </div>
+          <span class="irs-line-tag">W-2 Boxes 4 & 6</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Total FICA = Social Security Tax (6.2%) + Medicare Tax (1.45%)</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Total FICA = $0.00</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Total Employee FICA Taxes Paid:</span>
+          <span class="calc-output-value" style="color: #d97706;">$0.00</span>
+        </div>
+        <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.5rem;">
+          Note: Your employer also matched this exact amount on your behalf dollar-for-dollar into Social Security and Medicare trust funds.
+        </div>
+      </div>
+
+      <!-- Step 13: Official Form 1040 Line-by-Line Mirror -->
+      <div class="calc-card">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">13</span> IRS Form 1040 Mapping</div>
+            <h3 class="calc-card-title">Line-by-Line 1040 Mirror</h3>
+          </div>
+          <span class="irs-line-tag">Official Summary</span>
+        </div>
+
+        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 1rem;">
+          How every number on this page maps to the official federal Form 1040 lines:
+        </p>
+
+        <table class="form-1040-table">
+          <tbody>
+            <tr>
+              <td class="line-num">Line 1z</td>
+              <td class="line-desc">Total amount from Form(s) W-2, box 1</td>
+              <td class="line-val" id="line-1040-1z">$0.00</td>
+            </tr>
+            <tr>
+              <td class="line-num">Line 9</td>
+              <td class="line-desc">Total income (Sum of line 1z and other incomes)</td>
+              <td class="line-val" id="line-1040-9">$0.00</td>
+            </tr>
+            <tr>
+              <td class="line-num">Line 10</td>
+              <td class="line-desc">Adjustments to income from Schedule 1, line 26</td>
+              <td class="line-val" id="line-1040-10">$0.00</td>
+            </tr>
+            <tr>
+              <td class="line-num">Line 11</td>
+              <td class="line-desc"><strong>Adjusted Gross Income (AGI)</strong> (Subtract line 10 from line 9)</td>
+              <td class="line-val" id="line-1040-11" style="color: #10b981;">$0.00</td>
+            </tr>
+            <tr>
+              <td class="line-num">Line 12</td>
+              <td class="line-desc">Standard deduction or itemized deductions</td>
+              <td class="line-val" id="line-1040-12">$0.00</td>
+            </tr>
+            <tr>
+              <td class="line-num">Line 15</td>
+              <td class="line-desc"><strong>Taxable income</strong> (Subtract line 12 from line 11)</td>
+              <td class="line-val" id="line-1040-15" style="color: #10b981;">$0.00</td>
+            </tr>
+            <tr>
+              <td class="line-num">Line 16</td>
+              <td class="line-desc">Tax (Calculated using the Tax Rate Schedules)</td>
+              <td class="line-val" id="line-1040-16">$0.00</td>
+            </tr>
+            <tr>
+              <td class="line-num">Line 19</td>
+              <td class="line-desc">Child tax credit or credit for other dependents</td>
+              <td class="line-val" id="line-1040-19">$0.00</td>
+            </tr>
+            <tr>
+              <td class="line-num">Line 24</td>
+              <td class="line-desc"><strong>Total tax</strong> (Subtract line 19 from line 16)</td>
+              <td class="line-val" id="line-1040-24" style="color: #f97316;">$0.00</td>
+            </tr>
+            <tr>
+              <td class="line-num">Line 25d</td>
+              <td class="line-desc">Federal income tax withheld from Form(s) W-2</td>
+              <td class="line-val" id="line-1040-25d" style="color: #0284c7;">$0.00</td>
+            </tr>
+            <tr id="row-1040-refund">
+              <td class="line-num" style="color: #16a34a;">Line 34</td>
+              <td class="line-desc"><strong>AMOUNT OVERPAID (YOUR REFUND)</strong></td>
+              <td class="line-val" id="line-1040-34" style="color: #16a34a; font-size: 1.1rem;">$0.00</td>
+            </tr>
+            <tr id="row-1040-owed" style="display: none;">
+              <td class="line-num" style="color: #dc2626;">Line 37</td>
+              <td class="line-desc"><strong>AMOUNT YOU OWE TO THE IRS</strong></td>
+              <td class="line-val" id="line-1040-37" style="color: #dc2626; font-size: 1.1rem;">$0.00</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 2rem 0; border-top: 1px solid #e2e8f0; margin-top: 2rem;">
+      <p><strong>Actually Free Taxes</strong> — Open, Visual, Single-Page Tax Computation Engine.</p>
+      <p style="margin-top: 0.35rem;">Equations conform strictly to IRS Tax Year <span class="current-tax-year-text">2024</span> & 2025 guidelines. For educational and filing preparation transparency.</p>
+    </footer>
+
+  </main>
+
+  <!-- Application Logic -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

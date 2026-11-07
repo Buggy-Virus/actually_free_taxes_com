@@ -1,0 +1,13 @@
+{
+  "name": "actually-free-taxes",
+  "version": "1.0.0",
+  "description": "Visual, transparent, single-page tax calculation web app with animated dependency arrows and formula introspection.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/test-tax-engine.js",
+    "start": "python serve.py"
+  },
+  "keywords": ["taxes", "irs", "1040", "w2", "visual", "arrows"],
+  "author": "",
+  "license": "MIT"
+}
