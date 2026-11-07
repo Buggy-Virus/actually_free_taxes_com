@@ -1,117 +1,128 @@
 /**
- * Actually Free Taxes - Main Application Controller
+ * Actually Free Taxes - Main Application Controller (TypeScript)
  */
 
-import { calculateTaxes, formatCurrency, formatCurrencyExact, formatPercent, filingStatusLabel } from './tax-engine.js';
+import {
+  TaxAppState,
+  TaxYear,
+  FilingStatus,
+  W2Data,
+  ConnectionDef,
+  TaxCalculationSummary,
+  BracketDetail,
+  CalculationResult
+} from './types.js';
+import { calculateTaxes, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
 
 class TaxApp {
+  private state: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    w2s: [
+      {
+        id: 0,
+        employer: 'Acme Corp, Inc.',
+        ein: '12-3456789',
+        box1: 75000,
+        box2: 8900,
+        box3: 75000,
+        box4: 4650,
+        box5: 75000,
+        box6: 1087.50
+      }
+    ],
+    otherIncome: {
+      interest: 0
+    },
+    adjustments: {
+      studentLoan: 0,
+      ira: 0,
+      hsa: 0
+    },
+    dependents: {
+      childrenCount: 0
+    },
+    showAllArrows: true
+  };
+
+  private arrowEngine: ArrowEngine | null = null;
+  private w2Counter: number = 1;
+
   constructor() {
-    this.state = {
-      year: 2024,
-      filingStatus: 'single',
-      w2s: [
-        {
-          id: 0,
-          employer: 'Acme Corp, Inc.',
-          ein: '12-3456789',
-          box1: 75000,
-          box2: 8900,
-          box3: 75000,
-          box4: 4650,
-          box5: 75000,
-          box6: 1087.50
-        }
-      ],
-      otherIncome: {
-        interest: 0
-      },
-      adjustments: {
-        studentLoan: 0,
-        ira: 0,
-        hsa: 0
-      },
-      dependents: {
-        childrenCount: 0
-      },
-      showAllArrows: true
-    };
-
-    this.arrowEngine = null;
-    this.w2Counter = 1;
-
     this.init();
   }
 
-  init() {
-    const svgEl = document.getElementById('arrow-canvas');
-    this.arrowEngine = new ArrowEngine(svgEl, { showAll: this.state.showAllArrows });
+  private init(): void {
+    const svgEl = document.getElementById('arrow-canvas') as unknown as SVGSVGElement;
+    if (svgEl) {
+      this.arrowEngine = new ArrowEngine(svgEl, { showAll: this.state.showAllArrows });
+    }
 
     this.renderW2Forms();
     this.bindGlobalEvents();
     this.recalculateAndRender();
   }
 
-  bindGlobalEvents() {
-    // Tax Year Selector
-    const yearSelect = document.getElementById('select-tax-year');
+  private bindGlobalEvents(): void {
+    const yearSelect = document.getElementById('select-tax-year') as HTMLSelectElement | null;
     if (yearSelect) {
-      yearSelect.value = this.state.year;
-      yearSelect.addEventListener('change', (e) => {
-        this.state.year = parseInt(e.target.value, 10);
+      yearSelect.value = String(this.state.year);
+      yearSelect.addEventListener('change', (e: Event) => {
+        this.state.year = parseInt((e.target as HTMLSelectElement).value, 10) as TaxYear;
         this.renderYearBadges();
         this.recalculateAndRender();
       });
     }
 
-    // Filing Status Selector
-    const statusSelect = document.getElementById('select-filing-status');
+    const statusSelect = document.getElementById('select-filing-status') as HTMLSelectElement | null;
     if (statusSelect) {
       statusSelect.value = this.state.filingStatus;
-      statusSelect.addEventListener('change', (e) => {
-        this.state.filingStatus = e.target.value;
+      statusSelect.addEventListener('change', (e: Event) => {
+        this.state.filingStatus = (e.target as HTMLSelectElement).value as FilingStatus;
         this.recalculateAndRender();
       });
     }
 
-    // Show All Arrows Toggle
-    const toggleArrows = document.getElementById('toggle-all-arrows');
+    const toggleArrows = document.getElementById('toggle-all-arrows') as HTMLInputElement | null;
     if (toggleArrows) {
       toggleArrows.checked = this.state.showAllArrows;
-      toggleArrows.addEventListener('change', (e) => {
-        this.state.showAllArrows = e.target.checked;
-        this.arrowEngine.setShowAll(this.state.showAllArrows);
+      toggleArrows.addEventListener('change', (e: Event) => {
+        this.state.showAllArrows = (e.target as HTMLInputElement).checked;
+        if (this.arrowEngine) {
+          this.arrowEngine.setShowAll(this.state.showAllArrows);
+        }
       });
     }
 
-    // Add W-2 Button
-    const addW2Btn = document.getElementById('btn-add-w2');
+    const addW2Btn = document.getElementById('btn-add-w2') as HTMLButtonElement | null;
     if (addW2Btn) {
       addW2Btn.addEventListener('click', () => {
         this.addW2();
       });
     }
 
-    // Preset buttons
-    document.querySelectorAll('[data-preset]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const preset = e.target.closest('[data-preset]').dataset.preset;
-        this.loadPreset(preset);
+    document.querySelectorAll<HTMLElement>('[data-preset]').forEach(btn => {
+      btn.addEventListener('click', (e: Event) => {
+        const target = (e.target as HTMLElement).closest('[data-preset]') as HTMLElement;
+        const preset = target.dataset.preset;
+        if (preset) {
+          this.loadPreset(preset);
+        }
       });
     });
 
-    // Other inputs (Student loan, IRA, HSA, Interest, Dependents)
-    const bindInput = (id, setter) => {
-      const el = document.getElementById(id);
+    const bindInput = (id: string, setter: (val: number) => void) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
       if (el) {
-        el.addEventListener('input', (e) => {
-          setter(Number(e.target.value) || 0);
+        el.addEventListener('input', (e: Event) => {
+          setter(Number((e.target as HTMLInputElement).value) || 0);
           this.recalculateAndRender();
         });
-        el.addEventListener('focus', () => this.arrowEngine.setActiveSource(id));
-        el.addEventListener('blur', () => this.arrowEngine.clearActive());
-        el.addEventListener('mouseenter', () => this.arrowEngine.setActiveSource(id));
-        el.addEventListener('mouseleave', () => this.arrowEngine.clearActive());
+        el.addEventListener('focus', () => this.arrowEngine?.setActiveSource(id));
+        el.addEventListener('blur', () => this.arrowEngine?.clearActive());
+        el.addEventListener('mouseenter', () => this.arrowEngine?.setActiveSource(id));
+        el.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
       }
     };
 
@@ -121,11 +132,10 @@ class TaxApp {
     bindInput('input-other-interest', val => this.state.otherIncome.interest = val);
     bindInput('input-children-count', val => this.state.dependents.childrenCount = val);
 
-    // Calculation cards hover listeners
     this.bindCardInspectors();
   }
 
-  bindCardInspectors() {
+  private bindCardInspectors(): void {
     const cardMap = [
       'calc-total-w2-wages',
       'calc-gross-income',
@@ -144,13 +154,13 @@ class TaxApp {
     cardMap.forEach(id => {
       const el = document.getElementById(id);
       if (el) {
-        el.addEventListener('mouseenter', () => this.arrowEngine.setActiveTarget(id));
-        el.addEventListener('mouseleave', () => this.arrowEngine.clearActive());
+        el.addEventListener('mouseenter', () => this.arrowEngine?.setActiveTarget(id));
+        el.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
       }
     });
   }
 
-  addW2() {
+  private addW2(): void {
     const newId = this.w2Counter++;
     this.state.w2s.push({
       id: newId,
@@ -167,7 +177,7 @@ class TaxApp {
     this.recalculateAndRender();
   }
 
-  removeW2(id) {
+  private removeW2(id: number): void {
     if (this.state.w2s.length <= 1) {
       alert("At least one W-2 is required. You can set the values to $0 if needed.");
       return;
@@ -177,7 +187,7 @@ class TaxApp {
     this.recalculateAndRender();
   }
 
-  loadPreset(presetName) {
+  private loadPreset(presetName: string): void {
     if (presetName === 'single-75k') {
       this.state.filingStatus = 'single';
       this.state.w2s = [{
@@ -257,13 +267,12 @@ class TaxApp {
       this.state.dependents.childrenCount = 0;
     }
 
-    // Sync input values to DOM
-    const statusSelect = document.getElementById('select-filing-status');
+    const statusSelect = document.getElementById('select-filing-status') as HTMLSelectElement | null;
     if (statusSelect) statusSelect.value = this.state.filingStatus;
 
-    const setVal = (id, val) => {
-      const el = document.getElementById(id);
-      if (el) el.value = val;
+    const setVal = (id: string, val: number) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (el) el.value = String(val);
     };
     setVal('input-adj-student-loan', this.state.adjustments.studentLoan);
     setVal('input-adj-ira', this.state.adjustments.ira);
@@ -275,19 +284,19 @@ class TaxApp {
     this.recalculateAndRender();
   }
 
-  renderYearBadges() {
+  private renderYearBadges(): void {
     document.querySelectorAll('.current-tax-year-text').forEach(el => {
-      el.textContent = this.state.year;
+      el.textContent = String(this.state.year);
     });
   }
 
-  renderW2Forms() {
+  private renderW2Forms(): void {
     const container = document.getElementById('w2-list-container');
     if (!container) return;
 
     container.innerHTML = '';
 
-    this.state.w2s.forEach((w2, index) => {
+    this.state.w2s.forEach((w2: W2Data, index: number) => {
       const card = document.createElement('div');
       card.className = 'w2-card-wrapper';
       card.id = `w2-card-${w2.id}`;
@@ -316,7 +325,6 @@ class TaxApp {
           </div>
 
           <div class="w2-grid">
-            <!-- Box a: SSN -->
             <div class="w2-box">
               <div class="w2-box-header">
                 <span class="w2-box-number">a</span>
@@ -325,7 +333,6 @@ class TaxApp {
               <input type="text" class="w2-input-text" value="***-**-1234" readonly>
             </div>
 
-            <!-- Box 1: Wages, tips, other compensation (KEY INPUT) -->
             <div class="w2-box highlight-wages" id="w2-${w2.id}-box1-container">
               <div class="w2-box-header">
                 <div>
@@ -340,7 +347,6 @@ class TaxApp {
               </div>
             </div>
 
-            <!-- Box 2: Federal income tax withheld (KEY INPUT) -->
             <div class="w2-box highlight-withholding" id="w2-${w2.id}-box2-container">
               <div class="w2-box-header">
                 <div>
@@ -355,7 +361,6 @@ class TaxApp {
               </div>
             </div>
 
-            <!-- Box b: EIN -->
             <div class="w2-box">
               <div class="w2-box-header">
                 <span class="w2-box-number">b</span>
@@ -364,7 +369,6 @@ class TaxApp {
               <input type="text" class="w2-input-text" value="${w2.ein}" data-w2-field="ein" data-w2-id="${w2.id}">
             </div>
 
-            <!-- Box 3: Social Security wages -->
             <div class="w2-box highlight-ss" id="w2-${w2.id}-box3-container">
               <div class="w2-box-header">
                 <div>
@@ -379,7 +383,6 @@ class TaxApp {
               </div>
             </div>
 
-            <!-- Box 4: Social Security tax withheld -->
             <div class="w2-box highlight-ss" id="w2-${w2.id}-box4-container">
               <div class="w2-box-header">
                 <div>
@@ -394,7 +397,6 @@ class TaxApp {
               </div>
             </div>
 
-            <!-- Box c: Employer's name, address -->
             <div class="w2-box">
               <div class="w2-box-header">
                 <span class="w2-box-number">c</span>
@@ -403,7 +405,6 @@ class TaxApp {
               <input type="text" class="w2-input-text" value="${w2.employer}" data-w2-field="employer" data-w2-id="${w2.id}">
             </div>
 
-            <!-- Box 5: Medicare wages -->
             <div class="w2-box highlight-medicare" id="w2-${w2.id}-box5-container">
               <div class="w2-box-header">
                 <div>
@@ -418,7 +419,6 @@ class TaxApp {
               </div>
             </div>
 
-            <!-- Box 6: Medicare tax withheld -->
             <div class="w2-box highlight-medicare" id="w2-${w2.id}-box6-container">
               <div class="w2-box-header">
                 <div>
@@ -444,45 +444,43 @@ class TaxApp {
       container.appendChild(card);
     });
 
-    // Wire up events for W-2 inputs
     this.bindW2Events();
   }
 
-  bindW2Events() {
+  private bindW2Events(): void {
     this.state.w2s.forEach(w2 => {
-      const bindW2Field = (boxNum, propName, autoFillFICA = false) => {
+      const bindW2Field = (boxNum: number, propName: keyof W2Data, autoFillFICA = false) => {
         const inputId = `w2-${w2.id}-box${boxNum}`;
-        const inputEl = document.getElementById(inputId);
+        const inputEl = document.getElementById(inputId) as HTMLInputElement | null;
         if (!inputEl) return;
 
-        inputEl.addEventListener('input', (e) => {
-          const val = Number(e.target.value) || 0;
-          w2[propName] = val;
+        inputEl.addEventListener('input', (e: Event) => {
+          const val = Number((e.target as HTMLInputElement).value) || 0;
+          (w2 as any)[propName] = val;
 
-          // Helpful standard autofill for Box 3 & 5 if Box 1 is edited and they match
           if (autoFillFICA && (w2.box3 === 0 || w2.box3 === w2.box1)) {
             w2.box3 = val;
             w2.box4 = Math.round(val * 0.062 * 100) / 100;
             w2.box5 = val;
             w2.box6 = Math.round(val * 0.0145 * 100) / 100;
 
-            const b3 = document.getElementById(`w2-${w2.id}-box3`);
-            const b4 = document.getElementById(`w2-${w2.id}-box4`);
-            const b5 = document.getElementById(`w2-${w2.id}-box5`);
-            const b6 = document.getElementById(`w2-${w2.id}-box6`);
-            if (b3) b3.value = w2.box3;
-            if (b4) b4.value = w2.box4;
-            if (b5) b5.value = w2.box5;
-            if (b6) b6.value = w2.box6;
+            const b3 = document.getElementById(`w2-${w2.id}-box3`) as HTMLInputElement | null;
+            const b4 = document.getElementById(`w2-${w2.id}-box4`) as HTMLInputElement | null;
+            const b5 = document.getElementById(`w2-${w2.id}-box5`) as HTMLInputElement | null;
+            const b6 = document.getElementById(`w2-${w2.id}-box6`) as HTMLInputElement | null;
+            if (b3) b3.value = String(w2.box3);
+            if (b4) b4.value = String(w2.box4);
+            if (b5) b5.value = String(w2.box5);
+            if (b6) b6.value = String(w2.box6);
           }
 
           this.recalculateAndRender();
         });
 
-        inputEl.addEventListener('focus', () => this.arrowEngine.setActiveSource(inputId));
-        inputEl.addEventListener('blur', () => this.arrowEngine.clearActive());
-        inputEl.addEventListener('mouseenter', () => this.arrowEngine.setActiveSource(inputId));
-        inputEl.addEventListener('mouseleave', () => this.arrowEngine.clearActive());
+        inputEl.addEventListener('focus', () => this.arrowEngine?.setActiveSource(inputId));
+        inputEl.addEventListener('blur', () => this.arrowEngine?.clearActive());
+        inputEl.addEventListener('mouseenter', () => this.arrowEngine?.setActiveSource(inputId));
+        inputEl.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
       };
 
       bindW2Field(1, 'box1', true);
@@ -493,19 +491,17 @@ class TaxApp {
       bindW2Field(6, 'box6');
     });
 
-    // Remove buttons
-    document.querySelectorAll('[data-remove-w2]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const idToRemove = parseInt(e.target.dataset.removeW2, 10);
+    document.querySelectorAll<HTMLElement>('[data-remove-w2]').forEach(btn => {
+      btn.addEventListener('click', (e: Event) => {
+        const idToRemove = parseInt((e.target as HTMLElement).dataset.removeW2 || '', 10);
         this.removeW2(idToRemove);
       });
     });
   }
 
-  buildConnections() {
-    const connections = [];
+  private buildConnections(): ConnectionDef[] {
+    const connections: ConnectionDef[] = [];
 
-    // 1. W2 Box 1 (Wages) -> Total Wages Calc
     this.state.w2s.forEach(w => {
       connections.push({
         id: `conn-w2-${w.id}-box1-wages`,
@@ -516,7 +512,6 @@ class TaxApp {
       });
     });
 
-    // 2. Total Wages -> Gross Income
     connections.push({
       id: 'conn-wages-gross',
       sourceId: 'calc-total-w2-wages',
@@ -525,7 +520,6 @@ class TaxApp {
       label: 'Total Wages to Gross Income'
     });
 
-    // 3. Other Incomes -> Gross Income
     if (this.state.otherIncome.interest > 0) {
       connections.push({
         id: 'conn-interest-gross',
@@ -536,7 +530,6 @@ class TaxApp {
       });
     }
 
-    // 4. Adjustments -> Total Adjustments
     connections.push({
       id: 'conn-adj-student-loan',
       sourceId: 'input-adj-student-loan',
@@ -545,7 +538,6 @@ class TaxApp {
       label: 'Student Loan to Adjustments'
     });
 
-    // 5. Gross Income & Adjustments -> AGI
     connections.push({
       id: 'conn-gross-agi',
       sourceId: 'calc-gross-income',
@@ -561,7 +553,6 @@ class TaxApp {
       label: 'Adjustments to AGI'
     });
 
-    // 6. Filing Status -> Standard Deduction
     connections.push({
       id: 'conn-status-deduction',
       sourceId: 'select-filing-status',
@@ -570,7 +561,6 @@ class TaxApp {
       label: 'Status sets Standard Deduction'
     });
 
-    // 7. AGI & Deduction -> Taxable Income
     connections.push({
       id: 'conn-agi-taxable',
       sourceId: 'calc-agi',
@@ -586,7 +576,6 @@ class TaxApp {
       label: 'Deduction to Taxable Income'
     });
 
-    // 8. Taxable Income -> Tentative Tax (Brackets)
     connections.push({
       id: 'conn-taxable-tentative',
       sourceId: 'calc-taxable-income',
@@ -595,7 +584,6 @@ class TaxApp {
       label: 'Taxable Income to Tax Brackets'
     });
 
-    // 9. Credits -> Total Tax Liability
     connections.push({
       id: 'conn-tentative-totaltax',
       sourceId: 'calc-tax-before-credits',
@@ -611,7 +599,6 @@ class TaxApp {
       label: 'Credits reduce Liability'
     });
 
-    // 10. W2 Box 2 (Withholding) -> Total Withholding
     this.state.w2s.forEach(w => {
       connections.push({
         id: `conn-w2-${w.id}-box2-withheld`,
@@ -622,7 +609,6 @@ class TaxApp {
       });
     });
 
-    // 11. Final comparison: Total Withholding & Total Tax -> Final Verdict
     connections.push({
       id: 'conn-withheld-verdict',
       sourceId: 'calc-total-withholding',
@@ -638,7 +624,6 @@ class TaxApp {
       label: 'Tax to Verdict'
     });
 
-    // 12. FICA Connections
     this.state.w2s.forEach(w => {
       connections.push({
         id: `conn-w2-${w.id}-box4-fica`,
@@ -659,11 +644,10 @@ class TaxApp {
     return connections;
   }
 
-  recalculateAndRender() {
+  private recalculateAndRender(): void {
     const taxData = calculateTaxes(this.state);
 
-    // Helper to update a card's equations and value
-    const updateCard = (cardId, calcObj, formattedVal) => {
+    const updateCard = (cardId: string, calcObj: CalculationResult, formattedVal: string) => {
       const card = document.getElementById(cardId);
       if (!card) return;
 
@@ -676,55 +660,31 @@ class TaxApp {
       if (valEl && formattedVal) valEl.textContent = formattedVal;
     };
 
-    // 1. Total W-2 Wages
     updateCard('calc-total-w2-wages', taxData.w2WagesCalc, formatCurrency(taxData.w2WagesCalc.result));
-
-    // 2. Gross Income
     updateCard('calc-gross-income', taxData.grossIncomeCalc, formatCurrency(taxData.grossIncomeCalc.result));
-
-    // 3. Adjustments
     updateCard('calc-total-adjustments', taxData.adjustmentsCalc, formatCurrency(taxData.adjustmentsCalc.result));
-
-    // 4. AGI
     updateCard('calc-agi', taxData.agiCalc, formatCurrency(taxData.agiCalc.result));
-
-    // 5. Standard Deduction
     updateCard('calc-standard-deduction', taxData.deductionCalc, formatCurrency(taxData.deductionCalc.result));
-
-    // 6. Taxable Income
     updateCard('calc-taxable-income', taxData.taxableIncomeCalc, formatCurrency(taxData.taxableIncomeCalc.result));
-
-    // 7. Tax Before Credits (Brackets)
     updateCard('calc-tax-before-credits', taxData.taxBeforeCreditsCalc, formatCurrencyExact(taxData.taxBeforeCreditsCalc.result));
     this.renderTaxBrackets(taxData.taxBeforeCreditsCalc.brackets, taxData.taxableIncomeCalc.result);
 
-    // 8. Credits
     updateCard('calc-total-credits', taxData.creditsCalc, formatCurrency(taxData.creditsCalc.result));
-
-    // 9. Total Tax Liability
     updateCard('calc-total-tax-liability', taxData.totalTaxCalc, formatCurrencyExact(taxData.totalTaxCalc.result));
-
-    // 10. Total Withholding
     updateCard('calc-total-withholding', taxData.withholdingCalc, formatCurrencyExact(taxData.withholdingCalc.result));
 
-    // 11. Final Verdict Card
     this.renderVerdict(taxData);
-
-    // 12. FICA Breakdown
     updateCard('calc-fica-breakdown', taxData.ficaCalc, formatCurrencyExact(taxData.ficaCalc.totalFica));
-
-    // 13. Form 1040 Mirror
     this.render1040Mirror(taxData);
-
-    // Update Quick Stats in Sticky Header
     this.updateHeaderStats(taxData);
 
-    // Update Connections & Redraw Arrows
     const connections = this.buildConnections();
-    this.arrowEngine.setConnections(connections);
+    if (this.arrowEngine) {
+      this.arrowEngine.setConnections(connections);
+    }
   }
 
-  renderTaxBrackets(brackets, taxableIncome) {
+  private renderTaxBrackets(brackets: BracketDetail[], taxableIncome: number): void {
     const tbody = document.getElementById('tax-brackets-tbody');
     const barContainer = document.getElementById('bracket-progress-bar');
     if (!tbody) return;
@@ -745,7 +705,6 @@ class TaxApp {
       `;
       tbody.appendChild(tr);
 
-      // Add segment to progress bar if taxed
       if (barContainer && taxableIncome > 0 && isTaxed) {
         const pct = Math.max(2, (b.taxableAmount / taxableIncome) * 100);
         const seg = document.createElement('div');
@@ -758,7 +717,7 @@ class TaxApp {
     });
   }
 
-  renderVerdict(taxData) {
+  private renderVerdict(taxData: TaxCalculationSummary): void {
     const verdictCard = document.getElementById('calc-final-verdict');
     if (!verdictCard) return;
 
@@ -788,9 +747,8 @@ class TaxApp {
     if (genEl) genEl.textContent = taxData.finalResultCalc.generalFormula;
     if (plugEl) plugEl.textContent = taxData.finalResultCalc.pluggedFormula;
 
-    // Comparison Bar
-    const withheldBar = document.getElementById('comp-bar-withheld');
-    const taxBar = document.getElementById('comp-bar-tax');
+    const withheldBar = document.getElementById('comp-bar-withheld') as HTMLElement | null;
+    const taxBar = document.getElementById('comp-bar-tax') as HTMLElement | null;
     const maxVal = Math.max(taxData.withholdingCalc.result, taxData.totalTaxCalc.result, 1);
 
     if (withheldBar) {
@@ -808,8 +766,8 @@ class TaxApp {
     }
   }
 
-  updateHeaderStats(taxData) {
-    const setStat = (id, text) => {
+  private updateHeaderStats(taxData: TaxCalculationSummary): void {
+    const setStat = (id: string, text: string) => {
       const el = document.getElementById(id);
       if (el) el.textContent = text;
     };
@@ -831,8 +789,8 @@ class TaxApp {
     }
   }
 
-  render1040Mirror(taxData) {
-    const setLine = (id, val) => {
+  private render1040Mirror(taxData: TaxCalculationSummary): void {
+    const setLine = (id: string, val: number) => {
       const el = document.getElementById(id);
       if (el) el.textContent = formatCurrencyExact(val);
     };
@@ -865,7 +823,6 @@ class TaxApp {
   }
 }
 
-// Instantiate on DOM load
 window.addEventListener('DOMContentLoaded', () => {
-  window.taxApp = new TaxApp();
+  (window as any).taxApp = new TaxApp();
 });

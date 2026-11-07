@@ -1,36 +1,46 @@
 /**
- * Actually Free Taxes - Dynamic Arrow & Data Flow Engine
+ * Actually Free Taxes - Dynamic Arrow & Data Flow Engine (TypeScript)
  * Draws animated, color-coded SVG Bezier arrows connecting input fields to downstream calculations.
  */
 
-export class ArrowEngine {
-  constructor(svgElement, options = {}) {
-    this.svg = svgElement;
-    this.connections = []; // Array of { id, sourceId, targetId, color, label, category }
-    this.activeSourceId = null;
-    this.activeTargetId = null;
-    this.showAll = options.showAll !== undefined ? options.showAll : true;
-    this.animationFrame = null;
+import { ConnectionDef, ArrowColorCategory } from './types.js';
 
-    this.colors = {
-      wages: '#10b981',       // Emerald
-      withholding: '#0284c7', // Sky Blue
-      ss: '#f59e0b',          // Amber
-      medicare: '#ec4899',    // Pink
-      adjustments: '#8b5cf6', // Violet
-      status: '#6366f1',      // Indigo
-      tax: '#f97316',         // Orange
-      credits: '#14b8a6',     // Teal
-      refund: '#10b981',      // Green
-      owed: '#ef4444',        // Red
-      default: '#3b82f6'      // Blue
-    };
+export interface ArrowEngineOptions {
+  showAll?: boolean;
+}
+
+export class ArrowEngine {
+  private svg: SVGSVGElement;
+  private connections: ConnectionDef[] = [];
+  private activeSourceId: string | null = null;
+  private activeTargetId: string | null = null;
+  private showAll: boolean;
+  private animationFrame: number | null = null;
+  private resizeObserver?: ResizeObserver;
+
+  public readonly colors: Record<ArrowColorCategory, string> = {
+    wages: '#10b981',       // Emerald
+    withholding: '#0284c7', // Sky Blue
+    ss: '#f59e0b',          // Amber
+    medicare: '#ec4899',    // Pink
+    adjustments: '#8b5cf6', // Violet
+    status: '#6366f1',      // Indigo
+    tax: '#f97316',         // Orange
+    credits: '#14b8a6',     // Teal
+    refund: '#10b981',      // Green
+    owed: '#ef4444',        // Red
+    default: '#3b82f6'      // Blue
+  };
+
+  constructor(svgElement: SVGSVGElement, options: ArrowEngineOptions = {}) {
+    this.svg = svgElement;
+    this.showAll = options.showAll !== undefined ? options.showAll : true;
 
     this.initMarkers();
     this.bindEvents();
   }
 
-  initMarkers() {
+  private initMarkers(): void {
     let defs = this.svg.querySelector('defs');
     if (!defs) {
       defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
@@ -52,77 +62,75 @@ export class ArrowEngine {
       path.setAttribute('d', 'M 1 2 L 10 6 L 1 10 Z');
       path.setAttribute('fill', color);
       marker.appendChild(path);
-      defs.appendChild(marker);
+      defs!.appendChild(marker);
     });
   }
 
-  bindEvents() {
+  private bindEvents(): void {
     window.addEventListener('resize', () => this.scheduleRedraw());
     window.addEventListener('scroll', () => this.scheduleRedraw(), { passive: true });
 
-    // Global observer for element size or position changes
     if (window.ResizeObserver) {
       this.resizeObserver = new ResizeObserver(() => this.scheduleRedraw());
       this.resizeObserver.observe(document.body);
     }
   }
 
-  setConnections(connectionList) {
+  public setConnections(connectionList: ConnectionDef[]): void {
     this.connections = connectionList;
     this.scheduleRedraw();
   }
 
-  addConnection(conn) {
+  public addConnection(conn: ConnectionDef): void {
     this.connections.push(conn);
     this.scheduleRedraw();
   }
 
-  clearConnections() {
+  public clearConnections(): void {
     this.connections = [];
     this.scheduleRedraw();
   }
 
-  setActiveSource(sourceId) {
+  public setActiveSource(sourceId: string | null): void {
     this.activeSourceId = sourceId;
     this.updateHighlightStyles();
   }
 
-  setActiveTarget(targetId) {
+  public setActiveTarget(targetId: string | null): void {
     this.activeTargetId = targetId;
     this.updateHighlightStyles();
   }
 
-  clearActive() {
+  public clearActive(): void {
     this.activeSourceId = null;
     this.activeTargetId = null;
     this.updateHighlightStyles();
   }
 
-  setShowAll(val) {
+  public setShowAll(val: boolean): void {
     this.showAll = Boolean(val);
     this.scheduleRedraw();
   }
 
-  scheduleRedraw() {
-    if (this.animationFrame) {
+  public scheduleRedraw(): void {
+    if (this.animationFrame !== null) {
       cancelAnimationFrame(this.animationFrame);
     }
     this.animationFrame = requestAnimationFrame(() => this.redraw());
   }
 
-  updateSvgDimensions() {
+  private updateSvgDimensions(): void {
     const docWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth);
     const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight);
-    this.svg.setAttribute('width', docWidth);
-    this.svg.setAttribute('height', docHeight);
+    this.svg.setAttribute('width', String(docWidth));
+    this.svg.setAttribute('height', String(docHeight));
     this.svg.style.width = `${docWidth}px`;
     this.svg.style.height = `${docHeight}px`;
   }
 
-  redraw() {
+  private redraw(): void {
     this.updateSvgDimensions();
 
-    // Preserve defs
     const defs = this.svg.querySelector('defs');
     this.svg.innerHTML = '';
     if (defs) this.svg.appendChild(defs);
@@ -130,7 +138,6 @@ export class ArrowEngine {
     const docScrollX = window.pageXOffset || document.documentElement.scrollLeft;
     const docScrollY = window.pageYOffset || document.documentElement.scrollTop;
 
-    // Filter connections to render based on showAll or active selection
     this.connections.forEach(conn => {
       const sourceEl = document.getElementById(conn.sourceId);
       const targetEl = document.getElementById(conn.targetId);
@@ -140,7 +147,6 @@ export class ArrowEngine {
       const sourceRect = sourceEl.getBoundingClientRect();
       const targetRect = targetEl.getBoundingClientRect();
 
-      // Check if both elements are in layout
       if (sourceRect.width === 0 || targetRect.width === 0) return;
 
       const isConnectedToActive =
@@ -151,24 +157,19 @@ export class ArrowEngine {
       if (!shouldShow) return;
 
       const isHighlighted = isConnectedToActive;
-      const colorCategory = conn.category || 'default';
+      const colorCategory: ArrowColorCategory = conn.category || 'default';
       const strokeColor = this.colors[colorCategory] || this.colors.default;
 
-      // Calculate anchor points
-      // Source point: usually bottom-center or right-center
-      // Target point: usually top-center or left-center
       const sX = sourceRect.left + docScrollX + (sourceRect.width / 2);
       const sY = sourceRect.bottom + docScrollY - 2;
 
       const tX = targetRect.left + docScrollX + (targetRect.width / 2);
       const tY = targetRect.top + docScrollY + 2;
 
-      // Calculate smooth cubic Bezier curve
       const dx = tX - sX;
       const dy = tY - sY;
       const delta = Math.max(Math.abs(dy), 60);
 
-      // Curve downward from source, then into target from above
       const c1x = sX + (dx * 0.1);
       const c1y = sY + (delta * 0.45);
       const c2x = tX - (dx * 0.1);
@@ -176,13 +177,11 @@ export class ArrowEngine {
 
       const pathData = `M ${sX} ${sY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tX} ${tY}`;
 
-      // Create group
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.setAttribute('class', `arrow-group ${isHighlighted ? 'active' : ''}`);
       g.dataset.source = conn.sourceId;
       g.dataset.target = conn.targetId;
 
-      // Glow backdrop line if highlighted
       if (isHighlighted) {
         const glow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         glow.setAttribute('d', pathData);
@@ -194,7 +193,6 @@ export class ArrowEngine {
         g.appendChild(glow);
       }
 
-      // Main visible path
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', pathData);
       path.setAttribute('fill', 'none');
@@ -211,14 +209,13 @@ export class ArrowEngine {
 
       g.appendChild(path);
 
-      // Wider invisible path for easy clicking/hovering
       const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       hitArea.setAttribute('d', pathData);
       hitArea.setAttribute('fill', 'none');
       hitArea.setAttribute('stroke', 'transparent');
       hitArea.setAttribute('stroke-width', '16');
       hitArea.style.cursor = 'pointer';
-      hitArea.style.pointerEvents = 'stroke';
+      (hitArea.style as any).pointerEvents = 'stroke';
 
       hitArea.addEventListener('mouseenter', () => {
         this.setActiveSource(conn.sourceId);
@@ -240,8 +237,7 @@ export class ArrowEngine {
     this.updateHighlightStyles();
   }
 
-  updateHighlightStyles() {
-    // Add glowing border to active source and targets
+  private updateHighlightStyles(): void {
     document.querySelectorAll('.data-source-active, .data-target-active').forEach(el => {
       el.classList.remove('data-source-active', 'data-target-active');
     });
@@ -250,7 +246,6 @@ export class ArrowEngine {
       const srcEl = document.getElementById(this.activeSourceId);
       if (srcEl) srcEl.classList.add('data-source-active');
 
-      // Find targets of this source
       this.connections.filter(c => c.sourceId === this.activeSourceId).forEach(c => {
         const tgtEl = document.getElementById(c.targetId);
         if (tgtEl) tgtEl.classList.add('data-target-active');
@@ -261,7 +256,6 @@ export class ArrowEngine {
       const tgtEl = document.getElementById(this.activeTargetId);
       if (tgtEl) tgtEl.classList.add('data-target-active');
 
-      // Find sources of this target
       this.connections.filter(c => c.targetId === this.activeTargetId).forEach(c => {
         const srcEl = document.getElementById(c.sourceId);
         if (srcEl) srcEl.classList.add('data-source-active');

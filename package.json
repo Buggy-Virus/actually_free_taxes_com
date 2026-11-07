@@ -4,10 +4,24 @@
   "description": "Visual, transparent, single-page tax calculation web app with animated dependency arrows and formula introspection.",
   "type": "module",
   "scripts": {
-    "test": "node tests/test-tax-engine.js",
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "tsc && node dist/tests/test-tax-engine.js",
     "start": "python serve.py"
   },
-  "keywords": ["taxes", "irs", "1040", "w2", "visual", "arrows"],
+  "keywords": [
+    "taxes",
+    "irs",
+    "1040",
+    "w2",
+    "visual",
+    "arrows",
+    "typescript"
+  ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^14.18.63",
+    "typescript": "^4.9.5"
+  }
 }

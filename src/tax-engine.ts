@@ -1,9 +1,36 @@
 /**
- * Actually Free Taxes - Tax Calculation Engine
+ * Actually Free Taxes - Tax Calculation Engine (TypeScript)
  * Supports 2024 & 2025 IRS federal tax rules, brackets, and transparent formula builders.
  */
 
-export const TAX_CONSTANTS = {
+import {
+  TaxYear,
+  FilingStatus,
+  TaxAppState,
+  BracketDef,
+  BracketDetail,
+  CalculationResult,
+  TaxBeforeCreditsResult,
+  FinalResultCalculation,
+  FicaCalculation,
+  EffectiveRateCalculation,
+  TaxCalculationSummary
+} from './types.js';
+
+interface YearTaxRules {
+  standardDeduction: Record<FilingStatus, number>;
+  ssWageLimit: number;
+  ssRate: number;
+  medicareRate: number;
+  additionalMedicareRate: number;
+  additionalMedicareThreshold: Record<FilingStatus, number>;
+  childTaxCreditPerChild: number;
+  childTaxCreditRefundableMax: number;
+  childTaxCreditPhaseout: Record<FilingStatus, number>;
+  brackets: Record<FilingStatus, BracketDef[]>;
+}
+
+export const TAX_CONSTANTS: Record<TaxYear, YearTaxRules> = {
   2024: {
     standardDeduction: {
       single: 14600,
@@ -134,8 +161,8 @@ export const TAX_CONSTANTS = {
   }
 };
 
-export function formatCurrency(num) {
-  if (isNaN(num) || num === null || num === undefined) return "$0";
+export function formatCurrency(num: number | null | undefined): string {
+  if (num === null || num === undefined || isNaN(num)) return "$0";
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -144,8 +171,8 @@ export function formatCurrency(num) {
   }).format(num);
 }
 
-export function formatCurrencyExact(num) {
-  if (isNaN(num) || num === null || num === undefined) return "$0.00";
+export function formatCurrencyExact(num: number | null | undefined): string {
+  if (num === null || num === undefined || isNaN(num)) return "$0.00";
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -154,26 +181,36 @@ export function formatCurrencyExact(num) {
   }).format(num);
 }
 
-export function formatPercent(rate) {
+export function formatPercent(rate: number): string {
   return `${(rate * 100).toFixed(1).replace(/\.0$/, '')}%`;
+}
+
+export function filingStatusLabel(status: FilingStatus): string {
+  switch (status) {
+    case 'single': return 'Single';
+    case 'married_joint': return 'Married Filing Jointly';
+    case 'married_separate': return 'Married Filing Separately';
+    case 'head_of_household': return 'Head of Household';
+    default: return 'Single';
+  }
 }
 
 /**
  * Perform complete tax calculation with fully annotated general & plugged-in equations.
  */
-export function calculateTaxes(state) {
+export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
   const year = state.year || 2024;
   const filingStatus = state.filingStatus || 'single';
   const rules = TAX_CONSTANTS[year] || TAX_CONSTANTS[2024];
 
-  const w2List = state.w2s && state.w2s.length > 0 ? state.w2s : [{ id: 0, box1: 0, box2: 0, box3: 0, box4: 0, box5: 0, box6: 0 }];
+  const w2List = state.w2s && state.w2s.length > 0 ? state.w2s : [{ id: 0, employer: '', ein: '', box1: 0, box2: 0, box3: 0, box4: 0, box5: 0, box6: 0 }];
 
   // 1. Total W-2 Wages (Box 1)
   const box1Values = w2List.map(w => Number(w.box1) || 0);
   const totalW2Wages = box1Values.reduce((sum, val) => sum + val, 0);
   const w2WageFieldIds = w2List.map((w, idx) => `w2-${w.id || idx}-box1`);
 
-  const w2WagesCalc = {
+  const w2WagesCalc: CalculationResult = {
     result: totalW2Wages,
     sourceFields: w2WageFieldIds,
     generalFormula: w2List.length === 1 ? 'Total Wages = W-2 Box 1' : 'Total Wages = ∑(W-2 Box 1)',
@@ -188,7 +225,7 @@ export function calculateTaxes(state) {
 
   // 2. Total Gross Income
   const grossIncome = totalW2Wages + otherIncomeTotal;
-  const grossIncomeCalc = {
+  const grossIncomeCalc: CalculationResult = {
     result: grossIncome,
     sourceFields: ['calc-total-w2-wages', ...(interestIncome > 0 ? ['input-other-interest'] : [])],
     generalFormula: 'Gross Income = Total W-2 Wages + Other Incomes',
@@ -203,7 +240,7 @@ export function calculateTaxes(state) {
   const hsaDeduction = Number(state.adjustments?.hsa) || 0;
   const totalAdjustments = studentLoanInterest + iraDeduction + hsaDeduction;
 
-  const adjustmentsCalc = {
+  const adjustmentsCalc: CalculationResult = {
     result: totalAdjustments,
     sourceFields: ['input-adj-student-loan', 'input-adj-ira', 'input-adj-hsa'],
     generalFormula: 'Adjustments = Student Loan Interest + Traditional IRA + HSA Deduction',
@@ -212,7 +249,7 @@ export function calculateTaxes(state) {
 
   // 4. Adjusted Gross Income (AGI) - Line 11 on Form 1040
   const agi = Math.max(0, grossIncome - totalAdjustments);
-  const agiCalc = {
+  const agiCalc: CalculationResult = {
     result: agi,
     sourceFields: ['calc-gross-income', 'calc-total-adjustments'],
     generalFormula: 'Adjusted Gross Income (AGI) = Gross Income − Adjustments',
@@ -221,7 +258,7 @@ export function calculateTaxes(state) {
 
   // 5. Standard Deduction
   const standardDeductionBase = rules.standardDeduction[filingStatus] || 14600;
-  const deductionCalc = {
+  const deductionCalc: CalculationResult = {
     result: standardDeductionBase,
     sourceFields: ['select-filing-status', 'select-tax-year'],
     generalFormula: `Standard Deduction (${filingStatusLabel(filingStatus)}, Year ${year})`,
@@ -230,7 +267,7 @@ export function calculateTaxes(state) {
 
   // 6. Taxable Income - Line 15 on Form 1040
   const taxableIncome = Math.max(0, agi - standardDeductionBase);
-  const taxableIncomeCalc = {
+  const taxableIncomeCalc: CalculationResult = {
     result: taxableIncome,
     sourceFields: ['calc-agi', 'calc-standard-deduction'],
     generalFormula: 'Taxable Income = max(0, AGI − Standard Deduction)',
@@ -239,9 +276,9 @@ export function calculateTaxes(state) {
 
   // 7. Federal Income Tax (Marginal Tax Brackets calculation)
   const brackets = rules.brackets[filingStatus] || rules.brackets.single;
-  const bracketDetails = [];
+  const bracketDetails: BracketDetail[] = [];
   let tentativeTax = 0;
-  const bracketFormulaParts = [];
+  const bracketFormulaParts: string[] = [];
 
   for (let i = 0; i < brackets.length; i++) {
     const b = brackets[i];
@@ -276,7 +313,7 @@ export function calculateTaxes(state) {
   }
 
   const taxBeforeCredits = tentativeTax;
-  const taxBeforeCreditsCalc = {
+  const taxBeforeCreditsCalc: TaxBeforeCreditsResult = {
     result: taxBeforeCredits,
     sourceFields: ['calc-taxable-income', 'select-filing-status'],
     generalFormula: 'Tentative Tax = ∑(Taxable Income in Bracket i × Bracket Rate i)',
@@ -287,7 +324,7 @@ export function calculateTaxes(state) {
   };
 
   // 8. Tax Credits (Child Tax Credit)
-  const numChildren = Math.max(0, parseInt(state.dependents?.childrenCount, 10) || 0);
+  const numChildren = Math.max(0, parseInt(String(state.dependents?.childrenCount), 10) || 0);
   let childCreditAllowed = 0;
   let childCreditPhaseoutAmount = 0;
 
@@ -302,7 +339,7 @@ export function calculateTaxes(state) {
     childCreditAllowed = Math.max(0, Math.min(taxBeforeCredits, maxPotentialCredit - childCreditPhaseoutAmount));
   }
 
-  const creditsCalc = {
+  const creditsCalc: CalculationResult = {
     result: childCreditAllowed,
     sourceFields: ['input-children-count', 'calc-agi', 'calc-tax-before-credits'],
     generalFormula: 'Tax Credits = min(Tax Liability, Qualifying Children × $2,000 − Phaseout)',
@@ -313,7 +350,7 @@ export function calculateTaxes(state) {
 
   // 9. Total Federal Tax Liability
   const totalTaxLiability = Math.max(0, taxBeforeCredits - childCreditAllowed);
-  const totalTaxCalc = {
+  const totalTaxCalc: CalculationResult = {
     result: totalTaxLiability,
     sourceFields: ['calc-tax-before-credits', 'calc-total-credits'],
     generalFormula: 'Total Tax Liability = max(0, Tentative Tax − Total Credits)',
@@ -325,7 +362,7 @@ export function calculateTaxes(state) {
   const totalWithheld = box2Values.reduce((sum, val) => sum + val, 0);
   const w2WithheldFieldIds = w2List.map((w, idx) => `w2-${w.id || idx}-box2`);
 
-  const withholdingCalc = {
+  const withholdingCalc: CalculationResult = {
     result: totalWithheld,
     sourceFields: w2WithheldFieldIds,
     generalFormula: w2List.length === 1 ? 'Total Withholding = W-2 Box 2' : 'Total Withholding = ∑(W-2 Box 2)',
@@ -339,7 +376,7 @@ export function calculateTaxes(state) {
   const isRefund = netDifference >= 0;
   const finalAmount = Math.abs(netDifference);
 
-  const finalResultCalc = {
+  const finalResultCalc: FinalResultCalculation = {
     result: finalAmount,
     isRefund: isRefund,
     netDifference: netDifference,
@@ -364,7 +401,8 @@ export function calculateTaxes(state) {
   const totalMedTax = box6Values.reduce((s, v) => s + v, 0);
   const totalFicaWithheld = totalSSTax + totalMedTax;
 
-  const ficaCalc = {
+  const ficaCalc: FicaCalculation = {
+    result: totalFicaWithheld,
     ssWages: totalSSWages,
     ssTax: totalSSTax,
     medWages: totalMedWages,
@@ -380,7 +418,7 @@ export function calculateTaxes(state) {
 
   // Effective Tax Rate
   const effectiveRate = grossIncome > 0 ? (totalTaxLiability / grossIncome) : 0;
-  const effectiveRateCalc = {
+  const effectiveRateCalc: EffectiveRateCalculation = {
     rate: effectiveRate,
     sourceFields: ['calc-total-tax-liability', 'calc-gross-income'],
     generalFormula: 'Effective Tax Rate = Total Tax Liability ÷ Gross Income',
@@ -405,14 +443,4 @@ export function calculateTaxes(state) {
     ficaCalc,
     effectiveRateCalc
   };
-}
-
-export function filingStatusLabel(status) {
-  switch (status) {
-    case 'single': return 'Single';
-    case 'married_joint': return 'Married Filing Jointly';
-    case 'married_separate': return 'Married Filing Separately';
-    case 'head_of_household': return 'Head of Household';
-    default: return 'Single';
-  }
 }

@@ -37,7 +37,22 @@ ActuallyFreeTaxes is a web app designed to demystify taxes. Rather than hiding c
 
 ---
 
-## How to Run
+## Development & TypeScript Build
+
+This project is written in strict **TypeScript** (`src/`) and compiles to modern ES modules (`dist/`).
+
+### Prerequisites
+- Node.js (tested on Node 14+)
+
+### Commands
+- **Compile TypeScript**: `npm run build`
+- **Watch mode (recompile on save)**: `npm run watch`
+- **Run Unit Tests**: `npm test`
+- **Start Local Server**: `npm start` (or `python serve.py`)
+
+---
+
+## How to Run the Web App
 
 ### Option 1: Python HTTP Server (Recommended)
 ```bash
@@ -46,9 +61,9 @@ python serve.py
 Then open your browser to `http://localhost:8080`.
 
 ### Option 2: Direct File Open
-You can open `index.html` directly in any modern browser (Chrome, Edge, Firefox, Safari).
+You can also open `index.html` directly in any modern browser.
 
 ### Run Test Suite
 ```bash
-node tests/test-tax-engine.js
+npm test
 ```
