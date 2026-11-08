@@ -3,7 +3,7 @@
  */
 import { calculateTaxes, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
-import { renderRatingPill, renderRatingCardHtml } from './field-ratings.js';
+import { renderRatingPill, renderRatingCardHtml, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
 export const US_STATES = [
     { code: 'AL', name: 'Alabama', noIncomeTax: false },
     { code: 'AK', name: 'Alaska', noIncomeTax: true },
@@ -89,7 +89,9 @@ class TaxApp {
             ],
             otherIncome: {
                 interest: 0,
-                sources: []
+                sources: [],
+                capitalGains: { shortTerm: 0, longTerm: 0 },
+                scheduleCExpenses: 0
             },
             adjustments: {
                 studentLoan: 0,
@@ -99,6 +101,13 @@ class TaxApp {
             dependents: {
                 childrenCount: 0
             },
+            itemizedDeductions: {
+                medicalExpenses: 0,
+                realEstateTax: 0,
+                mortgageInterest: 0,
+                charity: 0
+            },
+            deductionMethod: 'auto',
             showAllArrows: true
         };
         this.arrowEngine = null;
@@ -191,10 +200,40 @@ class TaxApp {
         bindInput('input-adj-hsa', val => this.state.adjustments.hsa = val);
         bindInput('input-other-interest', val => this.state.otherIncome.interest = val);
         bindInput('input-children-count', val => this.state.dependents.childrenCount = val);
+        const getCapitalGains = () => {
+            if (!this.state.otherIncome.capitalGains) {
+                this.state.otherIncome.capitalGains = { shortTerm: 0, longTerm: 0 };
+            }
+            return this.state.otherIncome.capitalGains;
+        };
+        const getItemized = () => {
+            if (!this.state.itemizedDeductions) {
+                this.state.itemizedDeductions = { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 0 };
+            }
+            return this.state.itemizedDeductions;
+        };
+        // Capital gains & Schedule C expenses
+        bindInput('input-capital-gains-st', val => getCapitalGains().shortTerm = val);
+        bindInput('input-capital-gains-lt', val => getCapitalGains().longTerm = val);
+        bindInput('input-1099-nec-expenses', val => this.state.otherIncome.scheduleCExpenses = val);
+        // Schedule A Itemized deductions
+        bindInput('input-itemized-medical', val => getItemized().medicalExpenses = val);
+        bindInput('input-itemized-salt', val => getItemized().realEstateTax = val);
+        bindInput('input-itemized-mortgage', val => getItemized().mortgageInterest = val);
+        bindInput('input-itemized-charity', val => getItemized().charity = val);
+        const dedMethodSelect = document.getElementById('select-deduction-method');
+        if (dedMethodSelect) {
+            dedMethodSelect.value = this.state.deductionMethod || 'auto';
+            dedMethodSelect.addEventListener('change', (e) => {
+                this.state.deductionMethod = e.target.value;
+                this.recalculateAndRender();
+            });
+        }
         this.bindCardInspectors();
         this.bindGuidanceModalEvents();
         this.bindFilterToolbar();
         this.bindRatingPillEvents();
+        this.bindExplainEvents();
     }
     openGuidanceModal(fieldKey) {
         const modalEl = document.getElementById('guidance-modal-overlay');
@@ -250,6 +289,90 @@ class TaxApp {
             };
         });
     }
+    bindExplainEvents() {
+        document.querySelectorAll('.btn-explain-toggle').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const targetId = btn.dataset.explainTarget;
+                if (!targetId)
+                    return;
+                const drawer = document.getElementById(targetId);
+                if (!drawer)
+                    return;
+                const isOpen = drawer.classList.contains('open');
+                if (isOpen) {
+                    drawer.classList.remove('open');
+                    drawer.setAttribute('hidden', '');
+                    drawer.setAttribute('aria-hidden', 'true');
+                    btn.setAttribute('aria-expanded', 'false');
+                    btn.classList.remove('active');
+                }
+                else {
+                    drawer.classList.add('open');
+                    drawer.removeAttribute('hidden');
+                    drawer.setAttribute('aria-hidden', 'false');
+                    btn.setAttribute('aria-expanded', 'true');
+                    btn.classList.add('active');
+                }
+            };
+        });
+        document.querySelectorAll('[data-close-drawer]').forEach(closeBtn => {
+            closeBtn.onclick = (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const drawerId = closeBtn.dataset.closeDrawer;
+                if (!drawerId)
+                    return;
+                const drawer = document.getElementById(drawerId);
+                if (!drawer)
+                    return;
+                drawer.classList.remove('open');
+                drawer.setAttribute('hidden', '');
+                drawer.setAttribute('aria-hidden', 'true');
+                const toggleBtn = document.querySelector(`[data-explain-target="${drawerId}"]`);
+                if (toggleBtn) {
+                    toggleBtn.setAttribute('aria-expanded', 'false');
+                    toggleBtn.classList.remove('active');
+                }
+            };
+        });
+        const globalToggle = document.getElementById('btn-toggle-all-explain');
+        if (globalToggle && !globalToggle.dataset.bound) {
+            globalToggle.dataset.bound = 'true';
+            let allExpanded = false;
+            globalToggle.addEventListener('click', () => {
+                allExpanded = !allExpanded;
+                const drawers = document.querySelectorAll('.field-explain-drawer');
+                const toggleBtns = document.querySelectorAll('.btn-explain-toggle');
+                drawers.forEach(drawer => {
+                    if (allExpanded) {
+                        drawer.classList.add('open');
+                        drawer.removeAttribute('hidden');
+                        drawer.setAttribute('aria-hidden', 'false');
+                    }
+                    else {
+                        drawer.classList.remove('open');
+                        drawer.setAttribute('hidden', '');
+                        drawer.setAttribute('aria-hidden', 'true');
+                    }
+                });
+                toggleBtns.forEach(btn => {
+                    btn.setAttribute('aria-expanded', allExpanded ? 'true' : 'false');
+                    if (allExpanded)
+                        btn.classList.add('active');
+                    else
+                        btn.classList.remove('active');
+                });
+                globalToggle.innerHTML = allExpanded
+                    ? '🔒 Collapse All Explanations'
+                    : '💡 Expand All Explanations';
+                globalToggle.style.background = allExpanded ? '#fef3c7' : '#f0fdf4';
+                globalToggle.style.color = allExpanded ? '#b45309' : '#15803d';
+                globalToggle.style.borderColor = allExpanded ? '#fde68a' : '#bbf7d0';
+            });
+        }
+    }
     bindFilterToolbar() {
         const toolbar = document.getElementById('ratings-filter-toolbar');
         if (!toolbar)
@@ -282,8 +405,10 @@ class TaxApp {
         const cardMap = [
             'calc-total-w2-wages',
             'calc-gross-income',
+            'calc-capital-gains',
             'calc-total-adjustments',
             'calc-agi',
+            'calc-itemized-deductions',
             'calc-standard-deduction',
             'calc-taxable-income',
             'calc-tax-before-credits',
@@ -435,7 +560,7 @@ class TaxApp {
             card.style.position = 'relative';
             card.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.4rem;">
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <select class="w2-input" id="select-income-type-${src.id}" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 700; width: auto; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px;">
               <option value="1099-NEC" ${src.type === '1099-NEC' ? 'selected' : ''}>Form 1099-NEC (Freelance/Contract)</option>
               <option value="1099-DIV" ${src.type === '1099-DIV' ? 'selected' : ''}>Form 1099-DIV (Dividends)</option>
@@ -443,6 +568,7 @@ class TaxApp {
               <option value="1099-INT" ${src.type === '1099-INT' ? 'selected' : ''}>Form 1099-INT (Interest)</option>
               <option value="Other" ${src.type === 'Other' ? 'selected' : ''}>Other Taxable Income</option>
             </select>
+            ${renderExplainToggleBtn(`drawer-explain-income-${src.id}`)}
             ${renderRatingPill(ratingKey)}
           </div>
           <button type="button" class="btn" id="btn-del-income-${src.id}" title="Remove this income source" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #ef4444; border-color: #fecaca; background: #fef2f2;">
@@ -461,6 +587,7 @@ class TaxApp {
         <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">
           Reported on 1040 line &amp; feeds directly into Gross Income.
         </div>
+        ${renderFieldExplanationDrawer(ratingKey, `drawer-explain-income-${src.id}`)}
       `;
             container.appendChild(card);
             const typeSelect = card.querySelector(`#select-income-type-${src.id}`);
@@ -767,13 +894,17 @@ class TaxApp {
                 <span class="w2-box-number">16</span>
                 <span class="w2-box-label">State wages</span>
               </div>
-              ${renderRatingPill('w2-box16')}
+              <div style="display: flex; align-items: center; gap: 0.35rem;">
+                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st.id}-box16`)}
+                ${renderRatingPill('w2-box16')}
+              </div>
             </div>
             <div class="w2-input-wrapper">
               <span class="currency-symbol">$</span>
               <input type="number" step="any" class="w2-input" id="w2-${w2.id}-state-${st.id}-box16" value="${st.stateWages}" placeholder="0"
                      data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateWages">
             </div>
+            ${renderFieldExplanationDrawer('w2-box16', `drawer-explain-w2-${w2.id}-st-${st.id}-box16`)}
           </div>
 
           <!-- Box 17: State income tax withheld (KEY INPUT) -->
@@ -783,13 +914,17 @@ class TaxApp {
                 <span class="w2-box-number">17</span>
                 <span class="w2-box-label">State tax withheld</span>
               </div>
-              ${renderRatingPill('w2-box17')}
+              <div style="display: flex; align-items: center; gap: 0.35rem;">
+                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st.id}-box17`)}
+                ${renderRatingPill('w2-box17')}
+              </div>
             </div>
             <div class="w2-input-wrapper">
               <span class="currency-symbol">$</span>
               <input type="number" step="any" class="w2-input" id="w2-${w2.id}-state-${st.id}-box17" value="${st.stateTaxWithheld}" placeholder="0"
                      data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateTaxWithheld">
             </div>
+            ${renderFieldExplanationDrawer('w2-box17', `drawer-explain-w2-${w2.id}-st-${st.id}-box17`)}
           </div>
 
           <!-- Box 18: Local wages -->
@@ -880,12 +1015,16 @@ class TaxApp {
                   <span class="w2-box-number">1</span>
                   <span class="w2-box-label">Wages, tips, other comp.</span>
                 </div>
-                ${renderRatingPill('w2-box1')}
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box1`)}
+                  ${renderRatingPill('w2-box1')}
+                </div>
               </div>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
                 <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box1" value="${w2.box1}" placeholder="0">
               </div>
+              ${renderFieldExplanationDrawer('w2-box1', `drawer-explain-w2-${w2.id}-box1`)}
             </div>
 
             <!-- Box 2: Federal income tax withheld (KEY INPUT) -->
@@ -895,12 +1034,16 @@ class TaxApp {
                   <span class="w2-box-number">2</span>
                   <span class="w2-box-label">Federal tax withheld</span>
                 </div>
-                ${renderRatingPill('w2-box2')}
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box2`)}
+                  ${renderRatingPill('w2-box2')}
+                </div>
               </div>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
                 <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box2" value="${w2.box2}" placeholder="0">
               </div>
+              ${renderFieldExplanationDrawer('w2-box2', `drawer-explain-w2-${w2.id}-box2`)}
             </div>
 
             <!-- Box b: EIN -->
@@ -910,9 +1053,13 @@ class TaxApp {
                   <span class="w2-box-number">b</span>
                   <span class="w2-box-label">Employer identification number</span>
                 </div>
-                ${renderRatingPill('w2-ein')}
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-ein`)}
+                  ${renderRatingPill('w2-ein')}
+                </div>
               </div>
               <input type="text" class="w2-input-text" value="${w2.ein}" data-w2-field="ein" data-w2-id="${w2.id}">
+              ${renderFieldExplanationDrawer('w2-ein', `drawer-explain-w2-${w2.id}-ein`)}
             </div>
 
             <!-- Box 3: Social Security wages -->
@@ -922,12 +1069,16 @@ class TaxApp {
                   <span class="w2-box-number">3</span>
                   <span class="w2-box-label">Social security wages</span>
                 </div>
-                ${renderRatingPill('w2-box3')}
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box3`)}
+                  ${renderRatingPill('w2-box3')}
+                </div>
               </div>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
                 <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box3" value="${w2.box3}" placeholder="0">
               </div>
+              ${renderFieldExplanationDrawer('w2-box3', `drawer-explain-w2-${w2.id}-box3`)}
             </div>
 
             <!-- Box 4: Social Security tax withheld -->
@@ -961,12 +1112,16 @@ class TaxApp {
                   <span class="w2-box-number">5</span>
                   <span class="w2-box-label">Medicare wages</span>
                 </div>
-                ${renderRatingPill('w2-box5')}
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box5`)}
+                  ${renderRatingPill('w2-box5')}
+                </div>
               </div>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
                 <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box5" value="${w2.box5}" placeholder="0">
               </div>
+              ${renderFieldExplanationDrawer('w2-box5', `drawer-explain-w2-${w2.id}-box5`)}
             </div>
 
             <!-- Box 6: Medicare tax withheld -->
@@ -991,7 +1146,10 @@ class TaxApp {
                   <span class="w2-box-number">12</span>
                   <span class="w2-box-label">Codes (D, W, DD, etc.)</span>
                 </div>
-                ${renderRatingPill('w2-box12')}
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box12`)}
+                  ${renderRatingPill('w2-box12')}
+                </div>
               </div>
               <div style="display: flex; gap: 0.35rem;">
                 <input type="text" class="w2-input-text" style="width: 55px; text-transform: uppercase; font-weight: 700; text-align: center;" value="${w2.box12Code || ''}" placeholder="Code" data-w2-id="${w2.id}" data-w2-field="box12Code">
@@ -1000,6 +1158,7 @@ class TaxApp {
                   <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box12-amt" value="${w2.box12Amount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12Amount">
                 </div>
               </div>
+              ${renderFieldExplanationDrawer('w2-box12', `drawer-explain-w2-${w2.id}-box12`)}
             </div>
 
             <!-- Boxes 15-20: State and Local Taxes Section -->
@@ -1221,6 +1380,42 @@ class TaxApp {
                 });
             }
         });
+        // 3b. Capital Gains -> Capital Gains Card & Gross Income
+        const cap = this.state.otherIncome.capitalGains;
+        if (cap && (cap.shortTerm !== 0 || cap.longTerm !== 0)) {
+            connections.push({
+                id: 'conn-capital-gains-st',
+                sourceId: 'input-capital-gains-st',
+                targetId: 'calc-capital-gains',
+                category: 'capital',
+                label: 'Short-Term Capital Gains'
+            });
+            connections.push({
+                id: 'conn-capital-gains-lt',
+                sourceId: 'input-capital-gains-lt',
+                targetId: 'calc-capital-gains',
+                category: 'capital',
+                label: 'Long-Term Capital Gains'
+            });
+            connections.push({
+                id: 'conn-capital-gains-gross',
+                sourceId: 'calc-capital-gains',
+                targetId: 'calc-gross-income',
+                category: 'capital',
+                label: 'Allowable Capital Gains/Loss'
+            });
+        }
+        // 3c. Schedule C Freelance Expenses -> Gross Income
+        const schedExp = this.state.otherIncome.scheduleCExpenses || 0;
+        if (schedExp > 0) {
+            connections.push({
+                id: 'conn-1099-expenses-gross',
+                sourceId: 'input-1099-nec-expenses',
+                targetId: 'calc-gross-income',
+                category: 'adjustments',
+                label: 'Schedule C Expenses reduce Business Profit'
+            });
+        }
         // 4. Adjustments -> Total Adjustments
         connections.push({
             id: 'conn-adj-student-loan',
@@ -1229,6 +1424,24 @@ class TaxApp {
             category: 'adjustments',
             label: 'Student Loan to Adjustments'
         });
+        if (this.state.adjustments.ira > 0) {
+            connections.push({
+                id: 'conn-adj-ira',
+                sourceId: 'input-adj-ira',
+                targetId: 'calc-total-adjustments',
+                category: 'adjustments',
+                label: 'IRA Deduction to Adjustments'
+            });
+        }
+        if (this.state.adjustments.hsa > 0) {
+            connections.push({
+                id: 'conn-adj-hsa',
+                sourceId: 'input-adj-hsa',
+                targetId: 'calc-total-adjustments',
+                category: 'adjustments',
+                label: 'HSA Form 8889 to Adjustments'
+            });
+        }
         // 5. Gross Income & Adjustments -> AGI
         connections.push({
             id: 'conn-gross-agi',
@@ -1243,6 +1456,52 @@ class TaxApp {
             targetId: 'calc-agi',
             category: 'adjustments',
             label: 'Adjustments to AGI'
+        });
+        // 5b. Schedule A Itemized Deductions Connections
+        const itm = this.state.itemizedDeductions;
+        if (itm && itm.medicalExpenses > 0) {
+            connections.push({
+                id: 'conn-itemized-medical',
+                sourceId: 'input-itemized-medical',
+                targetId: 'calc-itemized-deductions',
+                category: 'itemized',
+                label: 'Medical Expenses (>7.5% AGI)'
+            });
+        }
+        if (itm && itm.realEstateTax > 0) {
+            connections.push({
+                id: 'conn-itemized-salt',
+                sourceId: 'input-itemized-salt',
+                targetId: 'calc-itemized-deductions',
+                category: 'itemized',
+                label: 'Real Estate Tax (SALT)'
+            });
+        }
+        if (itm && itm.mortgageInterest > 0) {
+            connections.push({
+                id: 'conn-itemized-mortgage',
+                sourceId: 'input-itemized-mortgage',
+                targetId: 'calc-itemized-deductions',
+                category: 'itemized',
+                label: 'Mortgage Interest'
+            });
+        }
+        if (itm && itm.charity > 0) {
+            connections.push({
+                id: 'conn-itemized-charity',
+                sourceId: 'input-itemized-charity',
+                targetId: 'calc-itemized-deductions',
+                category: 'itemized',
+                label: 'Charitable Donations'
+            });
+        }
+        // Schedule A Itemized Card -> Deduction Card
+        connections.push({
+            id: 'conn-itemized-deduction-choice',
+            sourceId: 'calc-itemized-deductions',
+            targetId: 'calc-standard-deduction',
+            category: 'itemized',
+            label: 'Optimal Deduction to Return'
         });
         // 6. Filing Status -> Standard Deduction
         connections.push({
@@ -1364,12 +1623,29 @@ class TaxApp {
         };
         updateCard('calc-total-w2-wages', taxData.w2WagesCalc, formatCurrency(taxData.w2WagesCalc.result));
         updateCard('calc-gross-income', taxData.grossIncomeCalc, formatCurrency(taxData.grossIncomeCalc.result));
+        updateCard('calc-capital-gains', taxData.capitalGainsCalc, formatCurrencyExact(taxData.capitalGainsCalc.result));
         updateCard('calc-total-adjustments', taxData.adjustmentsCalc, formatCurrency(taxData.adjustmentsCalc.result));
         updateCard('calc-agi', taxData.agiCalc, formatCurrency(taxData.agiCalc.result));
+        updateCard('calc-itemized-deductions', taxData.itemizedCalc, formatCurrency(taxData.itemizedCalc.result));
         updateCard('calc-standard-deduction', taxData.deductionCalc, formatCurrency(taxData.deductionCalc.result));
         updateCard('calc-taxable-income', taxData.taxableIncomeCalc, formatCurrency(taxData.taxableIncomeCalc.result));
         updateCard('calc-tax-before-credits', taxData.taxBeforeCreditsCalc, formatCurrencyExact(taxData.taxBeforeCreditsCalc.result));
         this.renderTaxBrackets(taxData.taxBeforeCreditsCalc.brackets, taxData.taxableIncomeCalc.result);
+        const optDedEl = document.getElementById('optimal-deduction-amount');
+        if (optDedEl)
+            optDedEl.textContent = formatCurrency(taxData.deductionCalc.result);
+        const compBadge = document.getElementById('deduction-comparison-badge');
+        if (compBadge) {
+            const isItemizedChosen = taxData.itemizedCalc.chosenMethod === 'itemized';
+            compBadge.className = `deduction-comparison-pill ${isItemizedChosen ? 'optimal-itemized' : 'optimal-standard'}`;
+            const diff = Math.abs(taxData.itemizedCalc.totalItemizedDeductions - taxData.itemizedCalc.standardDeduction);
+            if (isItemizedChosen) {
+                compBadge.textContent = `🌟 Optimal Choice: Itemized (+$${formatCurrency(diff)} Extra Deduction!)`;
+            }
+            else {
+                compBadge.textContent = `Optimal Choice: Standard Deduction ($${formatCurrency(taxData.itemizedCalc.standardDeduction)})`;
+            }
+        }
         updateCard('calc-total-credits', taxData.creditsCalc, formatCurrency(taxData.creditsCalc.result));
         updateCard('calc-total-tax-liability', taxData.totalTaxCalc, formatCurrencyExact(taxData.totalTaxCalc.result));
         updateCard('calc-total-withholding', taxData.withholdingCalc, formatCurrencyExact(taxData.withholdingCalc.result));
@@ -1385,6 +1661,7 @@ class TaxApp {
         }
         this.updateTableOfContents();
         this.bindRatingPillEvents();
+        this.bindExplainEvents();
     }
     renderStateTaxSummary(taxData) {
         const card = document.getElementById('calc-state-tax-summary');

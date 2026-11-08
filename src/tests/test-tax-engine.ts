@@ -1,6 +1,6 @@
 import { calculateTaxes } from '../tax-engine.js';
 import { TaxAppState } from '../types.js';
-import { getFieldRating, renderRatingPill, renderRatingCardHtml, renderRatingCircles } from '../field-ratings.js';
+import { getFieldRating, renderRatingPill, renderRatingCardHtml, renderRatingCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from '../field-ratings.js';
 import assert from 'assert';
 
 console.log("Running TypeScript Tax Engine Verification Suite...\n");
@@ -316,4 +316,135 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   console.log("✓ TS Test 6: Field Ratings & IRS Risk Engine (with Color Circles & '!' on Max) verified correctly!");
 }
 
-console.log("\nAll 6 TypeScript test suites PASSED with 100% accuracy!\n");
+// Test Case 7: Advanced Features — HSA, Capital Loss Limit (-$3k cap), Schedule C Business Expenses & Itemized Deductions (Schedule A)
+{
+  // Sub-case A: Capital loss capping and Schedule C expenses
+  const stateA: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    w2s: [
+      {
+        id: 0,
+        employer: 'Main Corp',
+        ein: '12-3456789',
+        box1: 80000,
+        box2: 9000,
+        box3: 80000,
+        box4: 4960,
+        box5: 80000,
+        box6: 1160,
+        states: [{ id: 0, state: 'CA', stateId: 'CA-1', stateWages: 80000, stateTaxWithheld: 3500, localWages: 0, localTaxWithheld: 0, localityName: '' }]
+      }
+    ],
+    otherIncome: {
+      interest: 500,
+      sources: [
+        { id: 1, type: '1099-NEC', payer: 'Consulting Client', amount: 12000 }
+      ],
+      capitalGains: { shortTerm: -5000, longTerm: -2000 }, // Total net loss -$7,000, should be capped at -$3,000!
+      scheduleCExpenses: 4000 // Reduces $12,000 1099-NEC down to $8,000 net profit
+    },
+    adjustments: {
+      studentLoan: 0,
+      ira: 2000,
+      hsa: 3500 // Form 8889 HSA deduction
+    },
+    dependents: { childrenCount: 0 },
+    itemizedDeductions: {
+      medicalExpenses: 0,
+      realEstateTax: 0,
+      mortgageInterest: 0,
+      charity: 0
+    },
+    deductionMethod: 'auto',
+    showAllArrows: true
+  };
+
+  const resA = calculateTaxes(stateA);
+
+  // Capital gains: net is -7,000, capped at -3,000
+  assert.strictEqual(resA.capitalGainsCalc.netTotal, -7000, 'Total capital loss is -7,000');
+  assert.strictEqual(resA.capitalGainsCalc.allowableLoss, -3000, 'Allowable loss is capped at -3,000');
+  assert.strictEqual(resA.capitalGainsCalc.result, -3000, 'Result reflects -$3,000 loss deduction');
+
+  // Gross income: 80,000 (W2) + 500 (INT) + (12,000 - 4,000 = 8,000 1099 Net) + (-3,000 Cap Gains) = 85,500
+  assert.strictEqual(resA.grossIncomeCalc.result, 85500, 'Gross income with Schedule C expenses and capped capital losses');
+
+  // Adjustments: 2,000 (IRA) + 3,500 (HSA) = 5,500
+  assert.strictEqual(resA.adjustmentsCalc.result, 5500, 'Adjustments include IRA and HSA');
+
+  // AGI: 85,500 - 5,500 = 80,000
+  assert.strictEqual(resA.agiCalc.result, 80000, 'AGI is 80,000');
+
+  // Standard deduction is $14,600, higher than $0 itemized, so auto picks standard
+  assert.strictEqual(resA.deductionCalc.result, 14600, 'Auto picks Standard Deduction when itemized is lower');
+  assert.strictEqual(resA.itemizedCalc.chosenMethod, 'standard', 'Chosen method is standard');
+
+  // Sub-case B: Schedule A Itemized Deductions exceeding Standard Deduction
+  // AGI = $80,000. 7.5% of AGI = $6,000 floor.
+  // Medical = $10,000 -> Deductible = 10,000 - 6,000 = $4,000.
+  // State tax withheld = $3,500 + Real estate tax = $8,000 -> Sum = $11,500, capped at $10,000 SALT!
+  // Mortgage interest = $9,000. Charity = $2,500.
+  // Total Itemized = $4,000 (Medical) + $10,000 (SALT) + $9,000 (Mortgage) + $2,500 (Charity) = $25,500!
+  // $25,500 > $14,600 standard deduction -> Engine should automatically select itemized!
+  const stateB: TaxAppState = {
+    ...stateA,
+    itemizedDeductions: {
+      medicalExpenses: 10000,
+      realEstateTax: 8000,
+      mortgageInterest: 9000,
+      charity: 2500
+    }
+  };
+
+  const resB = calculateTaxes(stateB);
+  assert.strictEqual(resB.itemizedCalc.medicalDeductible, 4000, 'Medical deductible after 7.5% floor (10k - 6k)');
+  assert.strictEqual(resB.itemizedCalc.saltDeduction, 10000, 'SALT capped at $10,000 (3,500 CA tax + 8,000 property = 11,500 -> 10,000)');
+  assert.strictEqual(resB.itemizedCalc.totalItemizedDeductions, 25500, 'Total itemized = 4,000 + 10,000 + 9,000 + 2,500 = 25,500');
+  assert.strictEqual(resB.itemizedCalc.chosenMethod, 'itemized', 'Auto optimal method switches to itemized');
+  assert.strictEqual(resB.deductionCalc.result, 25500, 'Deduction applied to return is $25,500 (saving an extra $10,900 off income!)');
+
+  // Sub-case C: Manual override to force Standard Deduction
+  const stateC: TaxAppState = {
+    ...stateB,
+    deductionMethod: 'standard'
+  };
+  const resC = calculateTaxes(stateC);
+  assert.strictEqual(resC.deductionCalc.result, 14600, 'Forced standard deduction is respected even when itemized is higher');
+
+  console.log("✓ TS Test 7: Advanced Features (HSA, -$3k Cap Loss Cap, Schedule C Expenses & Schedule A Itemized Deductions) verified correctly!");
+}
+
+// Test Case 8: Field Explanations Engine & Inline Drawer Generation
+{
+  // Test explanation drawer generation for W-2 Box 1
+  const b1Drawer = renderFieldExplanationDrawer('w2-box1', 'drawer-test-b1');
+  assert(b1Drawer.includes('id="drawer-test-b1"'), 'Drawer has custom id');
+  assert(b1Drawer.includes('class="field-explain-drawer"'), 'Drawer has field-explain-drawer class');
+  assert(b1Drawer.includes('What does this mean?'), 'Drawer has section: What does this mean?');
+  assert(b1Drawer.includes('Where to find it:'), 'Drawer has section: Where to find it');
+  assert(b1Drawer.includes('Why it matters for your taxes:'), 'Drawer has section: Why it matters');
+  assert(b1Drawer.includes('📌 Pro-Tip / Verdict:'), 'Drawer has section: Pro-Tip');
+  assert(b1Drawer.includes('data-close-drawer="drawer-test-b1"'), 'Drawer has close button with target');
+
+  // Test explain toggle button generation
+  const toggleBtn = renderExplainToggleBtn('drawer-test-b1', 'Explain Box 1');
+  assert(toggleBtn.includes('class="btn-explain-toggle"'), 'Toggle button has btn-explain-toggle class');
+  assert(toggleBtn.includes('data-explain-target="drawer-test-b1"'), 'Toggle button has data-explain-target');
+  assert(toggleBtn.includes('Explain Box 1'), 'Toggle button includes label text');
+
+  // Test new rating definitions exist and have complete scorecards
+  const hsaRating = getFieldRating('adj-hsa');
+  assert.strictEqual(hsaRating.recommendation, 'high_savings', 'HSA is high money saver');
+  assert(hsaRating.explanation, 'HSA has explanation');
+
+  const capRating = getFieldRating('capital-gains');
+  assert.strictEqual(capRating.irsRisk, 'high', 'Capital gains is high IRS risk');
+
+  const medRating = getFieldRating('itemized-medical');
+  assert.strictEqual(medRating.importanceScore, 1, 'Medical is voluntary (1/4)');
+
+  console.log("✓ TS Test 8: Field Explanations Engine & Inline Drawer Generation verified correctly!");
+}
+
+console.log("\nAll 8 TypeScript test suites PASSED with 100% accuracy!\n");

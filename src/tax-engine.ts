@@ -17,6 +17,8 @@ import {
   FicaCalculation,
   EffectiveRateCalculation,
   StateTaxCalculation,
+  ItemizedDeductionCalculation,
+  CapitalGainsCalculation,
   TaxCalculationSummary
 } from './types.js';
 
@@ -224,17 +226,84 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
       : `Total Wages = ${box1Values.map(v => formatCurrency(v)).join(' + ')} = ${formatCurrency(totalW2Wages)}`
   };
 
+  // State & Local Tax Summary (Boxes 15-20 across all W-2s) - Computed early for SALT deduction
+  const stateLines = w2List.flatMap(w => (w.states || []).map((s: StateTaxLine) => ({ ...s, w2Id: w.id })));
+  const totalStateWages = stateLines.reduce((sum, s) => sum + (Number(s.stateWages) || 0), 0);
+  const totalStateTaxWithheld = stateLines.reduce((sum, s) => sum + (Number(s.stateTaxWithheld) || 0), 0);
+  const totalLocalTaxWithheld = stateLines.reduce((sum, s) => sum + (Number(s.localTaxWithheld) || 0), 0);
+
+  const stateMap = new Map<string, { state: string; stateWages: number; stateTaxWithheld: number; localTaxWithheld: number; sourceFieldIds: string[] }>();
+  stateLines.forEach(s => {
+    const st = (s.state || 'OTHER').toUpperCase().trim();
+    if (!stateMap.has(st)) {
+      stateMap.set(st, { state: st, stateWages: 0, stateTaxWithheld: 0, localTaxWithheld: 0, sourceFieldIds: [] });
+    }
+    const item = stateMap.get(st)!;
+    item.stateWages += Number(s.stateWages) || 0;
+    item.stateTaxWithheld += Number(s.stateTaxWithheld) || 0;
+    item.localTaxWithheld += Number(s.localTaxWithheld) || 0;
+    item.sourceFieldIds.push(`w2-${s.w2Id}-state-${s.id}-box17`);
+  });
+
+  const byState = Array.from(stateMap.values());
+  const stateWithheldValues = stateLines.map(s => ({
+    state: (s.state || 'State').toUpperCase(),
+    amount: Number(s.stateTaxWithheld) || 0
+  })).filter(x => x.amount > 0);
+
+  const stateTaxCalc: StateTaxCalculation = {
+    result: totalStateTaxWithheld,
+    totalStateWages,
+    totalStateWithheld: totalStateTaxWithheld,
+    totalLocalWithheld: totalLocalTaxWithheld,
+    byState,
+    sourceFields: stateLines.map(s => `w2-${s.w2Id}-state-${s.id}-box17`),
+    generalFormula: 'Total State Withholding = ∑(W-2 Box 17)',
+    pluggedFormula: stateWithheldValues.length > 0
+      ? `Total State Tax = ${stateWithheldValues.map(v => `${v.state}: ${formatCurrencyExact(v.amount)}`).join(' + ')} = ${formatCurrencyExact(totalStateTaxWithheld)}`
+      : 'Total State Tax = $0.00'
+  };
+
+  // Capital Gains / Losses (Schedule D / Line 7)
+  const stGain = Number(state.otherIncome?.capitalGains?.shortTerm) || 0;
+  const ltGain = Number(state.otherIncome?.capitalGains?.longTerm) || 0;
+  const netGainLoss = stGain + ltGain;
+  const maxLoss = filingStatus === 'married_separate' ? -1500 : -3000;
+  const allowableCapitalNet = netGainLoss < 0 ? Math.max(maxLoss, netGainLoss) : netGainLoss;
+
+  const capitalGainsCalc: CapitalGainsCalculation = {
+    result: allowableCapitalNet,
+    netTotal: netGainLoss,
+    allowableLoss: allowableCapitalNet,
+    sourceFields: ['input-capital-gains-st', 'input-capital-gains-lt'],
+    generalFormula: 'Net Capital Gain/Loss = Short-Term + Long-Term (Losses capped at -$3,000/yr)',
+    pluggedFormula: netGainLoss < 0
+      ? `Net = ${formatCurrency(stGain)} + ${formatCurrency(ltGain)} = ${formatCurrency(netGainLoss)} ➔ Capped at ${formatCurrency(allowableCapitalNet)}`
+      : `Net = ${formatCurrency(stGain)} + ${formatCurrency(ltGain)} = ${formatCurrency(allowableCapitalNet)}`
+  };
+
+  // Schedule C Business Expenses
+  const scheduleCExpenses = Math.max(0, Number(state.otherIncome?.scheduleCExpenses) || 0);
+
   // Additional Incomes
   const interestIncome = Number(state.otherIncome?.interest) || 0;
   const extraSources = state.otherIncome?.sources || [];
-  const extraSourcesTotal = extraSources.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-  const otherIncomeTotal = interestIncome + extraSourcesTotal;
+  let extraSourcesTotal = 0;
+  extraSources.forEach(s => {
+    let amt = Number(s.amount) || 0;
+    if (s.type === '1099-NEC' && scheduleCExpenses > 0) {
+      amt = Math.max(0, amt - scheduleCExpenses);
+    }
+    extraSourcesTotal += amt;
+  });
+  const otherIncomeTotal = interestIncome + extraSourcesTotal + allowableCapitalNet;
 
   // 2. Total Gross Income
-  const grossIncome = totalW2Wages + otherIncomeTotal;
+  const grossIncome = Math.max(0, totalW2Wages + otherIncomeTotal);
   const grossIncomeSourceFields = [
     'calc-total-w2-wages',
     ...(interestIncome > 0 ? ['input-other-interest'] : []),
+    ...(allowableCapitalNet !== 0 ? ['calc-capital-gains'] : []),
     ...extraSources.filter(s => (Number(s.amount) || 0) > 0).map(s => `input-income-source-${s.id}`)
   ];
 
@@ -244,9 +313,16 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
   }
   extraSources.forEach(s => {
     if ((Number(s.amount) || 0) > 0) {
-      pluggedFormulaParts.push(formatCurrency(Number(s.amount) || 0));
+      let amt = Number(s.amount) || 0;
+      if (s.type === '1099-NEC' && scheduleCExpenses > 0) {
+        amt = Math.max(0, amt - scheduleCExpenses);
+      }
+      pluggedFormulaParts.push(formatCurrency(amt));
     }
   });
+  if (allowableCapitalNet !== 0) {
+    pluggedFormulaParts.push(formatCurrency(allowableCapitalNet));
+  }
   if (pluggedFormulaParts.length === 1) {
     pluggedFormulaParts.push('$0');
   }
@@ -255,7 +331,7 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     result: grossIncome,
     sourceFields: grossIncomeSourceFields,
     generalFormula: extraSources.length > 0 
-      ? 'Gross Income = Total W-2 Wages + Interest + Additional Incomes'
+      ? 'Gross Income = Total W-2 Wages + Interest + Additional Incomes + Net Capital Gains'
       : 'Gross Income = Total W-2 Wages + Other Incomes',
     pluggedFormula: `Gross Income = ${pluggedFormulaParts.join(' + ')} = ${formatCurrency(grossIncome)}`
   };
@@ -282,22 +358,94 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     pluggedFormula: `AGI = ${formatCurrency(grossIncome)} − ${formatCurrency(totalAdjustments)} = ${formatCurrency(agi)}`
   };
 
-  // 5. Standard Deduction
+  // 5. Standard vs Itemized Deductions (Schedule A)
   const standardDeductionBase = rules.standardDeduction[filingStatus] || 14600;
+
+  const medicalRaw = Number(state.itemizedDeductions?.medicalExpenses) || 0;
+  const medicalThreshold = 0.075 * agi;
+  const allowableMedical = Math.max(0, medicalRaw - medicalThreshold);
+
+  const realEstateTax = Number(state.itemizedDeductions?.realEstateTax) || 0;
+  const totalSaltPaid = realEstateTax + totalStateTaxWithheld;
+  const saltCap = filingStatus === 'married_separate' ? 5000 : 10000;
+  const allowableSalt = Math.min(saltCap, totalSaltPaid);
+
+  const mortgageInterest = Number(state.itemizedDeductions?.mortgageInterest) || 0;
+  const charity = Number(state.itemizedDeductions?.charity) || 0;
+
+  const totalItemized = allowableMedical + allowableSalt + mortgageInterest + charity;
+
+  const method = state.deductionMethod || 'auto';
+  let chosenMethod: 'standard' | 'itemized' = 'standard';
+  let chosenDeduction = standardDeductionBase;
+
+  if (method === 'auto') {
+    if (totalItemized > standardDeductionBase) {
+      chosenMethod = 'itemized';
+      chosenDeduction = totalItemized;
+    } else {
+      chosenMethod = 'standard';
+      chosenDeduction = standardDeductionBase;
+    }
+  } else if (method === 'itemized') {
+    chosenMethod = 'itemized';
+    chosenDeduction = totalItemized;
+  } else {
+    chosenMethod = 'standard';
+    chosenDeduction = standardDeductionBase;
+  }
+
+  const isItemizedBetter = totalItemized > standardDeductionBase;
+  const savingsOverAlternate = Math.abs(totalItemized - standardDeductionBase);
+
+  const itemizedCalc: ItemizedDeductionCalculation = {
+    result: chosenDeduction,
+    sourceFields: [
+      'input-itemized-medical',
+      'input-itemized-salt',
+      'input-itemized-mortgage',
+      'input-itemized-charity',
+      'calc-agi',
+      'select-filing-status'
+    ],
+    generalFormula: 'Itemized Deductions = Medical (>7.5% AGI) + SALT (cap $10k) + Mortgage Interest + Charity',
+    pluggedFormula: `Medical: ${formatCurrency(allowableMedical)} + SALT: ${formatCurrency(allowableSalt)} + Mortgage: ${formatCurrency(mortgageInterest)} + Charity: ${formatCurrency(charity)} = ${formatCurrency(totalItemized)} (vs. Standard ${formatCurrency(standardDeductionBase)})`,
+    isItemizedBetter,
+    totalItemized,
+    totalItemizedDeductions: totalItemized,
+    allowableMedical,
+    medicalDeductible: allowableMedical,
+    allowableSalt,
+    saltDeduction: allowableSalt,
+    mortgage: mortgageInterest,
+    charity,
+    standardDeductionAmount: standardDeductionBase,
+    standardDeduction: standardDeductionBase,
+    chosenDeduction,
+    chosenMethod,
+    savingsOverAlternate
+  };
+
   const deductionCalc: CalculationResult = {
-    result: standardDeductionBase,
-    sourceFields: ['select-filing-status', 'select-tax-year'],
-    generalFormula: `Standard Deduction (${filingStatusLabel(filingStatus)}, Year ${year})`,
-    pluggedFormula: `Standard Deduction = ${formatCurrency(standardDeductionBase)}`
+    result: chosenDeduction,
+    sourceFields: chosenMethod === 'itemized' 
+      ? ['calc-itemized-deductions', 'select-filing-status'] 
+      : ['select-filing-status', 'select-tax-year'],
+    generalFormula: chosenMethod === 'itemized'
+      ? 'Deduction = Itemized Deductions (Schedule A - Larger than Standard)'
+      : `Standard Deduction (${filingStatusLabel(filingStatus)}, Year ${year})`,
+    pluggedFormula: chosenMethod === 'itemized'
+      ? `Itemized Deduction Selected = ${formatCurrency(chosenDeduction)} (Saves ${formatCurrency(savingsOverAlternate)} more than Standard!)`
+      : `Standard Deduction = ${formatCurrency(chosenDeduction)}`
   };
 
   // 6. Taxable Income - Line 15 on Form 1040
-  const taxableIncome = Math.max(0, agi - standardDeductionBase);
+  const taxableIncome = Math.max(0, agi - chosenDeduction);
   const taxableIncomeCalc: CalculationResult = {
     result: taxableIncome,
     sourceFields: ['calc-agi', 'calc-standard-deduction'],
-    generalFormula: 'Taxable Income = max(0, AGI − Standard Deduction)',
-    pluggedFormula: `Taxable Income = max(0, ${formatCurrency(agi)} − ${formatCurrency(standardDeductionBase)}) = ${formatCurrency(taxableIncome)}`
+    generalFormula: 'Taxable Income = max(0, AGI − Deductions)',
+    pluggedFormula: `Taxable Income = max(0, ${formatCurrency(agi)} − ${formatCurrency(chosenDeduction)}) = ${formatCurrency(taxableIncome)}`
   };
 
   // 7. Federal Income Tax (Marginal Tax Brackets calculation)
@@ -442,44 +590,6 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     pluggedFormula: `Total FICA = ${formatCurrencyExact(totalSSTax)} + ${formatCurrencyExact(totalMedTax)} = ${formatCurrencyExact(totalFicaWithheld)}`
   };
 
-  // 13. State & Local Tax Summary (Boxes 15-20 across all W-2s)
-  const stateLines = w2List.flatMap(w => (w.states || []).map((s: StateTaxLine) => ({ ...s, w2Id: w.id })));
-  const totalStateWages = stateLines.reduce((sum, s) => sum + (Number(s.stateWages) || 0), 0);
-  const totalStateTaxWithheld = stateLines.reduce((sum, s) => sum + (Number(s.stateTaxWithheld) || 0), 0);
-  const totalLocalTaxWithheld = stateLines.reduce((sum, s) => sum + (Number(s.localTaxWithheld) || 0), 0);
-
-  const stateMap = new Map<string, { state: string; stateWages: number; stateTaxWithheld: number; localTaxWithheld: number; sourceFieldIds: string[] }>();
-  stateLines.forEach(s => {
-    const st = (s.state || 'OTHER').toUpperCase().trim();
-    if (!stateMap.has(st)) {
-      stateMap.set(st, { state: st, stateWages: 0, stateTaxWithheld: 0, localTaxWithheld: 0, sourceFieldIds: [] });
-    }
-    const item = stateMap.get(st)!;
-    item.stateWages += Number(s.stateWages) || 0;
-    item.stateTaxWithheld += Number(s.stateTaxWithheld) || 0;
-    item.localTaxWithheld += Number(s.localTaxWithheld) || 0;
-    item.sourceFieldIds.push(`w2-${s.w2Id}-state-${s.id}-box17`);
-  });
-
-  const byState = Array.from(stateMap.values());
-  const stateWithheldValues = stateLines.map(s => ({
-    state: (s.state || 'State').toUpperCase(),
-    amount: Number(s.stateTaxWithheld) || 0
-  })).filter(x => x.amount > 0);
-
-  const stateTaxCalc: StateTaxCalculation = {
-    result: totalStateTaxWithheld,
-    totalStateWages,
-    totalStateWithheld: totalStateTaxWithheld,
-    totalLocalWithheld: totalLocalTaxWithheld,
-    byState,
-    sourceFields: stateLines.map(s => `w2-${s.w2Id}-state-${s.id}-box17`),
-    generalFormula: 'Total State Withholding = ∑(W-2 Box 17)',
-    pluggedFormula: stateWithheldValues.length > 0
-      ? `Total State Tax = ${stateWithheldValues.map(v => `${v.state}: ${formatCurrencyExact(v.amount)}`).join(' + ')} = ${formatCurrencyExact(totalStateTaxWithheld)}`
-      : 'Total State Tax = $0.00'
-  };
-
   // Effective Tax Rate
   const effectiveRate = grossIncome > 0 ? (totalTaxLiability / grossIncome) : 0;
   const effectiveRateCalc: EffectiveRateCalculation = {
@@ -498,6 +608,8 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     adjustmentsCalc,
     agiCalc,
     deductionCalc,
+    itemizedCalc,
+    capitalGainsCalc,
     taxableIncomeCalc,
     taxBeforeCreditsCalc,
     creditsCalc,

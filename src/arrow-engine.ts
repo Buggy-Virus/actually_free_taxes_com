@@ -30,6 +30,8 @@ export class ArrowEngine {
     credits: '#14b8a6',     // Teal
     refund: '#10b981',      // Green
     owed: '#ef4444',        // Red
+    itemized: '#059669',    // Rich Green for Itemized Deductions
+    capital: '#d97706',     // Warm Amber for Capital Gains/Losses
     default: '#3b82f6'      // Blue
   };
 

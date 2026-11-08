@@ -528,6 +528,262 @@ export const FIELD_RATINGS = {
         recommendation: 'must_be_accurate',
         recommendationTag: 'SELECT CURRENT TAX YEAR',
         plainEnglishVerdict: 'Always choose the calendar year in which the income was earned (e.g. choose 2024 for taxes filed in Spring 2025).'
+    },
+    // HEALTH SAVINGS ACCOUNT (HSA) DEDUCTION (FORM 8889)
+    'adj-hsa': {
+        fieldKey: 'adj-hsa',
+        fieldTitle: 'Health Savings Account (HSA) Deduction',
+        formName: 'Schedule 1 • Line 13 & Form 8889',
+        importance: 'optional',
+        importanceScore: 1,
+        importanceLabel: 'Voluntary Deduction (1/4)',
+        importanceDescription: 'Optional above-the-line deduction for individuals enrolled in an HSA-eligible High Deductible Health Plan (HDHP) who made direct contributions.',
+        irsRisk: 'medium',
+        irsRiskScore: 2,
+        irsRiskLabel: 'Medium Risk (2/3)',
+        irsRiskDescription: 'The IRS cross-checks Form 5498-SA and Box 12 Code W on your W-2. Employer payroll contributions are already excluded from Box 1 wages.',
+        savingsPotential: 'high',
+        savingsScore: 3,
+        savingsLabel: 'Triple Tax Advantage ($$$$)',
+        savingsDescription: 'Every dollar contributed direct to an HSA reduces your AGI dollar-for-dollar (up to $4,150 Single / $8,300 Family in 2024), saving hundreds in tax liability.',
+        applicability: 'moderate',
+        applicabilityScore: 2,
+        applicabilityPercent: '26% of Filers',
+        applicabilityLabel: 'HDHP Policyholders (26%)',
+        applicabilityDescription: 'Applies to employees and self-employed individuals with high-deductible health coverage.',
+        recommendation: 'high_savings',
+        recommendationTag: 'HIGH MONEY SAVER • UP TO $4,150+ DEDUCTION',
+        plainEnglishVerdict: 'Triple tax advantage! If you contributed your own post-tax money to an HSA outside payroll deductions, claim it here for instant tax savings.',
+        explanation: {
+            whatItMeans: 'Contributions you personally made to a qualified Health Savings Account (HSA) using your own after-tax funds (NOT pre-tax payroll deductions).',
+            whereToFind: 'Your annual HSA contribution summary or Form 5498-SA sent by your HSA custodian (e.g., Fidelity, Lively, HealthEquity).',
+            whyItMatters: 'This is an above-the-line adjustment to income on Schedule 1 Line 13. It reduces your Adjusted Gross Income (AGI) dollar-for-dollar even if you take the Standard Deduction!',
+            exampleOrTip: 'Do not re-enter payroll HSA contributions that were already deducted on your pay stub (those appear in Box 12 Code W of your W-2 and are already excluded from Box 1 wages).'
+        }
+    },
+    // CAPITAL GAINS & LOSSES (SCHEDULE D)
+    'capital-gains': {
+        fieldKey: 'capital-gains',
+        fieldTitle: 'Net Capital Gains & Losses (Stocks, Crypto, Property)',
+        formName: 'Form 1040 • Line 7 & Schedule D',
+        importance: 'recommended',
+        importanceScore: 3,
+        importanceLabel: 'Required if Sold (3/4)',
+        importanceDescription: 'Report sales of stocks, bonds, crypto, mutual funds, or capital assets reported on Form 1099-B.',
+        irsRisk: 'high',
+        irsRiskScore: 3,
+        irsRiskLabel: 'High Risk (3/3)',
+        irsRiskDescription: 'Brokerages send 1099-B transcripts directly to the IRS. Omitting sales can cause the IRS to assess tax on the full gross proceeds assuming a $0 cost basis!',
+        savingsPotential: 'medium',
+        savingsScore: 2,
+        savingsLabel: 'Offset up to -$3,000 Losses ($$)',
+        savingsDescription: 'Net capital losses can offset up to $3,000 ($1,500 if MFS) of ordinary wage income, carrying forward the rest to future years.',
+        applicability: 'moderate',
+        applicabilityScore: 2,
+        applicabilityPercent: '30% of Filers',
+        applicabilityLabel: 'Investors (30%)',
+        applicabilityDescription: 'Applies to anyone who sold stocks, crypto, or investments in taxable brokerage accounts.',
+        recommendation: 'must_be_accurate',
+        recommendationTag: 'MUST MATCH FORM 1099-B',
+        plainEnglishVerdict: 'Report net gains and losses from Form 1099-B. If you lost money this year, up to $3,000 can reduce your taxable wage income!',
+        explanation: {
+            whatItMeans: 'Net profit or loss resulting from selling investments (stocks, ETFs, cryptocurrencies, bonds) or personal property held in taxable accounts.',
+            whereToFind: 'Form 1099-B or Consolidated 1099 Tax Statement from your brokerage (Robinhood, Schwab, Fidelity, Coinbase, etc.).',
+            whyItMatters: 'Net gains increase taxable income. Net losses offset other income up to -$3,000 per year (-$1,500 if MFS), with any remaining loss carried forward indefinitely.',
+            exampleOrTip: 'If your net result is negative (e.g. -$5,000), enter it with a minus sign or negative amount. The IRS caps the deduction at -$3,000 against ordinary income this year.'
+        }
+    },
+    // SCHEDULE C FREELANCE BUSINESS EXPENSES
+    'income-1099-nec-expenses': {
+        fieldKey: 'income-1099-nec-expenses',
+        fieldTitle: 'Deductible Freelance Business Expenses',
+        formName: 'Schedule C • Part II (Expenses)',
+        importance: 'optional',
+        importanceScore: 1,
+        importanceLabel: 'Voluntary Expense Deduction (1/4)',
+        importanceDescription: 'Ordinary and necessary expenses incurred in earning your 1099-NEC freelance income (mileage, supplies, software, home office).',
+        irsRisk: 'medium',
+        irsRiskScore: 2,
+        irsRiskLabel: 'Medium-High Risk (2/3)',
+        irsRiskDescription: 'The IRS scrutinizes round-number expense deductions and losses on Schedule C. Keep receipts, bank records, and mileage logs.',
+        savingsPotential: 'high',
+        savingsScore: 3,
+        savingsLabel: 'Double Savings ($$$$$)',
+        savingsDescription: 'Business expenses reduce both your regular income tax AND the 15.3% Self-Employment Tax on Schedule SE.',
+        applicability: 'niche',
+        applicabilityScore: 2,
+        applicabilityPercent: '24% of Filers',
+        applicabilityLabel: 'Freelancers / 1099 Only (24%)',
+        applicabilityDescription: 'Only applies to independent contractors and gig workers who earned 1099 income.',
+        recommendation: 'high_savings',
+        recommendationTag: 'HIGH MONEY SAVER • SLASHES 1099 TAX',
+        plainEnglishVerdict: 'Massive tax saver for contractors! Enter legitimate business expenses (supplies, subscriptions, equipment) to reduce your taxable freelance profit.',
+        explanation: {
+            whatItMeans: 'Ordinary and necessary operating costs you paid out of pocket to earn freelance, contract, or gig income.',
+            whereToFind: 'Your business bank/credit card statements, receipts, and mileage tracking logs.',
+            whyItMatters: 'Directly subtracts from gross 1099-NEC compensation. This reduces both your income tax bracket rate AND the 15.3% self-employment (FICA) tax!',
+            exampleOrTip: 'Common eligible write-offs include software subscriptions, client gifts under $25, business vehicle mileage, advertising, and professional equipment.'
+        }
+    },
+    // SCHEDULE A: MEDICAL & DENTAL EXPENSES
+    'itemized-medical': {
+        fieldKey: 'itemized-medical',
+        fieldTitle: 'Medical & Dental Expenses (Schedule A)',
+        formName: 'Schedule A • Line 1-4',
+        importance: 'optional',
+        importanceScore: 1,
+        importanceLabel: 'Itemized Deduction (1/4)',
+        importanceDescription: 'Only expenses in excess of 7.5% of your AGI can be deducted on Schedule A.',
+        irsRisk: 'low',
+        irsRiskScore: 1,
+        irsRiskLabel: 'Low Risk (1/3)',
+        irsRiskDescription: 'Standard substantiation required if audited. Ensure medical bills were paid out-of-pocket and not reimbursed by insurance or HSA.',
+        savingsPotential: 'medium',
+        savingsScore: 2,
+        savingsLabel: 'Conditional Savings ($$)',
+        savingsDescription: 'Helps taxpayers with catastrophic or high out-of-pocket healthcare costs surpass the Standard Deduction threshold.',
+        applicability: 'niche',
+        applicabilityScore: 1,
+        applicabilityPercent: '7% of Filers',
+        applicabilityLabel: 'High Medical Costs (7%)',
+        applicabilityDescription: 'Only beneficial if your out-of-pocket medical expenses exceed 7.5% of your AGI.',
+        recommendation: 'safe_to_ignore',
+        recommendationTag: 'ONLY DEDUCTIBLE IF >7.5% OF AGI',
+        plainEnglishVerdict: 'You can only deduct medical expenses that exceed 7.5% of your AGI. For most people with modest medical bills, this is safe to skip.',
+        explanation: {
+            whatItMeans: 'Out-of-pocket medical, dental, vision, prescription, and hospital costs paid during the tax year not covered or reimbursed by insurance or an HSA/FSA.',
+            whereToFind: 'Healthcare portal statements, pharmacy annual expense summaries, and medical invoices.',
+            whyItMatters: 'Tax code Section 213 permits deducting the portion that exceeds 7.5% of your Adjusted Gross Income (AGI).',
+            exampleOrTip: 'If your AGI is $80,000, 7.5% is $6,000. If you spent $10,000 on medical care, your deduction is $4,000 ($10,000 - $6,000).'
+        }
+    },
+    // SCHEDULE A: STATE & LOCAL TAXES (SALT) / REAL ESTATE TAX
+    'itemized-salt': {
+        fieldKey: 'itemized-salt',
+        fieldTitle: 'Real Estate & Property Taxes (SALT)',
+        formName: 'Schedule A • Line 5b',
+        importance: 'optional',
+        importanceScore: 1,
+        importanceLabel: 'Itemized Deduction (1/4)',
+        importanceDescription: 'Property and real estate taxes paid to county/city governments. Added to state income tax withholding, subject to the $10,000 SALT cap.',
+        irsRisk: 'low',
+        irsRiskScore: 1,
+        irsRiskLabel: 'Low Risk (1/3)',
+        irsRiskDescription: 'Counties report property tax payments to mortgage escrow lenders (Form 1098). The statutory $10,000 cap is strictly enforced by computer.',
+        savingsPotential: 'high',
+        savingsScore: 3,
+        savingsLabel: 'Homeowner Tax Deduction ($$$)',
+        savingsDescription: 'Major deduction component for homeowners. Capped at $10,000 ($5,000 if married filing separately).',
+        applicability: 'moderate',
+        applicabilityScore: 2,
+        applicabilityPercent: '32% of Filers',
+        applicabilityLabel: 'Homeowners (32%)',
+        applicabilityDescription: 'Applies to homeowners who pay county property or school district real estate taxes.',
+        recommendation: 'high_savings',
+        recommendationTag: 'HIGH SAVINGS FOR HOMEOWNERS (CAP $10K)',
+        plainEnglishVerdict: 'If you own a home, enter the property taxes you paid this year (found on Form 1098 from your mortgage company). Combined with state withholding, this can help you beat the Standard Deduction.',
+        explanation: {
+            whatItMeans: 'State and Local Taxes (SALT), specifically real estate property taxes assessed on your home or land by local government authorities.',
+            whereToFind: 'Box 10 of Form 1098 (Mortgage Interest Statement) or your county/city property tax bill receipt.',
+            whyItMatters: 'Combined with your state income tax withholding (from W-2 Box 17), this is deductible up to a statutory cap of $10,000 ($5,000 if MFS).',
+            exampleOrTip: 'If state income tax withholding was $4,000 and property tax was $8,000, your combined SALT is $12,000, which is capped at the maximum $10,000 deduction.'
+        }
+    },
+    // SCHEDULE A: MORTGAGE INTEREST
+    'itemized-mortgage': {
+        fieldKey: 'itemized-mortgage',
+        fieldTitle: 'Home Mortgage Interest (Form 1098)',
+        formName: 'Schedule A • Line 8a',
+        importance: 'optional',
+        importanceScore: 1,
+        importanceLabel: 'Itemized Deduction (1/4)',
+        importanceDescription: 'Interest paid on up to $750,000 of qualified acquisition debt for your primary or secondary residence.',
+        irsRisk: 'low',
+        irsRiskScore: 1,
+        irsRiskLabel: 'Low Risk (1/3)',
+        irsRiskDescription: 'Lenders file Form 1098 directly with the IRS. Simply match Box 1 of your Form 1098.',
+        savingsPotential: 'high',
+        savingsScore: 3,
+        savingsLabel: 'Huge Homeowner Deduction ($$$$)',
+        savingsDescription: 'One of the largest deductions in the tax code, often enabling homeowners to itemize and save thousands over the standard deduction.',
+        applicability: 'moderate',
+        applicabilityScore: 2,
+        applicabilityPercent: '30% of Filers',
+        applicabilityLabel: 'Mortgage Holders (30%)',
+        applicabilityDescription: 'Applies to homeowners paying interest on a residential mortgage.',
+        recommendation: 'high_savings',
+        recommendationTag: 'PRIMARY DRIVER OF SCHEDULE A SAVINGS',
+        plainEnglishVerdict: 'Huge deduction! Look at Box 1 of your Form 1098 from your mortgage bank. Entering this is the #1 reason people choose to itemize deductions.',
+        explanation: {
+            whatItMeans: 'Qualified interest paid on a mortgage secured by your primary residence or second home on loans up to $750,000 ($375,000 if MFS).',
+            whereToFind: 'Box 1 on Form 1098 provided by your mortgage lender or servicer.',
+            whyItMatters: 'Often the largest itemized deduction for middle-class homeowners, frequently pushing total deductions well beyond the standard deduction.',
+            exampleOrTip: 'If your standard deduction is $14,600 and you paid $12,000 in mortgage interest alone, combining this with SALT or charity often makes itemizing far more profitable.'
+        }
+    },
+    // SCHEDULE A: CHARITABLE CONTRIBUTIONS
+    'itemized-charity': {
+        fieldKey: 'itemized-charity',
+        fieldTitle: 'Charitable Donations & Gifts',
+        formName: 'Schedule A • Line 11-14',
+        importance: 'optional',
+        importanceScore: 1,
+        importanceLabel: 'Itemized Deduction (1/4)',
+        importanceDescription: 'Cash and non-cash gifts to qualified 501(c)(3) religious, educational, and non-profit organizations.',
+        irsRisk: 'medium',
+        irsRiskScore: 2,
+        irsRiskLabel: 'Medium Risk if >$250 (2/3)',
+        irsRiskDescription: 'Any single donation of $250 or more requires written contemporaneous acknowledgment from the charity. Non-cash donations over $500 require Form 8283.',
+        savingsPotential: 'high',
+        savingsScore: 3,
+        savingsLabel: 'Direct Tax Write-off ($$$)',
+        savingsDescription: 'Can deduct up to 60% of your AGI in cash donations, directly lowering taxable income.',
+        applicability: 'moderate',
+        applicabilityScore: 2,
+        applicabilityPercent: '28% of Filers',
+        applicabilityLabel: 'Donors (28%)',
+        applicabilityDescription: 'Applies to anyone who contributed to qualified charities, places of worship, or non-profits.',
+        recommendation: 'high_savings',
+        recommendationTag: 'DEDUCT DONATIONS IF ITEMIZING',
+        plainEnglishVerdict: 'Keep your receipts and donation acknowledgment letters! Donating saves money if your total itemized deductions exceed your standard deduction.',
+        explanation: {
+            whatItMeans: 'Donations of cash, check, credit card, or goods given to registered 501(c)(3) public charities, religious houses of worship, or educational institutions.',
+            whereToFind: 'Year-end giving receipts and written acknowledgment letters from the non-profit organizations you supported.',
+            whyItMatters: 'Cash donations to public charities can be deducted up to 60% of your AGI when itemizing on Schedule A.',
+            exampleOrTip: 'Contributions to political campaigns, GoFundMe personal causes, or individuals are NOT tax-deductible under federal law.'
+        }
+    },
+    // SCHEDULE A VS STANDARD DEDUCTION COMPARISON
+    'calc-itemized-deductions': {
+        fieldKey: 'calc-itemized-deductions',
+        fieldTitle: 'Itemized Deductions vs. Standard Deduction',
+        formName: 'Form 1040 Line 12 & Schedule A',
+        importance: 'critical',
+        importanceScore: 4,
+        importanceLabel: 'Decision Point (4/4)',
+        importanceDescription: 'The IRS allows you to take whichever is higher: the fixed Standard Deduction ($14,600 Single / $29,200 Married) OR your custom itemized expenses.',
+        irsRisk: 'low',
+        irsRiskScore: 1,
+        irsRiskLabel: 'Low Risk (1/3)',
+        irsRiskDescription: 'You have a statutory right to choose the higher deduction. Automated computer algorithms verify math.',
+        savingsPotential: 'high',
+        savingsScore: 3,
+        savingsLabel: 'Maximize Your Refund ($$$$$)',
+        savingsDescription: 'Automatically claiming the higher of the two guarantees the lowest possible taxable income and largest refund.',
+        applicability: 'common',
+        applicabilityScore: 4,
+        applicabilityPercent: '100% of Filers',
+        applicabilityLabel: 'Universal Choice (100%)',
+        applicabilityDescription: 'Every American tax return must choose either the standard or itemized deduction.',
+        recommendation: 'high_savings',
+        recommendationTag: 'AUTO-OPTIMAL: PICKS THE BIGGEST TAX SHIELD',
+        plainEnglishVerdict: 'We automatically calculate both for you and pick whichever saves you more money! You never have to guess.',
+        explanation: {
+            whatItMeans: 'The tax code gives you two paths to reduce taxable income: a guaranteed flat Standard Deduction or itemizing your actual qualifying expenses on Schedule A.',
+            whereToFind: 'Line 12 on Form 1040 and Schedule A.',
+            whyItMatters: 'Whichever number is larger shields more of your income from taxes, directly increasing your refund dollar-for-dollar.',
+            exampleOrTip: 'Our engine automatically calculates both in real-time, displays the comparison, and picks whichever saves you the most money.'
+        }
     }
 };
 /**
@@ -765,4 +1021,60 @@ export function renderRatingCardHtml(key) {
       </div>
     </div>
   `;
+}
+/**
+ * Render the inline expandable explanation drawer HTML that sits right near each field.
+ */
+export function renderFieldExplanationDrawer(fieldKey, customId) {
+    const r = getFieldRating(fieldKey);
+    const id = customId || `explain-${r.fieldKey}`;
+    const exp = r.explanation || {
+        whatItMeans: r.fieldTitle,
+        whereToFind: `Check your official ${r.formName}.`,
+        whyItMatters: r.importanceDescription,
+        exampleOrTip: r.plainEnglishVerdict
+    };
+    return `
+    <div class="field-explain-drawer" id="${id}" hidden aria-hidden="true">
+      <div class="explain-drawer-content">
+        <div class="explain-header">
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span class="explain-icon">💡</span>
+            <span class="explain-title">${r.fieldTitle} — Field Explainer</span>
+          </div>
+          <button type="button" class="btn-close-drawer" data-close-drawer="${id}" aria-label="Close explanation">✕</button>
+        </div>
+        <div class="explain-body">
+          <div class="explain-section">
+            <span class="explain-label">What does this mean?</span>
+            <p class="explain-text">${exp.whatItMeans}</p>
+          </div>
+          <div class="explain-section">
+            <span class="explain-label">Where to find it:</span>
+            <p class="explain-text">${exp.whereToFind}</p>
+          </div>
+          <div class="explain-section">
+            <span class="explain-label">Why it matters for your taxes:</span>
+            <p class="explain-text">${exp.whyItMatters}</p>
+          </div>
+          <div class="explain-section explain-tip-box">
+            <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+            <p class="explain-text">${exp.exampleOrTip}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `.trim();
+}
+/**
+ * Render the clickable toggle button placed next to a field to expand/collapse its explanation.
+ */
+export function renderExplainToggleBtn(targetId, shortLabel = 'What is this?') {
+    return `
+    <button type="button" class="btn-explain-toggle" data-explain-target="${targetId}" aria-expanded="false" title="Click to view plain-English explanation">
+      <span class="explain-btn-icon">💡</span>
+      <span class="explain-btn-text">${shortLabel}</span>
+      <span class="explain-btn-arrow">▾</span>
+    </button>
+  `.trim();
 }

@@ -1472,6 +1472,178 @@ body {
   border-color: #fcd34d;
 }
 
+/* Inline Expandable Field Explanations */
+.btn-explain-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  line-height: 1.2;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-explain-toggle:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.btn-explain-toggle .explain-btn-arrow {
+  display: inline-block;
+  font-size: 0.65rem;
+  transition: transform 0.2s ease;
+}
+
+.btn-explain-toggle[aria-expanded="true"] {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #0369a1;
+}
+
+.btn-explain-toggle[aria-expanded="true"] .explain-btn-arrow {
+  transform: rotate(180deg);
+}
+
+.field-explain-drawer {
+  margin-top: 0.45rem;
+  margin-bottom: 0.35rem;
+  animation: drawerSlideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  width: 100%;
+}
+
+.field-explain-drawer[hidden] {
+  display: none !important;
+}
+
+@keyframes drawerSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.explain-drawer-content {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-left: 3.5px solid #0284c7;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.75rem;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+}
+
+.explain-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.45rem;
+  margin-bottom: 0.45rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.explain-title {
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 0.78rem;
+}
+
+.btn-close-drawer {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+}
+
+.btn-close-drawer:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.explain-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.explain-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.explain-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.explain-text {
+  font-size: 0.73rem;
+  color: #334155;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.explain-tip-box {
+  background: #fffbeb;
+  border: 1px solid #fef08a;
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  margin-top: 0.2rem;
+}
+
+.explain-tip-box .explain-label {
+  color: #854d0e;
+}
+
+.explain-tip-box .explain-text {
+  color: #713f12;
+}
+
+/* Itemized Deductions & Smart Comparison */
+.deduction-comparison-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.deduction-comparison-pill.itemized-wins {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.deduction-comparison-pill.standard-wins {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
 /* Modal / Popover Overlay for Field Scorecard */
 .guidance-modal-overlay {
   position: fixed;

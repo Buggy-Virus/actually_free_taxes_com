@@ -20,6 +20,8 @@ export class ArrowEngine {
             credits: '#14b8a6',
             refund: '#10b981',
             owed: '#ef4444',
+            itemized: '#059669',
+            capital: '#d97706',
             default: '#3b82f6' // Blue
         };
         this.svg = svgElement;

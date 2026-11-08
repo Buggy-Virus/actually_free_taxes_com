@@ -64,7 +64,7 @@
     <aside class="toc-sidebar" id="toc-sidebar">
       <div class="toc-header">
         <span class="toc-title">📑 Tax Navigator</span>
-        <span class="toc-badge" id="toc-section-counter">6 Parts</span>
+        <span class="toc-badge" id="toc-section-counter">7 Parts</span>
       </div>
 
       <!-- Group: W-2 Forms (Updated dynamically as W-2s are added/removed) -->
@@ -90,20 +90,37 @@
           <span>+</span> Add Income Source
         </button>
         <a href="#section-other-inputs" class="toc-link" data-toc-target="section-other-inputs" style="margin-top: 0.25rem;">
-          <span>Part 2: Adjustments &amp; Credits</span>
+          <span>Part 2: Adjustments &amp; Incomes</span>
+        </a>
+      </div>
+
+      <!-- Group: Itemized Deductions (Schedule A) -->
+      <div class="toc-group">
+        <div class="toc-group-label">
+          <span>Itemized Deductions</span>
+          <span class="toc-badge">Part 3</span>
+        </div>
+        <a href="#section-itemized-inputs" class="toc-link" data-toc-target="section-itemized-inputs">
+          <span>Schedule A Inputs</span>
+        </a>
+        <a href="#calc-itemized-deductions" class="toc-link" data-toc-target="calc-itemized-deductions">
+          <span>Standard vs. Itemized</span>
         </a>
       </div>
 
       <!-- Group: Calculation Engine -->
       <div class="toc-group">
         <div class="toc-group-label">
-          <span>Part 3: Calculations</span>
+          <span>Part 4: Calculations</span>
         </div>
         <a href="#calc-total-w2-wages" class="toc-link" data-toc-target="calc-total-w2-wages">
           <span>Step 1: Total Wages</span>
         </a>
         <a href="#calc-gross-income" class="toc-link" data-toc-target="calc-gross-income">
           <span>Step 2: Gross Income</span>
+        </a>
+        <a href="#calc-capital-gains" class="toc-link" data-toc-target="calc-capital-gains">
+          <span>Step 2b: Capital Gains</span>
         </a>
         <a href="#calc-total-adjustments" class="toc-link" data-toc-target="calc-total-adjustments">
           <span>Step 3: Adjustments</span>
@@ -143,10 +160,10 @@
           <span>🎉 Final Tax Verdict</span>
         </a>
         <a href="#calc-state-tax-summary" class="toc-link" data-toc-target="calc-state-tax-summary">
-          <span>Part 5: State Taxes</span>
+          <span>Part 6: State Taxes</span>
         </a>
         <a href="#section-1040-mirror" class="toc-link" data-toc-target="section-1040-mirror">
-          <span>Part 6: 1040 Mirror</span>
+          <span>Part 7: 1040 Mirror</span>
         </a>
       </div>
     </aside>
@@ -239,6 +256,9 @@
           <button type="button" class="filter-chip" data-filter="must-only" title="Highlight fields that MUST be 100% correct">Must Be 100% Correct</button>
           <button type="button" class="filter-chip" data-filter="savers-only" title="Highlight high savings deductions and refund drivers">Money Savers</button>
           <button type="button" class="filter-chip" data-filter="hide-niche" title="Dim obscure or niche fields you can likely ignore">Dim Optional</button>
+          <button type="button" class="btn btn-sm" id="btn-toggle-all-explain" style="font-size: 0.72rem; padding: 0.25rem 0.65rem; background: #f0fdf4; color: #15803d; border-color: #bbf7d0; font-weight: 700;">
+            💡 Expand All Explanations
+          </button>
           <button type="button" class="btn btn-sm" id="btn-open-ratings-legend" style="font-size: 0.72rem; padding: 0.25rem 0.6rem;">
             ℹ️ Guide to Ratings
           </button>
@@ -296,17 +316,24 @@
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
         <!-- Taxable Interest -->
         <div class="calc-card priority-must" id="card-other-interest" style="padding: 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Form 1099-INT</div>
-            <span class="field-rating-pill badge-priority-verify" data-rating-field="other-interest" role="button" tabindex="0" title="Taxable Interest Income — Click for IRS Risk & Guidance Breakdown">
-              <span class="rating-circles-cluster" aria-label="Attention 2/4, Risk 3/3, Savings 0/3">
-                <span class="rating-circle circle-attention circle-att-2" title="Safe to Ignore / Attention: Recommended (2/4)"></span>
-                <span class="rating-circle circle-risk circle-risk-3 is-max" title="IRS Audit Risk: High Risk if >$10 (3/3) [MAX !]">!</span>
-                <span class="rating-circle circle-savings circle-save-0" title="Money Savings: Adds to Income ($0 Savings)"></span>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-other-interest" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-verify" data-rating-field="other-interest" role="button" tabindex="0" title="Taxable Interest Income — Click for IRS Risk & Guidance Breakdown">
+                <span class="rating-circles-cluster" aria-label="Attention 2/4, Risk 3/3, Savings 0/3">
+                  <span class="rating-circle circle-attention circle-att-2" title="Safe to Ignore / Attention: Recommended (2/4)"></span>
+                  <span class="rating-circle circle-risk circle-risk-3 is-max" title="IRS Audit Risk: High Risk if >$10 (3/3) [MAX !]">!</span>
+                  <span class="rating-circle circle-savings circle-save-0" title="Money Savings: Adds to Income ($0 Savings)"></span>
+                </span>
+                <span class="pill-text">Verify with Form</span>
+                <span class="pill-info-icon">ⓘ</span>
               </span>
-              <span class="pill-text">Verify with Form</span>
-              <span class="pill-info-icon">ⓘ</span>
-            </span>
+            </div>
           </div>
           <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Taxable Interest</div>
           <div class="w2-input-wrapper">
@@ -314,21 +341,185 @@
             <input type="number" step="any" class="w2-input" id="input-other-interest" value="0" placeholder="0">
           </div>
           <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Bank savings interest reported on 1099-INT.</div>
+          <div class="field-explain-drawer" id="drawer-explain-other-interest" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">Taxable Interest Income</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-other-interest" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Interest earned from bank high-yield savings accounts, CDs, checking accounts, and peer lending.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Form 1099-INT Box 1 sent in January by your financial institutions, or via online bank tax documents.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">Banks send Copy A directly to the IRS. If you omit over $10 of interest, the IRS automated matching system flags it.</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">Check your online banking portal in early February. Download your 1099-INT and enter the total interest.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Capital Gains & Losses (Schedule D / Form 8949) -->
+        <div class="calc-card priority-must" id="card-capital-gains-input" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Schedule D / Form 8949</div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-capital-gains" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-must" data-rating-field="capital-gains" role="button" tabindex="0" title="Capital Gains & Losses — Click for IRS Risk & Guidance Breakdown">
+                <span class="rating-circles-cluster" aria-label="Attention 3/4, Risk 3/3, Savings 2/3">
+                  <span class="rating-circle circle-attention circle-att-3" title="Safe to Ignore / Attention: High Attention (3/4)"></span>
+                  <span class="rating-circle circle-risk circle-risk-3 is-max" title="IRS Audit Risk: High Risk (3/3) [MAX !]">!</span>
+                  <span class="rating-circle circle-savings circle-save-2" title="Money Savings: Capital Loss Offsets ($$)"></span>
+                </span>
+                <span class="pill-text">Must Report If Sold</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+          </div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Net Capital Gains &amp; Losses</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <div>
+              <label for="input-capital-gains-st" style="font-size: 0.7rem; font-weight: 600; color: #475569;">Short-Term (≤1 yr)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-capital-gains-st" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-capital-gains-lt" style="font-size: 0.7rem; font-weight: 600; color: #475569;">Long-Term (>1 yr)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-capital-gains-lt" value="0" placeholder="0">
+              </div>
+            </div>
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Stocks, crypto, or property sales from 1099-B. Losses offset income up to -$3,000 cap.</div>
+          <div class="field-explain-drawer" id="drawer-explain-capital-gains" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">Capital Gains & Losses (Schedule D)</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-capital-gains" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Profits or losses from selling capital assets like stocks, mutual funds, ETFs, cryptocurrency, or real estate.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Form 1099-B provided by your brokerages (Robinhood, Fidelity, Charles Schwab, Coinbase, etc.).</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">Brokerages report proceeds to the IRS. If you don't report sales, the IRS may assume your cost basis was $0! If you had net losses, you can deduct up to $3,000 ($1,500 MFS) against ordinary wages.</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">If you sold no investments outside tax-sheltered accounts (401k/IRA), leave at $0. If you suffered losses, claiming the -$3,000 deduction saves you hundreds of dollars in taxes.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Schedule C Freelance Business Expenses -->
+        <div class="calc-card priority-saver" id="card-1099-nec-expenses" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Schedule C Part II</div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-1099-nec-expenses" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="income-1099-nec-expenses" role="button" tabindex="0" title="Freelance Business Expenses — Click for IRS Risk & Guidance Breakdown">
+                <span class="rating-circles-cluster" aria-label="Attention 2/4, Risk 2/3, Savings 3/3">
+                  <span class="rating-circle circle-attention circle-att-2" title="Safe to Ignore / Attention: Recommended for Freelancers (2/4)"></span>
+                  <span class="rating-circle circle-risk circle-risk-2" title="IRS Audit Risk: Medium Risk (2/3)"></span>
+                  <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: Huge Dollar Savings ($$$$) [MAX !]">!</span>
+                </span>
+                <span class="pill-text">Money Saver</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+          </div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Freelance Business Expenses</div>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-1099-nec-expenses" value="0" placeholder="0">
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Ordinary & necessary business expenses reducing your 1099-NEC earnings.</div>
+          <div class="field-explain-drawer" id="drawer-explain-1099-nec-expenses" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">Schedule C Business Expenses</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-1099-nec-expenses" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Costs you incurred to earn self-employment / 1099 income (mileage, software, laptop, home office, supplies).</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Your receipts, bank statements, mileage logs, and bookkeeping software for independent contractor activity.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">Business expenses directly reduce your Schedule C net profit dollar-for-dollar, cutting both your income tax and 15.3% self-employment tax!</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">Never pay taxes on gross 1099 revenue! Deduct all legitimate business expenses you have receipts or records for.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Student Loan Interest -->
         <div class="calc-card priority-saver" id="card-student-loan" style="padding: 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule 1 Line 21</div>
-            <span class="field-rating-pill badge-priority-saver" data-rating-field="adj-student-loan" role="button" tabindex="0" title="Student Loan Interest Deduction — Click for IRS Risk & Guidance Breakdown">
-              <span class="rating-circles-cluster" aria-label="Attention 1/4, Risk 1/3, Savings 3/3">
-                <span class="rating-circle circle-attention circle-att-1" title="Safe to Ignore / Attention: Voluntary (1/4)"></span>
-                <span class="rating-circle circle-risk circle-risk-1" title="IRS Audit Risk: Low Risk (1/3)"></span>
-                <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: High Cash Savings ($$$) [MAX !]">!</span>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-student-loan" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="adj-student-loan" role="button" tabindex="0" title="Student Loan Interest Deduction — Click for IRS Risk & Guidance Breakdown">
+                <span class="rating-circles-cluster" aria-label="Attention 1/4, Risk 1/3, Savings 3/3">
+                  <span class="rating-circle circle-attention circle-att-1" title="Safe to Ignore / Attention: Voluntary (1/4)"></span>
+                  <span class="rating-circle circle-risk circle-risk-1" title="IRS Audit Risk: Low Risk (1/3)"></span>
+                  <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: High Cash Savings ($$$) [MAX !]">!</span>
+                </span>
+                <span class="pill-text">Money Saver</span>
+                <span class="pill-info-icon">ⓘ</span>
               </span>
-              <span class="pill-text">Money Saver</span>
-              <span class="pill-info-icon">ⓘ</span>
-            </span>
+            </div>
           </div>
           <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Student Loan Interest</div>
           <div class="w2-input-wrapper">
@@ -336,21 +527,57 @@
             <input type="number" step="any" class="w2-input" id="input-adj-student-loan" value="0" placeholder="0">
           </div>
           <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Deductible interest paid on student loans (up to $2,500).</div>
+          <div class="field-explain-drawer" id="drawer-explain-student-loan" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">Student Loan Interest Deduction</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-student-loan" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Above-the-line deduction for interest paid during the year on eligible higher education student loans.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Form 1098-E Box 1 from your loan servicer (Aidvantage, MOHELA, Nelnet, Sallie Mae).</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">Capped at $2,500 per year. It directly reduces your AGI, lowering your tax bill without requiring itemizing.</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">If you paid at least $600 in student loan interest, your servicer is required to send you Form 1098-E. Always enter it!</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Traditional IRA Deduction -->
         <div class="calc-card priority-saver" id="card-adj-ira" style="padding: 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule 1 Line 20</div>
-            <span class="field-rating-pill badge-priority-saver" data-rating-field="adj-ira" role="button" tabindex="0" title="Traditional IRA Deduction — Click for IRS Risk & Guidance Breakdown">
-              <span class="rating-circles-cluster" aria-label="Attention 1/4, Risk 2/3, Savings 3/3">
-                <span class="rating-circle circle-attention circle-att-1" title="Safe to Ignore / Attention: Voluntary (1/4)"></span>
-                <span class="rating-circle circle-risk circle-risk-2" title="IRS Audit Risk: Medium Risk (2/3)"></span>
-                <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: High Cash Savings ($$$$) [MAX !]">!</span>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-adj-ira" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="adj-ira" role="button" tabindex="0" title="Traditional IRA Deduction — Click for IRS Risk & Guidance Breakdown">
+                <span class="rating-circles-cluster" aria-label="Attention 1/4, Risk 2/3, Savings 3/3">
+                  <span class="rating-circle circle-attention circle-att-1" title="Safe to Ignore / Attention: Voluntary (1/4)"></span>
+                  <span class="rating-circle circle-risk circle-risk-2" title="IRS Audit Risk: Medium Risk (2/3)"></span>
+                  <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: High Cash Savings ($$$$) [MAX !]">!</span>
+                </span>
+                <span class="pill-text">Money Saver</span>
+                <span class="pill-info-icon">ⓘ</span>
               </span>
-              <span class="pill-text">Money Saver</span>
-              <span class="pill-info-icon">ⓘ</span>
-            </span>
+            </div>
           </div>
           <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Traditional IRA Deduction</div>
           <div class="w2-input-wrapper">
@@ -358,41 +585,451 @@
             <input type="number" step="any" class="w2-input" id="input-adj-ira" value="0" placeholder="0">
           </div>
           <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Pre-tax contributions made to traditional IRAs.</div>
+          <div class="field-explain-drawer" id="drawer-explain-adj-ira" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">Traditional IRA Contribution Deduction</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-adj-ira" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Deductible contributions made directly to an individual retirement arrangement (IRA) up to annual limits ($7,000 / $8,000 if 50+).</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Your personal IRA account transaction history or Form 5498.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">Reduces your taxable income dollar-for-dollar. You can make contributions for the tax year until Tax Day (mid-April)!</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">Roth IRA contributions are NOT deductible (they grow tax-free later). Only enter Traditional IRA contributions here.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Health Savings Account (HSA Form 8889) -->
+        <div class="calc-card priority-saver" id="card-adj-hsa" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Form 8889 / Sched 1 Line 13</div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-adj-hsa" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="adj-hsa" role="button" tabindex="0" title="HSA Contribution Deduction — Click for IRS Risk & Guidance Breakdown">
+                <span class="rating-circles-cluster" aria-label="Attention 1/4, Risk 2/3, Savings 3/3">
+                  <span class="rating-circle circle-attention circle-att-1" title="Safe to Ignore / Attention: Voluntary (1/4)"></span>
+                  <span class="rating-circle circle-risk circle-risk-2" title="IRS Audit Risk: Medium Risk (2/3)"></span>
+                  <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: Triple-Tax-Advantaged ($$$$) [MAX !]">!</span>
+                </span>
+                <span class="pill-text">Money Saver</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+          </div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">HSA Deduction (After-Tax Contributions)</div>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-adj-hsa" value="0" placeholder="0">
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Personal after-tax contributions made to a qualified HSA ($4,150 single / $8,300 family).</div>
+          <div class="field-explain-drawer" id="drawer-explain-adj-hsa" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">Health Savings Account (HSA Form 8889)</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-adj-hsa" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Contributions you made directly from your checking account into an HSA (not via payroll pre-tax paycheck deductions).</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Form 5498-SA or your HSA custodian contribution summary for the tax year.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">This is an above-the-line deduction that lowers your Adjusted Gross Income (AGI) even if you claim the standard deduction.</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">Do NOT enter contributions that were already made through employer payroll (shown with code W in Box 12 of your W-2), as those were already excluded from Box 1 wages!</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Qualifying Children -->
         <div class="calc-card priority-saver" id="card-children-count" style="padding: 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Tax Credits</div>
-            <span class="field-rating-pill badge-priority-saver" data-rating-field="credits-children" role="button" tabindex="0" title="Qualifying Children (Child Tax Credit) — Click for IRS Risk & Guidance Breakdown">
-              <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 2/3, Savings 3/3">
-                <span class="rating-circle circle-attention circle-att-4 is-max" title="Safe to Ignore / Attention: Crucial for Parents (4/4) [MAX !]">!</span>
-                <span class="rating-circle circle-risk circle-risk-2" title="IRS Audit Risk: Medium-High Risk (2/3)"></span>
-                <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: Massive Cash Refund ($$$$$) [MAX !]">!</span>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-children-count" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="credits-children" role="button" tabindex="0" title="Qualifying Children (Child Tax Credit) — Click for IRS Risk & Guidance Breakdown">
+                <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 2/3, Savings 3/3">
+                  <span class="rating-circle circle-attention circle-att-4 is-max" title="Safe to Ignore / Attention: Crucial for Parents (4/4) [MAX !]">!</span>
+                  <span class="rating-circle circle-risk circle-risk-2" title="IRS Audit Risk: Medium-High Risk (2/3)"></span>
+                  <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: Massive Cash Refund ($$$$$) [MAX !]">!</span>
+                </span>
+                <span class="pill-text">Money Saver</span>
+                <span class="pill-info-icon">ⓘ</span>
               </span>
-              <span class="pill-text">Money Saver</span>
-              <span class="pill-info-icon">ⓘ</span>
-            </span>
+            </div>
           </div>
           <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Qualifying Children under 17</div>
           <div class="w2-input-wrapper">
             <input type="number" min="0" max="10" step="1" class="w2-input" id="input-children-count" value="0" style="padding-left: 0.75rem; text-align: left;">
           </div>
           <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">$2,000 Child Tax Credit per eligible child.</div>
+          <div class="field-explain-drawer" id="drawer-explain-children-count" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">Child Tax Credit (Qualifying Children)</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-children-count" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Children under age 17 at year-end who lived with you for more than half the year and whom you supported.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Your dependents' Social Security cards and birth dates.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">Worth up to $2,000 per child directly subtracted from your federal tax liability, with up to $1,700 refundable (Additional Child Tax Credit).</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">One of the largest refund drivers on US tax returns. Make sure the child has a valid SSN issued before the return due date.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- SECTION 3: DOWNSTREAM STEP-BY-STEP CALCULATIONS & EQUATIONS -->
+    <!-- Dotted Divider: Part 3 -->
+    <div class="section-divider-dotted">
+      <span class="divider-badge">PART 3 • SCHEDULE A ITEMIZED DEDUCTIONS VS. STANDARD DEDUCTION</span>
+    </div>
+
+    <!-- SECTION 3: SCHEDULE A ITEMIZED DEDUCTIONS -->
+    <section id="section-itemized-inputs">
+      <div class="w2-section-header">
+        <div class="w2-section-title">
+          <h2>3. Schedule A Itemized Deductions vs. Standard Deduction</h2>
+        </div>
+        <div style="font-size: 0.85rem; color: #64748b;">
+          The IRS allows you to claim whichever reduces your taxes more: your fixed Standard Deduction or the itemized sum of your eligible personal expenses.
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+        <!-- Medical & Dental Expenses -->
+        <div class="calc-card priority-saver" id="card-itemized-medical" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Schedule A Line 1</div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-itemized-medical" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="itemized-medical" role="button" tabindex="0" title="Medical Expenses — Click for Guidance">
+                <span class="rating-circles-cluster" aria-label="Attention 1/4, Risk 2/3, Savings 2/3">
+                  <span class="rating-circle circle-attention circle-att-1"></span>
+                  <span class="rating-circle circle-risk circle-risk-2"></span>
+                  <span class="rating-circle circle-savings circle-save-2"></span>
+                </span>
+                <span class="pill-text">>7.5% AGI Only</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+          </div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Medical &amp; Dental Expenses</div>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-itemized-medical" value="0" placeholder="0">
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Out-of-pocket medical costs exceeding 7.5% of your AGI are deductible.</div>
+          <div class="field-explain-drawer" id="drawer-explain-itemized-medical" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">Medical and Dental Expenses (Schedule A)</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-medical" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Total unreimbursed out-of-pocket doctor visits, prescriptions, surgeries, therapy, dental and vision bills.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Health insurance Explanations of Benefits (EOBs), pharmacy receipts, medical bills.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">Strict 7.5% AGI floor: only medical expenses IN EXCESS of 7.5% of your AGI count toward itemizing.</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">For most filers without catastrophic medical costs, the 7.5% floor makes this $0. If you had major surgery, add it up!</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- State & Local Real Estate / Property Taxes (SALT) -->
+        <div class="calc-card priority-saver" id="card-itemized-salt" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Schedule A Line 5b</div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-itemized-salt" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="itemized-salt" role="button" tabindex="0" title="SALT Property Taxes — Click for Guidance">
+                <span class="rating-circles-cluster" aria-label="Attention 2/4, Risk 2/3, Savings 3/3">
+                  <span class="rating-circle circle-attention circle-att-2"></span>
+                  <span class="rating-circle circle-risk circle-risk-2"></span>
+                  <span class="rating-circle circle-savings circle-save-3 is-max">!</span>
+                </span>
+                <span class="pill-text">$10k Cap</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+          </div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Real Estate / Property Taxes</div>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-itemized-salt" value="0" placeholder="0">
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">County/city property taxes on home/land. Combined with state tax withheld (max $10k cap).</div>
+          <div class="field-explain-drawer" id="drawer-explain-itemized-salt" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">State and Local Taxes (SALT Cap)</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-salt" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Real estate property taxes you paid on your primary residence, vacation home, or personal property.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Form 1098 Box 10 (from mortgage servicer) or county tax assessor bills.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">Federal law caps the total SALT deduction (sum of state income taxes + property taxes) at $10,000 ($5,000 if married filing separately).</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">The engine automatically combines your W-2 state withholding (Box 17) with this property tax number and caps it at $10,000.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Home Mortgage Interest -->
+        <div class="calc-card priority-saver" id="card-itemized-mortgage" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Schedule A Line 8a</div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-itemized-mortgage" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="itemized-mortgage" role="button" tabindex="0" title="Home Mortgage Interest — Click for Guidance">
+                <span class="rating-circles-cluster" aria-label="Attention 3/4, Risk 2/3, Savings 3/3">
+                  <span class="rating-circle circle-attention circle-att-3"></span>
+                  <span class="rating-circle circle-risk circle-risk-2"></span>
+                  <span class="rating-circle circle-savings circle-save-3 is-max">!</span>
+                </span>
+                <span class="pill-text">High Savings</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+          </div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Home Mortgage Interest</div>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-itemized-mortgage" value="0" placeholder="0">
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Interest paid on home loans up to $750,000 principal reported on Form 1098.</div>
+          <div class="field-explain-drawer" id="drawer-explain-itemized-mortgage" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">Home Mortgage Interest (Form 1098)</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-mortgage" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Interest paid on acquisition indebtedness used to buy, build, or substantially improve your primary or second home.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Form 1098 Box 1 sent in January by your mortgage lender (Chase, Wells Fargo, Rocket, etc.).</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">This is usually the #1 expense that pushes homeowners past the Standard Deduction threshold!</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">If you bought a home recently with mortgage rates at 6-7%, your interest often easily exceeds the Standard Deduction.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gifts to Charity -->
+        <div class="calc-card priority-saver" id="card-itemized-charity" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Schedule A Line 11</div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-itemized-charity" aria-expanded="false" title="Click to view explanation">
+                <span class="explain-btn-icon">💡</span>
+                <span class="explain-btn-text">What is this?</span>
+                <span class="explain-btn-arrow">▾</span>
+              </button>
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="itemized-charity" role="button" tabindex="0" title="Gifts to Charity — Click for Guidance">
+                <span class="rating-circles-cluster" aria-label="Attention 1/4, Risk 2/3, Savings 2/3">
+                  <span class="rating-circle circle-attention circle-att-1"></span>
+                  <span class="rating-circle circle-risk circle-risk-2"></span>
+                  <span class="rating-circle circle-savings circle-save-2"></span>
+                </span>
+                <span class="pill-text">Money Saver</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+          </div>
+          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Gifts to Charity (Cash &amp; Goods)</div>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-itemized-charity" value="0" placeholder="0">
+          </div>
+          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Donations to 501(c)(3) churches, non-profits, and educational institutions.</div>
+          <div class="field-explain-drawer" id="drawer-explain-itemized-charity" hidden aria-hidden="true">
+            <div class="explain-drawer-content">
+              <div class="explain-header">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="explain-icon">💡</span>
+                  <span class="explain-title">Charitable Contributions (Schedule A)</span>
+                </div>
+                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-charity" aria-label="Close explanation">✕</button>
+              </div>
+              <div class="explain-body">
+                <div class="explain-section">
+                  <span class="explain-label">What does this mean?</span>
+                  <p class="explain-text">Donations of cash, check, or property to qualifying non-profit 501(c)(3) organizations.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Where to find it:</span>
+                  <p class="explain-text">Year-end contribution receipts or written acknowledgments from the charities.</p>
+                </div>
+                <div class="explain-section">
+                  <span class="explain-label">Why it matters for your taxes:</span>
+                  <p class="explain-text">Reduces your taxable income when itemizing. For donations >$250, you must keep a written receipt from the charity.</p>
+                </div>
+                <div class="explain-section explain-tip-box">
+                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                  <p class="explain-text">Political contributions or GoFundMe personal fundraisers are NOT tax deductible.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Smart Comparison & Deduction Choice Card -->
+      <div class="calc-card" id="calc-itemized-deductions" style="padding: 1.5rem; border: 2px solid #a7f3d0; background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator" style="background: #dcfce7; color: #15803d; border-color: #bbf7d0;">Schedule A Optimization</div>
+            <h3 class="calc-card-title">Standard vs. Itemized Comparison Engine</h3>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <div class="deduction-comparison-pill optimal-standard" id="deduction-comparison-badge">
+              Optimal Choice: Standard Deduction ($14,600)
+            </div>
+            <select id="select-deduction-method" class="w2-input" style="width: auto; padding: 0.35rem 0.6rem; font-size: 0.8rem; font-weight: 700;">
+              <option value="auto">Auto (Choose Highest Deduction)</option>
+              <option value="standard">Force Standard Deduction</option>
+              <option value="itemized">Force Itemized Deductions</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Itemized Total = max(0, Medical − 7.5% AGI) + min($10,000, State Taxes + Real Estate Tax) + Mortgage + Charity</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Itemized Total = $0 vs Standard = $14,600 (Using Standard)</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Optimal Deduction Applied to Your Return:</span>
+          <span class="calc-output-value highlight-green" id="optimal-deduction-amount">$14,600</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: DOWNSTREAM STEP-BY-STEP CALCULATIONS & EQUATIONS -->
     <section class="step-container">
-      <!-- Dotted Divider: Part 3 -->
+      <!-- Dotted Divider: Part 4 -->
       <div class="section-divider-dotted">
-        <span class="divider-badge">PART 3 • STEP-BY-STEP CALCULATION ENGINE</span>
+        <span class="divider-badge">PART 4 • STEP-BY-STEP CALCULATION ENGINE</span>
       </div>
 
       <div class="w2-section-header">
         <div class="w2-section-title">
-          <h2>3. Step-by-Step Calculation Engine</h2>
+          <h2>4. Step-by-Step Calculation Engine</h2>
         </div>
         <div style="font-size: 0.85rem; color: #64748b;">
           Every step reveals both the mathematical law and your exact plugged-in numbers.
@@ -439,7 +1076,7 @@
         <div class="formula-box">
           <div class="formula-row">
             <span class="formula-badge general">General Formula</span>
-            <span class="formula-math formula-general">Gross Income = Total W-2 Wages + Other Incomes</span>
+            <span class="formula-math formula-general">Gross Income = Total W-2 Wages + Interest + 1099 Net Profit + Net Capital Gains</span>
           </div>
           <div class="formula-row">
             <span class="formula-badge plugged">With Your Numbers</span>
@@ -450,6 +1087,33 @@
         <div class="calc-output-row">
           <span class="calc-output-label">Gross Income:</span>
           <span class="calc-output-value highlight-green">$0</span>
+        </div>
+      </div>
+
+      <!-- Step 2b: Net Capital Gains & Losses -->
+      <div class="calc-card" id="calc-capital-gains">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">2b</span> Schedule D / Form 8949</div>
+            <h3 class="calc-card-title">Net Capital Gain or Loss</h3>
+          </div>
+          <span class="irs-line-tag">Form 1040 Line 7</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Net Capital Gains = Short-Term + Long-Term (Losses Capped at -$3,000 / -$1,500 MFS)</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Net Capital Gains = $0</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Allowable Capital Income / (Loss Deduction):</span>
+          <span class="calc-output-value">$0</span>
         </div>
       </div>
 
@@ -693,9 +1357,9 @@
         </div>
       </div>
 
-      <!-- Dotted Divider: Part 4 -->
+      <!-- Dotted Divider: Part 5 -->
       <div class="section-divider-dotted">
-        <span class="divider-badge">PART 4 • THE BOTTOM LINE: YOUR TAX VERDICT</span>
+        <span class="divider-badge">PART 5 • THE BOTTOM LINE: YOUR TAX VERDICT</span>
       </div>
 
       <!-- Step 11: The Ultimate Verdict (Refund or Amount Owed) -->
@@ -768,9 +1432,9 @@
         </div>
       </div>
 
-      <!-- Dotted Divider: Part 5 -->
+      <!-- Dotted Divider: Part 6 -->
       <div class="section-divider-dotted">
-        <span class="divider-badge">PART 5 • STATE &amp; LOCAL TAX ALLOCATION</span>
+        <span class="divider-badge">PART 6 • STATE &amp; LOCAL TAX ALLOCATION</span>
       </div>
 
       <!-- Step 13: State & Local Taxes Summary -->
@@ -822,9 +1486,9 @@
         </div>
       </div>
 
-      <!-- Dotted Divider: Part 6 -->
+      <!-- Dotted Divider: Part 7 -->
       <div class="section-divider-dotted">
-        <span class="divider-badge">PART 6 • OFFICIAL IRS FORM 1040 MIRROR</span>
+        <span class="divider-badge">PART 7 • OFFICIAL IRS FORM 1040 MIRROR</span>
       </div>
 
       <!-- Step 14: Official Form 1040 Line-by-Line Mirror -->

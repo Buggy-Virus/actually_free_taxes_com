@@ -39,9 +39,23 @@ export interface IncomeSource {
   amount: number;
 }
 
+export interface CapitalGainsInput {
+  shortTerm: number;
+  longTerm: number;
+}
+
+export interface ItemizedDeductionsInput {
+  medicalExpenses: number;
+  realEstateTax: number;
+  mortgageInterest: number;
+  charity: number;
+}
+
 export interface OtherIncome {
   interest: number;
   sources?: IncomeSource[];
+  capitalGains?: CapitalGainsInput;
+  scheduleCExpenses?: number;
 }
 
 export interface Adjustments {
@@ -54,6 +68,8 @@ export interface Dependents {
   childrenCount: number;
 }
 
+export type DeductionMethod = 'auto' | 'standard' | 'itemized';
+
 export interface TaxAppState {
   year: TaxYear;
   filingStatus: FilingStatus;
@@ -61,6 +77,8 @@ export interface TaxAppState {
   otherIncome: OtherIncome;
   adjustments: Adjustments;
   dependents: Dependents;
+  itemizedDeductions?: ItemizedDeductionsInput;
+  deductionMethod?: DeductionMethod;
   showAllArrows: boolean;
 }
 
@@ -126,6 +144,28 @@ export interface StateTaxCalculation extends CalculationResult {
   byState: StateBreakdownItem[];
 }
 
+export interface CapitalGainsCalculation extends CalculationResult {
+  netTotal: number;
+  allowableLoss: number;
+}
+
+export interface ItemizedDeductionCalculation extends CalculationResult {
+  isItemizedBetter: boolean;
+  totalItemized: number;
+  totalItemizedDeductions: number;
+  allowableMedical: number;
+  medicalDeductible: number;
+  allowableSalt: number;
+  saltDeduction: number;
+  mortgage: number;
+  charity: number;
+  standardDeductionAmount: number;
+  standardDeduction: number;
+  chosenDeduction: number;
+  chosenMethod: 'standard' | 'itemized';
+  savingsOverAlternate: number;
+}
+
 export interface TaxCalculationSummary {
   year: TaxYear;
   filingStatus: FilingStatus;
@@ -135,6 +175,8 @@ export interface TaxCalculationSummary {
   adjustmentsCalc: CalculationResult;
   agiCalc: CalculationResult;
   deductionCalc: CalculationResult;
+  itemizedCalc: ItemizedDeductionCalculation;
+  capitalGainsCalc: CapitalGainsCalculation;
   taxableIncomeCalc: CalculationResult;
   taxBeforeCreditsCalc: TaxBeforeCreditsResult;
   creditsCalc: CalculationResult;
@@ -158,6 +200,8 @@ export type ArrowColorCategory =
   | 'credits'
   | 'refund'
   | 'owed'
+  | 'itemized'
+  | 'capital'
   | 'default';
 
 export interface ConnectionDef {
@@ -173,6 +217,13 @@ export type IrsRiskLevel = 'high' | 'medium' | 'low';
 export type SavingsPotentialLevel = 'high' | 'medium' | 'low' | 'none';
 export type ApplicabilityLevel = 'common' | 'moderate' | 'niche';
 export type RecommendationPriority = 'must_be_accurate' | 'high_savings' | 'verify_paper' | 'safe_to_ignore';
+
+export interface FieldExplanation {
+  whatItMeans: string;
+  whereToFind: string;
+  whyItMatters: string;
+  exampleOrTip: string;
+}
 
 export interface FieldRatingDefinition {
   fieldKey: string;
@@ -198,4 +249,5 @@ export interface FieldRatingDefinition {
   recommendation: RecommendationPriority;
   recommendationTag: string;
   plainEnglishVerdict: string;
+  explanation?: FieldExplanation;
 }
