@@ -75,8 +75,11 @@ export const US_STATES = [
   { code: 'WY', name: 'Wyoming', noIncomeTax: true }
 ];
 
-class TaxApp {
-  private state: TaxAppState = {
+const STORAGE_KEY_DRAFT = 'aft_local_draft_v2';
+const STORAGE_KEY_TOS = 'aft_tos_accepted_v1';
+
+function getDefaultTaxAppState(): TaxAppState {
+  return {
     year: 2024,
     filingStatus: 'single',
     residentState: 'CA',
@@ -128,12 +131,17 @@ class TaxApp {
     deductionMethod: 'auto',
     showAllArrows: true
   };
+}
+
+class TaxApp {
+  private state: TaxAppState = getDefaultTaxAppState();
 
   private arrowEngine: ArrowEngine | null = null;
   private w2Counter: number = 1;
   private stateLineCounter: number = 1;
   private incomeSourceCounter: number = 1;
   private scrollspyAttached: boolean = false;
+  private isTosAccepted: boolean = false;
 
   constructor() {
     this.init();
@@ -145,18 +153,34 @@ class TaxApp {
       this.arrowEngine = new ArrowEngine(svgEl, { showAll: this.state.showAllArrows });
     }
 
+    // Check TOS acceptance on first page open
+    this.checkTosOnLoad();
+
+    // Check if URL specifies a preset
+    let loadedFromPreset = false;
+    if (typeof window !== 'undefined' && window.location) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const presetParam = urlParams.get('preset');
+      if (presetParam) {
+        this.loadPreset(presetParam);
+        loadedFromPreset = true;
+      }
+    }
+
+    // If no preset in URL, restore saved progress from localStorage if available
+    if (!loadedFromPreset) {
+      this.loadDraft();
+    }
+
     this.renderW2Forms();
     this.renderIncomeSources();
+    this.syncAllDomInputs();
     this.bindGlobalEvents();
     this.recalculateAndRender();
 
     // Support URL parameters for automated testing & deep-linking
     if (typeof window !== 'undefined' && window.location) {
       const urlParams = new URLSearchParams(window.location.search);
-      const presetParam = urlParams.get('preset');
-      if (presetParam) {
-        this.loadPreset(presetParam);
-      }
       const modalParam = urlParams.get('modal');
       if (modalParam) {
         this.openGuidanceModal(modalParam);
@@ -180,6 +204,219 @@ class TaxApp {
         }
       }
     }
+  }
+
+  /* --------------------------------------------------------------------------
+     TOS & Legal Advisory Modal Methods
+     -------------------------------------------------------------------------- */
+  private checkTosOnLoad(): void {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+    try {
+      const accepted = localStorage.getItem(STORAGE_KEY_TOS);
+      if (accepted === 'true') {
+        this.isTosAccepted = true;
+      } else {
+        this.isTosAccepted = false;
+        // Automatically present the legal advisory & TOS on first open
+        this.openTosModal();
+      }
+    } catch (e) {
+      console.warn("Could not check TOS status in localStorage:", e);
+    }
+  }
+
+  public openTosModal(): void {
+    const overlay = document.getElementById('tos-modal-overlay');
+    if (overlay) {
+      overlay.classList.add('open');
+    }
+  }
+
+  public closeTosModal(): void {
+    const overlay = document.getElementById('tos-modal-overlay');
+    if (overlay) {
+      overlay.classList.remove('open');
+    }
+  }
+
+  public acceptTos(): void {
+    const checkbox = document.getElementById('tos-confirm-checkbox') as HTMLInputElement | null;
+    if (checkbox && !checkbox.checked) {
+      alert("Please confirm you have read and agree to the Terms of Service.");
+      return;
+    }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY_TOS, 'true');
+      } catch (e) {
+        console.warn("Could not record TOS acceptance:", e);
+      }
+    }
+    this.isTosAccepted = true;
+    this.closeTosModal();
+  }
+
+  /* --------------------------------------------------------------------------
+     Client-Side Local Storage & Auto-Save Methods
+     -------------------------------------------------------------------------- */
+  private saveDraft(): void {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(this.state));
+      const statusText = document.getElementById('storage-status-text');
+      const dot = document.getElementById('storage-dot');
+      if (statusText) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        statusText.textContent = `Draft auto-saved locally (${timeStr})`;
+      }
+      if (dot) {
+        dot.style.background = '#10b981';
+      }
+    } catch (e) {
+      console.warn("Could not save tax draft to localStorage:", e);
+    }
+  }
+
+  private loadDraft(): boolean {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return false;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_DRAFT);
+      if (!saved) return false;
+      const parsed = JSON.parse(saved);
+      if (parsed && Array.isArray(parsed.w2s) && parsed.w2s.length > 0) {
+        this.state = parsed;
+        this.updateIdCounters();
+        const statusText = document.getElementById('storage-status-text');
+        if (statusText) {
+          statusText.textContent = "Restored saved draft from this device";
+        }
+        return true;
+      }
+    } catch (e) {
+      console.warn("Failed to load saved tax draft:", e);
+    }
+    return false;
+  }
+
+  public clearDraft(): void {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm("Are you sure you want to clear your saved tax progress and reset to blank/default?");
+      if (!confirmed) return;
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.removeItem(STORAGE_KEY_DRAFT);
+        } catch (e) {
+          console.warn("Failed to remove saved draft:", e);
+        }
+      }
+      this.state = getDefaultTaxAppState();
+      this.updateIdCounters();
+      this.syncAllDomInputs();
+      this.renderW2Forms();
+      this.renderIncomeSources();
+      this.recalculateAndRender();
+      const statusText = document.getElementById('storage-status-text');
+      if (statusText) {
+        statusText.textContent = "Saved data cleared. Started fresh.";
+      }
+    }
+  }
+
+  public exportDraft(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `actually_free_taxes_${this.state.year}_draft.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (e) {
+      alert("Could not export backup: " + (e as Error).message);
+    }
+  }
+
+  public importDraft(file: File): void {
+    const reader = new FileReader();
+    reader.onload = (e: ProgressEvent<FileReader>) => {
+      try {
+        const text = e.target?.result as string;
+        const parsed = JSON.parse(text);
+        if (parsed && Array.isArray(parsed.w2s) && parsed.w2s.length > 0) {
+          this.state = parsed;
+          this.updateIdCounters();
+          this.syncAllDomInputs();
+          this.renderW2Forms();
+          this.renderIncomeSources();
+          this.recalculateAndRender();
+          const statusText = document.getElementById('storage-status-text');
+          if (statusText) {
+            statusText.textContent = `Imported backup (${file.name}) successfully!`;
+          }
+          alert(`Successfully imported backup file: ${file.name}`);
+        } else {
+          alert("Invalid tax backup file format. Expected an ActuallyFreeTaxes JSON file with W-2 entries.");
+        }
+      } catch (err) {
+        alert("Failed to read backup file. Please ensure it is a valid JSON file.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  private updateIdCounters(): void {
+    let maxW2 = 0;
+    let maxState = 0;
+    (this.state.w2s || []).forEach(w => {
+      if (w.id >= maxW2) maxW2 = w.id + 1;
+      (w.states || []).forEach(s => {
+        if (s.id >= maxState) maxState = s.id + 1;
+      });
+    });
+    this.w2Counter = Math.max(1, maxW2);
+    this.stateLineCounter = Math.max(1, maxState);
+
+    let maxInc = 0;
+    (this.state.otherIncome?.sources || []).forEach(src => {
+      if (src.id >= maxInc) maxInc = src.id + 1;
+    });
+    this.incomeSourceCounter = Math.max(1, maxInc);
+  }
+
+  private syncAllDomInputs(): void {
+    const yearSelect = document.getElementById('select-tax-year') as HTMLSelectElement | null;
+    if (yearSelect) yearSelect.value = String(this.state.year);
+
+    const statusSelect = document.getElementById('select-filing-status') as HTMLSelectElement | null;
+    if (statusSelect) statusSelect.value = this.state.filingStatus;
+
+    const resSelect = document.getElementById('select-resident-state') as HTMLSelectElement | null;
+    if (resSelect) resSelect.value = this.state.residentState || 'CA';
+
+    const dedSelect = document.getElementById('select-deduction-method') as HTMLSelectElement | null;
+    if (dedSelect) dedSelect.value = this.state.deductionMethod || 'auto';
+
+    const setVal = (id: string, val: number | undefined) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (el) el.value = String(val !== undefined ? val : 0);
+    };
+
+    setVal('input-adj-student-loan', this.state.adjustments?.studentLoan);
+    setVal('input-adj-ira', this.state.adjustments?.ira);
+    setVal('input-adj-hsa', this.state.adjustments?.hsa);
+    setVal('input-other-interest', this.state.otherIncome?.interest);
+    setVal('input-children-count', this.state.dependents?.childrenCount);
+    setVal('input-capital-gains-st', this.state.otherIncome?.capitalGains?.shortTerm);
+    setVal('input-capital-gains-lt', this.state.otherIncome?.capitalGains?.longTerm);
+    setVal('input-1099-nec-expenses', this.state.otherIncome?.scheduleCExpenses);
+    setVal('input-itemized-medical', this.state.itemizedDeductions?.medicalExpenses);
+    setVal('input-itemized-salt', this.state.itemizedDeductions?.realEstateTax);
+    setVal('input-itemized-mortgage', this.state.itemizedDeductions?.mortgageInterest);
+    setVal('input-itemized-charity', this.state.itemizedDeductions?.charity);
+
+    this.renderYearBadges();
   }
 
   private bindGlobalEvents(): void {
@@ -310,6 +547,58 @@ class TaxApp {
     this.bindFilterToolbar();
     this.bindRatingPillEvents();
     this.bindExplainEvents();
+
+    // TOS modal bindings
+    const btnAcceptTos = document.getElementById('btn-accept-tos');
+    if (btnAcceptTos) {
+      btnAcceptTos.addEventListener('click', () => this.acceptTos());
+    }
+
+    const btnCloseTos = document.getElementById('btn-close-tos-modal');
+    if (btnCloseTos) {
+      btnCloseTos.addEventListener('click', () => {
+        if (!this.isTosAccepted) {
+          alert("You must review and accept the Terms of Service to proceed.");
+          return;
+        }
+        this.closeTosModal();
+      });
+    }
+
+    // Open TOS from header, storage bar, or footer
+    ['btn-header-tos', 'btn-open-tos', 'btn-footer-tos'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.addEventListener('click', () => this.openTosModal());
+      }
+    });
+
+    // Local Storage toolbar bindings
+    ['btn-clear-draft', 'btn-footer-clear'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.addEventListener('click', () => this.clearDraft());
+      }
+    });
+
+    const btnExport = document.getElementById('btn-export-draft');
+    if (btnExport) {
+      btnExport.addEventListener('click', () => this.exportDraft());
+    }
+
+    const btnImportTrigger = document.getElementById('btn-import-draft-trigger');
+    const inputImport = document.getElementById('input-import-draft') as HTMLInputElement | null;
+    if (btnImportTrigger && inputImport) {
+      btnImportTrigger.addEventListener('click', () => {
+        inputImport.click();
+      });
+      inputImport.addEventListener('change', () => {
+        if (inputImport.files && inputImport.files.length > 0) {
+          this.importDraft(inputImport.files[0]);
+          inputImport.value = ''; // reset
+        }
+      });
+    }
   }
 
   public openGuidanceModal(fieldKey: string): void {
@@ -1871,6 +2160,7 @@ class TaxApp {
     this.updateTableOfContents();
     this.bindRatingPillEvents();
     this.bindExplainEvents();
+    this.saveDraft();
   }
 
   private renderStateReturns(taxData: TaxCalculationSummary): void {

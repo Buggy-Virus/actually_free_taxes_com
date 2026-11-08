@@ -51,6 +51,9 @@
           <input type="checkbox" id="toggle-all-arrows" checked>
           <span>Dependency Arrows</span>
         </label>
+        <button type="button" class="btn btn-sm" id="btn-header-tos" style="font-size: 0.76rem; padding: 0.4rem 0.75rem; background: #ffffff; border: 1px solid #cbd5e1; color: #334155; font-weight: 700; border-radius: 8px;" title="View Terms of Service and Disclaimers">
+          ⚖️ Terms &amp; Advisory
+        </button>
         <button type="button" class="btn btn-primary" id="btn-add-w2">
           + Add W-2
         </button>
@@ -267,6 +270,30 @@
         <button type="button" class="preset-chip" data-preset="married-dual-140k">Dual-Income Married ($140k + 1 Kid)</button>
         <button type="button" class="preset-chip" data-preset="student-grad">College Grad with Student Loans</button>
         <button type="button" class="preset-chip" data-preset="blank">Blank Slate</button>
+      </div>
+
+      <!-- Client-Side Local Storage & Privacy Bar -->
+      <div class="storage-bar" id="storage-bar">
+        <div class="storage-status-group">
+          <span class="storage-pulse-dot" id="storage-dot"></span>
+          <span class="storage-status-text" id="storage-status-text">Draft auto-saved locally in browser</span>
+          <span class="storage-privacy-badge" title="Data is stored strictly in your browser's localStorage. Zero data is sent to our servers.">🔒 Zero Server Storage</span>
+        </div>
+        <div class="storage-actions-group">
+          <button type="button" class="storage-btn" id="btn-export-draft" title="Download a JSON backup of your current inputs">
+            📥 Export Backup (.json)
+          </button>
+          <button type="button" class="storage-btn" id="btn-import-draft-trigger" title="Restore inputs from a previously saved JSON file">
+            📤 Import Backup
+          </button>
+          <input type="file" id="input-import-draft" accept=".json,.aft" style="display: none;">
+          <button type="button" class="storage-btn text-danger" id="btn-clear-draft" title="Clear all local inputs and reset to default">
+            🗑️ Clear Saved Data
+          </button>
+          <button type="button" class="storage-btn" id="btn-open-tos" title="Review legal terms of service and disclaimers">
+            ⚖️ Terms &amp; Advisory
+          </button>
+        </div>
       </div>
 
       <!-- Ratings & Importance Filter Toolbar with Circle Legend -->
@@ -1671,13 +1698,99 @@
     </section>
 
     <!-- Footer -->
-    <footer style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 2rem 0; border-top: 1px solid #e2e8f0; margin-top: 2rem;">
+    <footer style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 2.5rem 1rem; border-top: 1px solid #e2e8f0; margin-top: 2rem;">
       <p><strong>Actually Free Taxes</strong> — Open, Visual, Single-Page Tax Computation Engine.</p>
-      <p style="margin-top: 0.35rem;">Equations conform strictly to IRS Tax Year <span class="current-tax-year-text">2024</span> & 2025 guidelines. For educational and filing preparation transparency.</p>
+      <p style="margin-top: 0.35rem;">Equations conform strictly to IRS Tax Year <span class="current-tax-year-text">2024</span> &amp; 2025 guidelines. For educational and filing preparation transparency.</p>
+      <div style="margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 1.25rem; flex-wrap: wrap;">
+        <button type="button" class="footer-link-btn" id="btn-footer-tos">⚖️ Terms of Service &amp; Legal Disclaimers</button>
+        <span style="color: #cbd5e1;">•</span>
+        <button type="button" class="footer-link-btn" id="btn-footer-clear">🗑️ Clear Saved Local Draft</button>
+        <span style="color: #cbd5e1;">•</span>
+        <span style="color: #10b981; font-weight: 600;">🔒 100% Client-Side • Zero Remote Server Storage</span>
+      </div>
     </footer>
 
   </main>
   </div> <!-- Close app-layout -->
+
+  <!-- Legal Advisory & Terms of Service Modal Dialog -->
+  <div class="tos-modal-overlay" id="tos-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="tos-modal-title">
+    <div class="tos-modal-dialog">
+      <div class="tos-modal-header">
+        <div style="display: flex; align-items: center; gap: 0.65rem;">
+          <span class="tos-header-icon">⚖️</span>
+          <div>
+            <div class="tos-badge">MANDATORY NOTICE &amp; TERMS OF USE</div>
+            <h2 class="tos-title" id="tos-modal-title">ActuallyFreeTaxes Legal Advisory &amp; Terms</h2>
+          </div>
+        </div>
+        <button type="button" class="tos-modal-close-btn" id="btn-close-tos-modal" aria-label="Close Terms of Service">✕</button>
+      </div>
+
+      <div class="tos-modal-body">
+        <div class="tos-intro-callout">
+          <p><strong>Welcome to ActuallyFreeTaxes.com.</strong> Please review these Terms of Service and Disclaimers before using this application. By accessing or using this website, you understand and agree to the following terms:</p>
+        </div>
+
+        <div class="tos-section-grid">
+          <!-- Item 1: Educational & Not Official Filing -->
+          <div class="tos-card warning-card">
+            <div class="tos-card-header">
+              <span class="tos-card-icon">🚫</span>
+              <h4>1. Educational Tool Only • DOES NOT File Taxes</h4>
+            </div>
+            <p>ActuallyFreeTaxes is an open, interactive computational visualizer designed to demystify IRS tax formulas. <strong>This web application DOES NOT file, submit, or electronically transmit your tax return to the Internal Revenue Service (IRS), state Department of Revenue, or any taxing authority.</strong></p>
+          </div>
+
+          <!-- Item 2: No Professional Advice -->
+          <div class="tos-card">
+            <div class="tos-card-header">
+              <span class="tos-card-icon">📜</span>
+              <h4>2. No Tax, Accounting, or Legal Advice</h4>
+            </div>
+            <p>Content, calculations, formula visualizations, and guidance on this site are for informational and educational purposes only. They do not constitute professional tax, accounting, financial, or legal advice. <strong>No CPA-client, attorney-client, or fiduciary relationship is formed.</strong> Always consult an official IRS publication or a licensed professional (CPA, Enrolled Agent, or Tax Attorney) for your specific tax situation.</p>
+          </div>
+
+          <!-- Item 3: AS IS & Liability Disclaimer -->
+          <div class="tos-card">
+            <div class="tos-card-header">
+              <span class="tos-card-icon">🛡️</span>
+              <h4>3. "AS IS" Warranty Disclaimer &amp; $0 Liability</h4>
+            </div>
+            <p>All formulas, calculations, and software are provided <strong>"AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND</strong>, express or implied, including accuracy, completeness, or fitness for a particular purpose. In no event shall the authors, operators, or contributors be liable for any penalties, interest, audit assessments, lost refunds, or damages. <strong>Aggregate liability is strictly capped at $0.00.</strong></p>
+          </div>
+
+          <!-- Item 4: Privacy & Client-Side Local Storage -->
+          <div class="tos-card privacy-card">
+            <div class="tos-card-header">
+              <span class="tos-card-icon">🔒</span>
+              <h4>4. 100% Client-Side Privacy &amp; Local Auto-Save</h4>
+            </div>
+            <p><strong>Your personal financial data never leaves your web browser.</strong> We run zero databases, zero tracking pixels, and never transmit or sell your numbers. To prevent losing your progress if you accidentally refresh or close your browser tab, your inputs are saved automatically in your device's private browser <code>localStorage</code>. You can permanently clear or export this data anytime via the toolbar.</p>
+          </div>
+
+          <!-- Item 5: Government Non-Affiliation -->
+          <div class="tos-card">
+            <div class="tos-card-header">
+              <span class="tos-card-icon">🏛️</span>
+              <h4>5. Government Non-Affiliation</h4>
+            </div>
+            <p>ActuallyFreeTaxes.com is an independent open-source educational project. It is <strong>not affiliated with, endorsed by, sponsored by, or operated by the Internal Revenue Service (IRS), the U.S. Department of the Treasury, or any federal, state, or municipal government agency.</strong></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tos-modal-footer">
+        <label class="tos-agree-checkbox-label">
+          <input type="checkbox" id="tos-confirm-checkbox" checked>
+          <span>I have read, understood, and agree to the Terms of Service and Disclaimers</span>
+        </label>
+        <button type="button" class="btn btn-primary btn-accept-tos" id="btn-accept-tos">
+          ✓ I Understand &amp; Agree to Terms
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Interactive Field Guidance & IRS Risk Modal Dialog -->
   <div class="guidance-modal-overlay" id="guidance-modal-overlay" role="dialog" aria-modal="true">
