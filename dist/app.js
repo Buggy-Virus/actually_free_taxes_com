@@ -127,6 +127,38 @@ class TaxApp {
         this.renderIncomeSources();
         this.bindGlobalEvents();
         this.recalculateAndRender();
+        // Support URL parameters for automated testing & deep-linking
+        if (typeof window !== 'undefined' && window.location) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const presetParam = urlParams.get('preset');
+            if (presetParam) {
+                this.loadPreset(presetParam);
+            }
+            const modalParam = urlParams.get('modal');
+            if (modalParam) {
+                this.openGuidanceModal(modalParam);
+            }
+            const expandParam = urlParams.get('expand');
+            if (expandParam === 'all') {
+                const globalToggle = document.getElementById('btn-toggle-all-explain');
+                if (globalToggle)
+                    globalToggle.click();
+            }
+            const scrollParam = urlParams.get('scroll');
+            if (scrollParam) {
+                const num = parseInt(scrollParam, 10);
+                if (!isNaN(num)) {
+                    window.scrollTo(0, num);
+                }
+                else {
+                    const target = document.getElementById(scrollParam);
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'auto', block: 'start' });
+                        window.scrollBy(0, -70);
+                    }
+                }
+            }
+        }
     }
     bindGlobalEvents() {
         const yearSelect = document.getElementById('select-tax-year');
