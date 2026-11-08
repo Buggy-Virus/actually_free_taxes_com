@@ -142,51 +142,169 @@ export class ArrowEngine {
     const docScrollX = window.pageXOffset || document.documentElement.scrollLeft;
     const docScrollY = window.pageYOffset || document.documentElement.scrollTop;
 
-    this.connections.forEach(conn => {
+    // Find main content container bounds for gutters
+    const mainEl = document.querySelector('.main-content') as HTMLElement | null;
+    const mainRect = mainEl ? mainEl.getBoundingClientRect() : null;
+    const docMainLeft = mainRect ? mainRect.left + docScrollX : 340;
+    const docMainRight = mainRect ? mainRect.right + docScrollX : (window.innerWidth - 80);
+    const docMainCenter = (docMainLeft + docMainRight) / 2;
+
+    // Filter connections that should be displayed
+    const visibleConnections = this.connections.filter(conn => {
       const sourceEl = document.getElementById(conn.sourceId);
       const targetEl = document.getElementById(conn.targetId);
-
-      if (!sourceEl || !targetEl) return;
-
-      const sourceRect = sourceEl.getBoundingClientRect();
-      const targetRect = targetEl.getBoundingClientRect();
-
-      if (sourceRect.width === 0 || targetRect.width === 0) return;
+      if (!sourceEl || !targetEl) return false;
+      const sRect = sourceEl.getBoundingClientRect();
+      const tRect = targetEl.getBoundingClientRect();
+      if (sRect.width === 0 || tRect.width === 0) return false;
 
       const isConnectedToActive =
         (this.activeSourceId && (conn.sourceId === this.activeSourceId || conn.targetId === this.activeSourceId)) ||
         (this.activeTargetId && (conn.targetId === this.activeTargetId || conn.sourceId === this.activeTargetId));
 
-      const shouldShow = this.showAll || isConnectedToActive;
-      if (!shouldShow) return;
+      return this.showAll || isConnectedToActive;
+    });
 
-      const isHighlighted = isConnectedToActive;
+    interface PreparedConn {
+      conn: ConnectionDef;
+      sourceEl: HTMLElement;
+      targetEl: HTMLElement;
+      sourceRect: DOMRect;
+      targetRect: DOMRect;
+      side: 'left' | 'right';
+      isHighlighted: boolean;
+      colorCategory: ArrowColorCategory;
+      strokeColor: string;
+    }
+
+    const preparedList: PreparedConn[] = [];
+
+    visibleConnections.forEach(conn => {
+      const sourceEl = document.getElementById(conn.sourceId)!;
+      const targetEl = document.getElementById(conn.targetId)!;
+      const sourceRect = sourceEl.getBoundingClientRect();
+      const targetRect = targetEl.getBoundingClientRect();
+
+      const isConnectedToActive = Boolean(
+        (this.activeSourceId && (conn.sourceId === this.activeSourceId || conn.targetId === this.activeSourceId)) ||
+        (this.activeTargetId && (conn.targetId === this.activeTargetId || conn.sourceId === this.activeTargetId))
+      );
+
       const colorCategory: ArrowColorCategory = conn.category || 'default';
       const strokeColor = this.colors[colorCategory] || this.colors.default;
 
-      const sX = sourceRect.left + docScrollX + (sourceRect.width / 2);
-      const sY = sourceRect.bottom + docScrollY - 2;
+      const sMidX = sourceRect.left + docScrollX + (sourceRect.width / 2);
 
-      const tX = targetRect.left + docScrollX + (targetRect.width / 2);
-      const tY = targetRect.top + docScrollY + 2;
+      let side: 'left' | 'right' = 'left';
+      if (conn.side) {
+        side = conn.side;
+      } else if (
+        conn.category === 'withholding' ||
+        conn.category === 'ss' ||
+        conn.category === 'medicare' ||
+        conn.id.includes('box2') ||
+        conn.id.includes('box4') ||
+        conn.id.includes('box6') ||
+        conn.id.includes('box17') ||
+        conn.id.includes('withheld') ||
+        conn.id.includes('unified') ||
+        conn.id.includes('verdict') ||
+        conn.id.includes('tax-verdict') ||
+        conn.id.includes('ostc')
+      ) {
+        side = 'right';
+      } else if (sMidX >= docMainCenter) {
+        side = 'right';
+      } else {
+        side = 'left';
+      }
 
-      const dx = tX - sX;
+      preparedList.push({
+        conn,
+        sourceEl,
+        targetEl,
+        sourceRect,
+        targetRect,
+        side,
+        isHighlighted: isConnectedToActive,
+        colorCategory,
+        strokeColor
+      });
+    });
+
+    const leftConns = preparedList.filter(p => p.side === 'left');
+    const rightConns = preparedList.filter(p => p.side === 'right');
+
+    const baseLeftGutter = docMainLeft - 18;
+    const baseRightGutter = docMainRight + 18;
+    const laneSpacing = 11;
+
+    const targetPortCount: Record<string, number> = {};
+
+    const renderArrow = (p: PreparedConn, laneIndex: number) => {
+      const { conn, targetEl, sourceRect, targetRect, side, isHighlighted, colorCategory, strokeColor } = p;
+
+      const targetKey = `${conn.targetId}-${side}`;
+      const portIndex = targetPortCount[targetKey] || 0;
+      targetPortCount[targetKey] = portIndex + 1;
+
+      let sX: number;
+      const sY = sourceRect.top + docScrollY + (sourceRect.height / 2);
+
+      let tX: number;
+      const tY = targetRect.top + docScrollY + Math.min(26 + (portIndex * 14), Math.max(15, targetRect.height - 12));
+
+      let laneX: number;
+      if (side === 'left') {
+        sX = sourceRect.left + docScrollX - 2;
+        tX = targetRect.left + docScrollX - 2;
+        laneX = baseLeftGutter - (laneIndex * laneSpacing);
+      } else {
+        sX = sourceRect.right + docScrollX + 2;
+        tX = targetRect.right + docScrollX + 2;
+        laneX = baseRightGutter + (laneIndex * laneSpacing);
+      }
+
       const dy = tY - sY;
-      const delta = Math.max(Math.abs(dy), 60);
+      const dirY = dy >= 0 ? 1 : -1;
+      const absDy = Math.abs(dy);
+      const R = Math.min(14, Math.max(3, (absDy - 4) / 2));
 
-      const c1x = sX + (dx * 0.1);
-      const c1y = sY + (delta * 0.45);
-      const c2x = tX - (dx * 0.1);
-      const c2y = tY - (delta * 0.45);
+      let pathData: string;
 
-      const pathData = `M ${sX} ${sY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tX} ${tY}`;
+      if (absDy < 8) {
+        pathData = `M ${sX} ${sY} L ${tX} ${tY}`;
+      } else if (side === 'left') {
+        // Go LEFT out to laneX, down laneX, then RIGHT into target
+        pathData = `M ${sX} ${sY} L ${laneX + R} ${sY} Q ${laneX} ${sY}, ${laneX} ${sY + dirY * R} L ${laneX} ${tY - dirY * R} Q ${laneX} ${tY}, ${laneX + R} ${tY} L ${tX} ${tY}`;
+      } else {
+        // Go RIGHT out to laneX, down laneX, then LEFT into target
+        pathData = `M ${sX} ${sY} L ${laneX - R} ${sY} Q ${laneX} ${sY}, ${laneX} ${sY + dirY * R} L ${laneX} ${tY - dirY * R} Q ${laneX} ${tY}, ${laneX - R} ${tY} L ${tX} ${tY}`;
+      }
 
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.setAttribute('class', `arrow-group ${isHighlighted ? 'active' : ''}`);
       g.dataset.source = conn.sourceId;
       g.dataset.target = conn.targetId;
 
+      // Anchor dot at field origin
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('cx', String(sX));
+      dot.setAttribute('cy', String(sY));
+      dot.setAttribute('r', isHighlighted ? '4.5' : '3.2');
+      dot.setAttribute('fill', strokeColor);
+      dot.setAttribute('opacity', isHighlighted ? '1' : '0.85');
+      g.appendChild(dot);
+
       if (isHighlighted) {
+        const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        halo.setAttribute('cx', String(sX));
+        halo.setAttribute('cy', String(sY));
+        halo.setAttribute('r', '8');
+        halo.setAttribute('fill', strokeColor);
+        halo.setAttribute('opacity', '0.25');
+        g.appendChild(halo);
+
         const glow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         glow.setAttribute('d', pathData);
         glow.setAttribute('fill', 'none');
@@ -202,7 +320,7 @@ export class ArrowEngine {
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', strokeColor);
       path.setAttribute('stroke-width', isHighlighted ? '3.5' : '2.2');
-      path.setAttribute('stroke-opacity', isHighlighted ? '1' : (this.activeSourceId || this.activeTargetId ? '0.2' : '0.75'));
+      path.setAttribute('stroke-opacity', isHighlighted ? '1' : (this.activeSourceId || this.activeTargetId ? '0.2' : '0.8'));
       path.setAttribute('stroke-linecap', 'round');
       path.setAttribute('marker-end', `url(#arrowhead-${colorCategory})`);
       path.setAttribute('class', `arrow-line ${isHighlighted ? 'flowing' : ''}`);
@@ -213,6 +331,7 @@ export class ArrowEngine {
 
       g.appendChild(path);
 
+      // Wide transparent hit area
       const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       hitArea.setAttribute('d', pathData);
       hitArea.setAttribute('fill', 'none');
@@ -236,7 +355,10 @@ export class ArrowEngine {
 
       g.appendChild(hitArea);
       this.svg.appendChild(g);
-    });
+    };
+
+    leftConns.forEach((p, idx) => renderArrow(p, idx));
+    rightConns.forEach((p, idx) => renderArrow(p, idx));
 
     this.updateHighlightStyles();
   }

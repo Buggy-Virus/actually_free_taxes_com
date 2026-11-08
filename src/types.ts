@@ -265,6 +265,7 @@ export interface ConnectionDef {
   targetId: string;
   category?: ArrowColorCategory;
   label?: string;
+  side?: 'left' | 'right';
 }
 
 export type ImportanceLevel = 'critical' | 'important' | 'recommended' | 'optional';

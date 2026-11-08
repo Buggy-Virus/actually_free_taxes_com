@@ -259,10 +259,10 @@ body {
 /* App Layout with Left Table of Contents */
 .app-layout {
   display: flex;
-  max-width: 1450px;
+  max-width: 1540px;
   margin: 1.5rem auto 5rem;
-  padding: 0 1.5rem;
-  gap: 2.5rem;
+  padding: 0 3.5rem 0 2rem;
+  gap: 3.5rem;
   position: relative;
   z-index: 10;
   align-items: flex-start;
