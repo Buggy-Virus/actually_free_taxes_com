@@ -589,35 +589,66 @@ export function getFieldRating(key: string): FieldRatingDefinition {
 }
 
 /**
- * Render a compact inline badge chip to place next to an input label.
+ * Render the cluster of 3 colored circles representing the field's rating metrics:
+ * 1. Safe to ignore / Attention: White (safe to ignore) to Yellow (needs attention).
+ * 2. Risk: White (low risk) to Red (high IRS audit risk).
+ * 3. Money saving: White ($0) to Green (high cash savings).
+ *
+ * For anything that maxes out its rating, an exclamation mark '!' is rendered in the center.
+ */
+export function renderRatingCircles(keyOrDef: string | FieldRatingDefinition): string {
+  const r = typeof keyOrDef === 'string' ? getFieldRating(keyOrDef) : keyOrDef;
+
+  const isAttMax = r.importanceScore === 4;
+  const isRiskMax = r.irsRiskScore === 3;
+  const isSaveMax = r.savingsScore === 3;
+
+  return `
+    <span class="rating-circles-cluster" aria-label="Attention ${r.importanceScore}/4, Risk ${r.irsRiskScore}/3, Savings ${r.savingsScore}/3">
+      <span class="rating-circle circle-attention circle-att-${r.importanceScore} ${isAttMax ? 'is-max' : ''}" 
+            title="Safe to Ignore / Attention: ${r.importanceLabel} (White = Safe to Ignore ➔ Yellow = Needs Attention${isAttMax ? ' [MAX !]' : ''})">
+        ${isAttMax ? '!' : ''}
+      </span>
+      <span class="rating-circle circle-risk circle-risk-${r.irsRiskScore} ${isRiskMax ? 'is-max' : ''}" 
+            title="IRS Audit Risk: ${r.irsRiskLabel} (White = Low Risk ➔ Red = High IRS Risk${isRiskMax ? ' [MAX !]' : ''})">
+        ${isRiskMax ? '!' : ''}
+      </span>
+      <span class="rating-circle circle-savings circle-save-${r.savingsScore} ${isSaveMax ? 'is-max' : ''}" 
+            title="Money Savings: ${r.savingsLabel} (White = $0 Savings ➔ Green = High Tax Savings${isSaveMax ? ' [MAX !]' : ''})">
+        ${isSaveMax ? '!' : ''}
+      </span>
+    </span>
+  `.trim();
+}
+
+/**
+ * Render a compact inline badge chip to place next to an input label, featuring the 3 rating circles.
  */
 export function renderRatingPill(key: string): string {
   const r = getFieldRating(key);
   let badgeClass = 'badge-priority-must';
-  let badgeIcon = '🔴';
   let shortText = 'Must be 100% Accurate';
 
   if (r.recommendation === 'high_savings') {
     badgeClass = 'badge-priority-saver';
-    badgeIcon = '💰';
     shortText = 'Money Saver';
   } else if (r.recommendation === 'safe_to_ignore') {
     badgeClass = 'badge-priority-skip';
-    badgeIcon = '⚪';
     shortText = 'Safe to Ignore if Blank';
   } else if (r.recommendation === 'verify_paper') {
     badgeClass = 'badge-priority-verify';
-    badgeIcon = '🟡';
     shortText = 'Verify with Form';
   }
 
+  const circlesHtml = renderRatingCircles(r);
+
   return `
-    <span class="field-rating-pill ${badgeClass}" data-rating-field="${r.fieldKey}" title="Click for IRS Risk & Guidance Breakdown">
-      <span class="pill-icon">${badgeIcon}</span>
+    <span class="field-rating-pill ${badgeClass}" data-rating-field="${r.fieldKey}" role="button" tabindex="0" title="${r.fieldTitle} — Click for IRS Risk & Guidance Breakdown">
+      ${circlesHtml}
       <span class="pill-text">${shortText}</span>
       <span class="pill-info-icon" aria-label="More Info">ⓘ</span>
     </span>
-  `;
+  `.trim();
 }
 
 /**
@@ -640,6 +671,10 @@ export function renderRatingCardHtml(key: string): string {
   const getSaveColor = (score: number) => score >= 3 ? 'meter-green' : (score >= 2 ? 'meter-teal' : 'meter-gray');
   const getAppColor = (score: number) => score >= 3 ? 'meter-purple' : 'meter-slate';
 
+  const isAttMax = r.importanceScore === 4;
+  const isRiskMax = r.irsRiskScore === 3;
+  const isSaveMax = r.savingsScore === 3;
+
   return `
     <div class="field-guidance-card" id="guidance-card-${r.fieldKey}">
       <div class="guidance-card-header">
@@ -647,8 +682,33 @@ export function renderRatingCardHtml(key: string): string {
           <div class="guidance-form-tag">${r.formName}</div>
           <div class="guidance-field-title">${r.fieldTitle}</div>
         </div>
-        <div class="guidance-rec-badge ${r.recommendation}">
-          ${r.recommendationTag}
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem;">
+          <div class="guidance-rec-badge ${r.recommendation}">
+            ${r.recommendationTag}
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: #64748b;">
+            <span>Rating:</span>
+            ${renderRatingCircles(r)}
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Explanation of Rating Circles -->
+      <div class="modal-circle-legend-banner">
+        <div class="legend-chip-item">
+          <span class="rating-circle circle-attention circle-att-4 is-max">!</span>
+          <span><strong>Attention:</strong> White (safe to ignore) ➔ Yellow (needs attention)</span>
+        </div>
+        <div class="legend-chip-item">
+          <span class="rating-circle circle-risk circle-risk-3 is-max">!</span>
+          <span><strong>Risk:</strong> White (low risk) ➔ Red (high IRS audit risk)</span>
+        </div>
+        <div class="legend-chip-item">
+          <span class="rating-circle circle-savings circle-save-3 is-max">!</span>
+          <span><strong>Savings:</strong> White ($0) ➔ Green (high cash savings)</span>
+        </div>
+        <div class="legend-chip-item" style="color: #64748b; font-style: italic;">
+          <span>(! in circle = Max Rating)</span>
         </div>
       </div>
 
@@ -656,7 +716,15 @@ export function renderRatingCardHtml(key: string): string {
         <!-- 1. Importance Dimension -->
         <div class="scorecard-cell">
           <div class="cell-header">
-            <span class="cell-label">1. Field Importance</span>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="rating-circle circle-attention circle-att-${r.importanceScore} ${isAttMax ? 'is-max' : ''}">
+                ${isAttMax ? '!' : ''}
+              </span>
+              <div>
+                <span class="cell-label">1. Safe to Ignore / Attention</span>
+                <div class="circle-legend-subtext">White = Safe to Ignore ➔ Yellow = Needs Attention</div>
+              </div>
+            </div>
             <span class="cell-score">${r.importanceLabel}</span>
           </div>
           ${renderMeter(r.importanceScore, 4, getImpColor(r.importanceScore))}
@@ -668,7 +736,15 @@ export function renderRatingCardHtml(key: string): string {
         <!-- 2. IRS Risk Dimension -->
         <div class="scorecard-cell">
           <div class="cell-header">
-            <span class="cell-label">2. IRS & Audit Risk</span>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="rating-circle circle-risk circle-risk-${r.irsRiskScore} ${isRiskMax ? 'is-max' : ''}">
+                ${isRiskMax ? '!' : ''}
+              </span>
+              <div>
+                <span class="cell-label">2. IRS &amp; Audit Risk</span>
+                <div class="circle-legend-subtext">White = Low Risk ➔ Red = High IRS Risk</div>
+              </div>
+            </div>
             <span class="cell-score">${r.irsRiskLabel}</span>
           </div>
           ${renderMeter(r.irsRiskScore, 3, getRiskColor(r.irsRiskScore))}
@@ -680,7 +756,15 @@ export function renderRatingCardHtml(key: string): string {
         <!-- 3. Savings Potential Dimension -->
         <div class="scorecard-cell">
           <div class="cell-header">
-            <span class="cell-label">3. Savings Potential</span>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="rating-circle circle-savings circle-save-${r.savingsScore} ${isSaveMax ? 'is-max' : ''}">
+                ${isSaveMax ? '!' : ''}
+              </span>
+              <div>
+                <span class="cell-label">3. Money Savings Potential</span>
+                <div class="circle-legend-subtext">White = $0 ➔ Green = High Savings</div>
+              </div>
+            </div>
             <span class="cell-score">${r.savingsLabel}</span>
           </div>
           ${renderMeter(r.savingsScore, 3, getSaveColor(r.savingsScore))}
@@ -692,7 +776,10 @@ export function renderRatingCardHtml(key: string): string {
         <!-- 4. Frequency / Applicability Dimension -->
         <div class="scorecard-cell">
           <div class="cell-header">
-            <span class="cell-label">4. Applicability</span>
+            <div>
+              <span class="cell-label">4. Applicability &amp; Frequency</span>
+              <div class="circle-legend-subtext">Taxpayer demographic prevalence</div>
+            </div>
             <span class="cell-score">${r.applicabilityPercent}</span>
           </div>
           ${renderMeter(r.applicabilityScore, 4, getAppColor(r.applicabilityScore))}

@@ -1,6 +1,6 @@
 import { calculateTaxes } from '../tax-engine.js';
 import { TaxAppState } from '../types.js';
-import { getFieldRating, renderRatingPill, renderRatingCardHtml } from '../field-ratings.js';
+import { getFieldRating, renderRatingPill, renderRatingCardHtml, renderRatingCircles } from '../field-ratings.js';
 import assert from 'assert';
 
 console.log("Running TypeScript Tax Engine Verification Suite...\n");
@@ -247,7 +247,7 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   console.log("✓ TS Test 5: Additional Income Sources (1099-NEC + 1099-DIV) verified correctly!");
 }
 
-// Test Case 6: Field Ratings & IRS Risk Assessment Engine
+// Test Case 6: Field Ratings & IRS Risk Assessment Engine with Color Circles & Exclamation Marks
 {
   const b1 = getFieldRating('w2-box1');
   assert.strictEqual(b1.importance, 'critical', 'Box 1 is critical');
@@ -268,16 +268,52 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   const kids = getFieldRating('credits-children');
   assert.strictEqual(kids.recommendation, 'high_savings', 'Child tax credit is high money saver');
 
+  // Verify Circle Generation for Box 1 (Wages: Max Attention !, Max Risk !, No Savings)
+  const b1Circles = renderRatingCircles('w2-box1');
+  assert(b1Circles.includes('circle-attention circle-att-4 is-max'), 'Box 1 attention is max 4');
+  assert(b1Circles.includes('circle-risk circle-risk-3 is-max'), 'Box 1 risk is max 3');
+  assert(b1Circles.includes('circle-savings circle-save-0'), 'Box 1 savings is 0');
+  assert(!b1Circles.includes('circle-save-0 is-max'), 'Box 1 savings is not max');
+  // Check exclamation marks inside circle elements (>!</span>)
+  const b1ExclamationCount = (b1Circles.match(/>\s*!\s*<\/span>/g) || []).length;
+  assert.strictEqual(b1ExclamationCount, 2, 'Box 1 has exactly 2 max ratings with ! (Attention and Risk)');
+
+  // Verify Circle Generation for Box 2 (Withholding: Trifecta with all 3 maxed out !)
+  const b2Circles = renderRatingCircles('w2-box2');
+  assert(b2Circles.includes('circle-attention circle-att-4 is-max'), 'Box 2 attention is max 4');
+  assert(b2Circles.includes('circle-risk circle-risk-3 is-max'), 'Box 2 risk is max 3');
+  assert(b2Circles.includes('circle-savings circle-save-3 is-max'), 'Box 2 savings is max 3');
+  const b2ExclamationCount = (b2Circles.match(/>\s*!\s*<\/span>/g) || []).length;
+  assert.strictEqual(b2ExclamationCount, 3, 'Box 2 has all 3 max ratings with ! (Attention, Risk, and Savings)');
+
+  // Verify Circle Generation for Student Loan (White attention, White risk, Green max savings !)
+  const loanCircles = renderRatingCircles('adj-student-loan');
+  assert(loanCircles.includes('circle-attention circle-att-1'), 'Student loan attention is 1 (white / safe to ignore)');
+  assert(!loanCircles.includes('circle-att-1 is-max'), 'Student loan attention is not max');
+  assert(loanCircles.includes('circle-risk circle-risk-1'), 'Student loan risk is 1 (white / low risk)');
+  assert(!loanCircles.includes('circle-risk-1 is-max'), 'Student loan risk is not max');
+  assert(loanCircles.includes('circle-savings circle-save-3 is-max'), 'Student loan savings is max 3 (green !)');
+  const loanExclamationCount = (loanCircles.match(/>\s*!\s*<\/span>/g) || []).length;
+  assert.strictEqual(loanExclamationCount, 1, 'Student loan deduction has exactly 1 max rating with ! (Savings)');
+
+  // Verify Pill HTML incorporates the rating circles
   const pillHtml = renderRatingPill('w2-box1');
+  assert(pillHtml.includes('rating-circles-cluster'), 'Pill contains circles cluster');
   assert(pillHtml.includes('Must be 100% Accurate'), 'Renders accurate pill text');
+  assert(pillHtml.includes('data-rating-field="w2-box1"'), 'Pill has data-rating-field');
 
+  // Verify Scorecard Modal HTML incorporates the rating circles and legend banner
   const cardHtml = renderRatingCardHtml('w2-box2');
+  assert(cardHtml.includes('modal-circle-legend-banner'), 'Modal includes circle legend banner');
+  assert(cardHtml.includes('White (safe to ignore) ➔ Yellow (needs attention)'), 'Legend explains yellow attention');
+  assert(cardHtml.includes('White (low risk) ➔ Red (high IRS audit risk)'), 'Legend explains red risk');
+  assert(cardHtml.includes('White ($0) ➔ Green (high cash savings)'), 'Legend explains green savings');
   assert(cardHtml.includes('If left blank:'), 'Includes importance dimension');
-  assert(cardHtml.includes('IRS & Audit Risk'), 'Includes IRS risk dimension');
+  assert(cardHtml.includes('IRS &amp; Audit Risk'), 'Includes IRS risk dimension');
   assert(cardHtml.includes('Savings Potential'), 'Includes savings dimension');
-  assert(cardHtml.includes('Applicability'), 'Includes applicability dimension');
+  assert(cardHtml.includes('Applicability &amp; Frequency'), 'Includes applicability dimension');
 
-  console.log("✓ TS Test 6: Field Ratings & IRS Risk Engine verified correctly!");
+  console.log("✓ TS Test 6: Field Ratings & IRS Risk Engine (with Color Circles & '!' on Max) verified correctly!");
 }
 
 console.log("\nAll 6 TypeScript test suites PASSED with 100% accuracy!\n");

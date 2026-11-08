@@ -271,6 +271,15 @@ class TaxApp {
           this.openGuidanceModal(fieldKey);
         }
       };
+      pill.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const fieldKey = pill.dataset.ratingField;
+          if (fieldKey) {
+            this.openGuidanceModal(fieldKey);
+          }
+        }
+      };
     });
   }
 
