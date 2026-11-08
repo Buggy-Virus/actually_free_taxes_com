@@ -814,6 +814,105 @@ export const FIELD_RATINGS: Record<string, FieldRatingDefinition> = {
       whyItMatters: 'Whichever number is larger shields more of your income from taxes, directly increasing your refund dollar-for-dollar.',
       exampleOrTip: 'Our engine automatically calculates both in real-time, displays the comparison, and picks whichever saves you the most money.'
     }
+  },
+
+  // PRIMARY RESIDENT STATE
+  'global-resident-state': {
+    fieldKey: 'global-resident-state',
+    fieldTitle: 'Primary Resident State (Home State)',
+    formName: 'State Tax Return Header',
+    importance: 'critical',
+    importanceScore: 4,
+    importanceLabel: 'Critical for State (4/4)',
+    importanceDescription: 'Determines which state Department of Revenue taxes your worldwide income and grants you credits for taxes paid to out-of-state work locations.',
+    irsRisk: 'high',
+    irsRiskScore: 3,
+    irsRiskLabel: 'High Audit Scrutiny (3/3)',
+    irsRiskDescription: 'State tax departments (especially NY, CA, NJ) audit domicile residency claims fiercely. Getting residency wrong triggers double taxation and penalty notices.',
+    savingsPotential: 'high',
+    savingsScore: 3,
+    savingsLabel: 'Determines State Rates ($$$$)',
+    savingsDescription: 'Setting your correct resident state determines whether you owe 0% (TX, FL, WA) or progressive rates up to 13%, and unlocks the Other State Tax Credit (OSTC).',
+    applicability: 'common',
+    applicabilityScore: 4,
+    applicabilityPercent: '100% of State Filers',
+    applicabilityLabel: 'Universal (100%)',
+    applicabilityDescription: 'Every American tax filer lives in a US state or territory.',
+    recommendation: 'must_be_accurate',
+    recommendationTag: 'MUST BE 100% ACCURATE • PRIMARY RESIDENCE',
+    plainEnglishVerdict: 'Select the state where your primary physical home is located. This establishes your resident state tax return and activates double-taxation prevention shields.',
+    explanation: {
+      whatItMeans: 'The US state where you maintain your permanent, primary domicile and spend the majority of your time.',
+      whereToFind: 'Your driver’s license, primary residential lease or deed, or voter registration card.',
+      whyItMatters: 'Your resident state has the legal right to tax your income, but must provide tax credits (OSTC) for taxes you paid to other states where you worked.',
+      exampleOrTip: 'If you lived in New Jersey and commuted to New York City for work, your Resident State is NJ, and NY is your Nonresident work state.'
+    }
+  },
+
+  // OTHER STATE TAX CREDIT (OSTC) / SCHEDULE S / IT-112-R / NJ-CO
+  'state-ostc-credit': {
+    fieldKey: 'state-ostc-credit',
+    fieldTitle: 'Credit for Taxes Paid to Another State (Double-Taxation Shield)',
+    formName: 'Schedule S / Form IT-112-R / Schedule NJ-CO',
+    importance: 'critical',
+    importanceScore: 4,
+    importanceLabel: 'Crucial Money Saver (4/4)',
+    importanceDescription: 'If you earned money in another state that taxed you, your home state gives you a dollar-for-dollar credit to prevent double taxation!',
+    irsRisk: 'medium',
+    irsRiskScore: 2,
+    irsRiskLabel: 'Medium State Audit Risk (2/3)',
+    irsRiskDescription: 'State auditors require an attached copy of your out-of-state non-resident return (e.g. attaching NY IT-203 to NJ-1040) to substantiate the credit.',
+    savingsPotential: 'high',
+    savingsScore: 3,
+    savingsLabel: 'Massive Double-Tax Shield ($$$$$)',
+    savingsDescription: 'Wipes out hundreds or thousands of dollars of resident state tax liability, ensuring you are not taxed twice on the same paycheck.',
+    applicability: 'moderate',
+    applicabilityScore: 2,
+    applicabilityPercent: '20% of Commuters / Multi-State Workers',
+    applicabilityLabel: 'Multi-State Workers (20%)',
+    applicabilityDescription: 'Applies to interstate commuters, remote workers with out-of-state employers, and individuals who moved during the year.',
+    recommendation: 'high_savings',
+    recommendationTag: 'ELIMINATES DOUBLE TAXATION • AUTOMATIC CREDIT',
+    plainEnglishVerdict: 'Protects your money! When you work in one state and live in another, this statutory credit prevents your paycheck from being taxed twice.',
+    explanation: {
+      whatItMeans: 'A state tax credit granted by your home state equal to the income tax you already paid to another state on the same earnings.',
+      whereToFind: 'Calculated automatically by our engine; maps to CA Schedule S, NY Form IT-112-R, NJ Schedule NJ-CO, etc.',
+      whyItMatters: 'Without this credit, interstate workers would suffer punishing double taxation on their wages.',
+      exampleOrTip: 'If you paid $1,200 in tax to New York on your work wages, your home state of New Jersey credits up to that amount against your NJ tax bill.'
+    }
+  },
+
+  // GRAND TOTAL UNIFIED TAX LEDGER
+  'calc-unified-summary': {
+    fieldKey: 'calc-unified-summary',
+    fieldTitle: 'Grand Total Combined Tax Verdict (Federal + All States)',
+    formName: 'Unified Multi-Jurisdiction Summary',
+    importance: 'critical',
+    importanceScore: 4,
+    importanceLabel: 'The Bottom Line (4/4)',
+    importanceDescription: 'The final unified financial calculation showing your total net refund or balance due across the IRS and all state revenue agencies.',
+    irsRisk: 'low',
+    irsRiskScore: 1,
+    irsRiskLabel: 'Low (1/3)',
+    irsRiskDescription: 'Mathematical summation of your official federal and state filings.',
+    savingsPotential: 'high',
+    savingsScore: 3,
+    savingsLabel: 'Total Net Cash in Pocket ($$$$$)',
+    savingsDescription: 'Combines all refund checks and balances due into a single net cash figure.',
+    applicability: 'common',
+    applicabilityScore: 4,
+    applicabilityPercent: '100% of Filers',
+    applicabilityLabel: 'Universal (100%)',
+    applicabilityDescription: 'Every taxpayer wants to know their ultimate net financial outcome.',
+    recommendation: 'high_savings',
+    recommendationTag: 'THE ULTIMATE BOTTOM LINE',
+    plainEnglishVerdict: 'Your total net tax picture. We combine your federal refund or balance with every state refund or balance so you know the exact net cash impact.',
+    explanation: {
+      whatItMeans: 'The combined sum of what you are owed or owe across both the federal government and every state where you filed.',
+      whereToFind: 'The Grand Total Unified Summary Card at the bottom of the page.',
+      whyItMatters: 'Gives you a clear, honest, single number so you know whether you are net positive (getting refund money) or net negative.',
+      exampleOrTip: 'If Federal gives you a $2,000 refund, NY gives a $200 refund, and NJ owes $100, your total net money in pocket is +$2,100.'
+    }
   }
 };
 

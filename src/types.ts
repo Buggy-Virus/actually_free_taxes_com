@@ -37,6 +37,7 @@ export interface IncomeSource {
   type: '1099-NEC' | '1099-DIV' | '1099-INT' | '1099-MISC' | 'Other';
   payer: string;
   amount: number;
+  state?: string;
 }
 
 export interface CapitalGainsInput {
@@ -73,6 +74,7 @@ export type DeductionMethod = 'auto' | 'standard' | 'itemized';
 export interface TaxAppState {
   year: TaxYear;
   filingStatus: FilingStatus;
+  residentState?: string;
   w2s: W2Data[];
   otherIncome: OtherIncome;
   adjustments: Adjustments;
@@ -144,6 +146,56 @@ export interface StateTaxCalculation extends CalculationResult {
   byState: StateBreakdownItem[];
 }
 
+export interface StateOtherStateCredit {
+  fromState: string;
+  sourceTaxPaid: number;
+  homeAttributableTax: number;
+  creditAllowed: number;
+}
+
+export interface StateReturnCalculation extends CalculationResult {
+  state: string;
+  stateName: string;
+  residentStatus: 'resident' | 'non_resident';
+  formName: string;
+  hasIncomeTax: boolean;
+  stateWages: number;
+  stateStandardDeduction: number;
+  stateTaxableIncome: number;
+  stateTaxBeforeCredit: number;
+  creditForOtherStates: number; // OSTC
+  creditedStates: StateOtherStateCredit[];
+  reciprocityExemption: boolean;
+  reciprocityNote?: string;
+  stateTaxLiability: number;
+  stateWithholding: number;
+  localTaxWithheld: number;
+  netOutcome: number; // withholding - liability (+ refund, - owed)
+  isRefund: boolean;
+  notes?: string[];
+}
+
+export interface UnifiedTaxJurisdictionLine {
+  jurisdiction: string;
+  formName: string;
+  taxLiability: number;
+  withholding: number;
+  netOutcome: number;
+  isRefund: boolean;
+  badge?: string;
+}
+
+export interface UnifiedTaxSummary extends CalculationResult {
+  lines: UnifiedTaxJurisdictionLine[];
+  federalNet: number;
+  federalIsRefund: boolean;
+  totalStateWithholding: number;
+  totalStateLiability: number;
+  totalStateNet: number;
+  grandTotalNet: number;
+  isGrandTotalRefund: boolean;
+}
+
 export interface CapitalGainsCalculation extends CalculationResult {
   netTotal: number;
   allowableLoss: number;
@@ -185,6 +237,8 @@ export interface TaxCalculationSummary {
   finalResultCalc: FinalResultCalculation;
   ficaCalc: FicaCalculation;
   stateTaxCalc: StateTaxCalculation;
+  stateReturnsCalc: StateReturnCalculation[];
+  unifiedSummaryCalc: UnifiedTaxSummary;
   effectiveRateCalc: EffectiveRateCalculation;
 }
 
@@ -194,6 +248,7 @@ export type ArrowColorCategory =
   | 'ss'
   | 'medicare'
   | 'state'
+  | 'state_credit'
   | 'adjustments'
   | 'status'
   | 'tax'

@@ -157,10 +157,13 @@
           <span>Results & Summary</span>
         </div>
         <a href="#calc-final-verdict" class="toc-link" data-toc-target="calc-final-verdict" style="color: #059669; font-weight: 700;">
-          <span>🎉 Final Tax Verdict</span>
+          <span>🎉 Federal Verdict</span>
+        </a>
+        <a href="#calc-unified-summary" class="toc-link" data-toc-target="calc-unified-summary" style="color: #4338ca; font-weight: 700;">
+          <span>★ Grand Total Ledger</span>
         </a>
         <a href="#calc-state-tax-summary" class="toc-link" data-toc-target="calc-state-tax-summary">
-          <span>Part 6: State Taxes</span>
+          <span>Part 6: Multi-State Returns</span>
         </a>
         <a href="#section-1040-mirror" class="toc-link" data-toc-target="section-1040-mirror">
           <span>Part 7: 1040 Mirror</span>
@@ -217,6 +220,42 @@
             <option value="married_joint">Married Filing Jointly</option>
             <option value="married_separate">Married Filing Separately</option>
             <option value="head_of_household">Head of Household</option>
+          </select>
+        </div>
+
+        <div class="select-control">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+            <label for="select-resident-state" style="margin-bottom: 0;">Primary Resident State</label>
+            <span class="field-rating-pill badge-priority-must" data-rating-field="global-resident-state" role="button" tabindex="0" title="Primary Resident State — Click for IRS & State Guidance">
+              <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 3/3, Savings 3/3">
+                <span class="rating-circle circle-attention circle-att-4 is-max" title="Safe to Ignore / Attention: Critical for State (4/4) [MAX !]">!</span>
+                <span class="rating-circle circle-risk circle-risk-3 is-max" title="IRS / State Audit Risk: High Audit Scrutiny (3/3) [MAX !]">!</span>
+                <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: Determines State Rates ($$$$) [MAX !]">!</span>
+              </span>
+              <span class="pill-text">Home State</span>
+              <span class="pill-info-icon">ⓘ</span>
+            </span>
+          </div>
+          <select id="select-resident-state">
+            <option value="CA" selected>CA - California (FTB Form 540)</option>
+            <option value="NY">NY - New York (Form IT-201)</option>
+            <option value="NJ">NJ - New Jersey (Form NJ-1040)</option>
+            <option value="PA">PA - Pennsylvania (Form PA-40)</option>
+            <option value="IL">IL - Illinois (Form IL-1040)</option>
+            <option value="MA">MA - Massachusetts (Form 1)</option>
+            <option value="TX">TX - Texas (0% No State Wage Tax)</option>
+            <option value="FL">FL - Florida (0% No State Wage Tax)</option>
+            <option value="WA">WA - Washington (0% No State Wage Tax)</option>
+            <option value="NV">NV - Nevada (0% No State Wage Tax)</option>
+            <option value="TN">TN - Tennessee (0% No State Wage Tax)</option>
+            <option value="CO">CO - Colorado (Form DR 0104)</option>
+            <option value="NC">NC - North Carolina (Form D-400)</option>
+            <option value="GA">GA - Georgia (Form 500)</option>
+            <option value="VA">VA - Virginia (Form 760)</option>
+            <option value="OH">OH - Ohio (Form IT 1040)</option>
+            <option value="MI">MI - Michigan (Form MI-1040)</option>
+            <option value="AZ">AZ - Arizona (Form 140)</option>
+            <option value="OTHER">Other US State</option>
           </select>
         </div>
       </div>
@@ -1402,6 +1441,60 @@
         </div>
       </div>
 
+      <!-- Step 11b: Grand Total Unified Tax Verdict (Federal + All States) -->
+      <div class="unified-summary-card" id="calc-unified-summary">
+        <div class="calc-card-header" style="margin-bottom: 0.75rem;">
+          <div>
+            <div class="step-indicator" style="color: #4338ca;"><span class="step-number" style="background: #4338ca;">★</span> Grand Total Bottom Line</div>
+            <h3 class="calc-card-title">Combined Federal &amp; Multi-State Tax Ledger</h3>
+          </div>
+          <span class="field-rating-pill badge-priority-saver" data-rating-field="calc-unified-summary" role="button" tabindex="0" title="Grand Total Verdict — Click for Breakdown">
+            <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 1/3, Savings 3/3">
+              <span class="rating-circle circle-attention circle-att-4 is-max" title="Attention: The Bottom Line [MAX !]">!</span>
+              <span class="rating-circle circle-risk circle-risk-1" title="IRS Risk: Low (1/3)"></span>
+              <span class="rating-circle circle-savings circle-save-3 is-max" title="Savings: Total Net Cash in Pocket [MAX !]">!</span>
+            </span>
+            <span class="pill-text">Grand Total</span>
+            <span class="pill-info-icon">ⓘ</span>
+          </span>
+        </div>
+
+        <div class="unified-hero-banner is-refund" id="unified-hero-banner">
+          <div class="unified-hero-title">🎉 Total Combined Net Money In Your Pocket</div>
+          <div class="unified-hero-amount" id="unified-hero-amount">$0.00</div>
+          <div class="unified-hero-subtitle" id="unified-hero-subtitle">Net sum of your federal refund and all state returns.</div>
+        </div>
+
+        <div class="formula-box" style="margin-bottom: 1.25rem;">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Grand Total Net = Federal Net (Withholding − Tax) + ∑ State Nets (Withholding − Tax)</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged" id="unified-formula-plugged">Grand Total = $0.00</span>
+          </div>
+        </div>
+
+        <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b; margin-bottom: 0.5rem;">
+          Multi-Jurisdiction Breakdown Ledger:
+        </div>
+
+        <table class="unified-ledger-table">
+          <thead>
+            <tr>
+              <th>Jurisdiction</th>
+              <th>Return Form</th>
+              <th>Tax Obligation</th>
+              <th>Taxes Paid (Withheld)</th>
+              <th>Net Outcome</th>
+              <th>Status / Notes</th>
+            </tr>
+          </thead>
+          <tbody id="unified-ledger-tbody"></tbody>
+        </table>
+      </div>
+
       <!-- Step 12: FICA & Payroll Tax Transparency -->
       <div class="calc-card" id="calc-fica-breakdown">
         <div class="calc-card-header">
@@ -1434,7 +1527,7 @@
 
       <!-- Dotted Divider: Part 6 -->
       <div class="section-divider-dotted">
-        <span class="divider-badge">PART 6 • STATE &amp; LOCAL TAX ALLOCATION</span>
+        <span class="divider-badge">PART 6 • MULTI-STATE TAX RETURNS &amp; ALLOCATIONS</span>
       </div>
 
       <!-- Step 13: State & Local Taxes Summary -->
@@ -1484,6 +1577,11 @@
         <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.75rem;">
           💡 <strong>SALT Deduction Note:</strong> State and local income taxes paid can be deducted on federal Schedule A (itemized deductions) up to a federal cap of $10,000 ($5,000 if married filing separately).
         </div>
+      </div>
+
+      <!-- Step 13b: Dynamic Multi-State Individual Return Cards (with OSTC & Reciprocity) -->
+      <div id="container-state-returns" style="margin-top: 1.5rem;">
+        <!-- Populated dynamically by app.ts for each resident and nonresident state -->
       </div>
 
       <!-- Dotted Divider: Part 7 -->

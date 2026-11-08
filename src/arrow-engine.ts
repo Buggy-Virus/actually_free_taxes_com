@@ -24,6 +24,7 @@ export class ArrowEngine {
     ss: '#f59e0b',          // Amber
     medicare: '#ec4899',    // Pink
     state: '#8b5cf6',       // Violet for State Tax
+    state_credit: '#c026d3',// Fuchsia/Magenta for Cross-State Tax Credit (OSTC)
     adjustments: '#6366f1', // Indigo
     status: '#4f46e5',      // Deep Indigo
     tax: '#f97316',         // Orange

@@ -132,6 +132,249 @@ export const TAX_CONSTANTS = {
         }
     }
 };
+export const STATE_TAX_RULES = {
+    CA: {
+        code: 'CA',
+        name: 'California',
+        hasIncomeTax: true,
+        formResident: 'FTB Form 540',
+        formNonResident: 'FTB Form 540NR',
+        standardDeduction: {
+            single: 5540,
+            married_joint: 11080,
+            married_separate: 5540,
+            head_of_household: 11080
+        },
+        isFlat: false,
+        brackets: {
+            single: [
+                { rate: 0.01, min: 0, max: 10412 },
+                { rate: 0.02, min: 10412, max: 24684 },
+                { rate: 0.04, min: 24684, max: 38959 },
+                { rate: 0.06, min: 38959, max: 54081 },
+                { rate: 0.08, min: 54081, max: 68350 },
+                { rate: 0.093, min: 68350, max: 349137 },
+                { rate: 0.103, min: 349137, max: 418961 },
+                { rate: 0.113, min: 418961, max: 698271 },
+                { rate: 0.123, min: 698271, max: Infinity }
+            ],
+            married_joint: [
+                { rate: 0.01, min: 0, max: 20824 },
+                { rate: 0.02, min: 20824, max: 49368 },
+                { rate: 0.04, min: 49368, max: 77918 },
+                { rate: 0.06, min: 77918, max: 108162 },
+                { rate: 0.08, min: 108162, max: 136700 },
+                { rate: 0.093, min: 136700, max: 698274 },
+                { rate: 0.103, min: 698274, max: 837922 },
+                { rate: 0.113, min: 837922, max: 1396542 },
+                { rate: 0.123, min: 1396542, max: Infinity }
+            ],
+            married_separate: [
+                { rate: 0.01, min: 0, max: 10412 },
+                { rate: 0.02, min: 10412, max: 24684 },
+                { rate: 0.04, min: 24684, max: 38959 },
+                { rate: 0.06, min: 38959, max: 54081 },
+                { rate: 0.08, min: 54081, max: 68350 },
+                { rate: 0.093, min: 68350, max: 349137 },
+                { rate: 0.103, min: 349137, max: 418961 },
+                { rate: 0.113, min: 418961, max: 698271 },
+                { rate: 0.123, min: 698271, max: Infinity }
+            ],
+            head_of_household: [
+                { rate: 0.01, min: 0, max: 20839 },
+                { rate: 0.02, min: 20839, max: 49369 },
+                { rate: 0.04, min: 49369, max: 63641 },
+                { rate: 0.06, min: 63641, max: 78761 },
+                { rate: 0.08, min: 78761, max: 93033 },
+                { rate: 0.093, min: 93033, max: 474824 },
+                { rate: 0.103, min: 474824, max: 569790 },
+                { rate: 0.113, min: 569790, max: 949649 },
+                { rate: 0.123, min: 949649, max: Infinity }
+            ]
+        },
+        notes: 'California Schedule S provides credit for taxes paid to other states.'
+    },
+    NY: {
+        code: 'NY',
+        name: 'New York',
+        hasIncomeTax: true,
+        formResident: 'Form IT-201',
+        formNonResident: 'Form IT-203',
+        standardDeduction: {
+            single: 8000,
+            married_joint: 16050,
+            married_separate: 8000,
+            head_of_household: 11200
+        },
+        isFlat: false,
+        brackets: {
+            single: [
+                { rate: 0.04, min: 0, max: 8500 },
+                { rate: 0.045, min: 8500, max: 11700 },
+                { rate: 0.0525, min: 11700, max: 13900 },
+                { rate: 0.055, min: 13900, max: 80650 },
+                { rate: 0.06, min: 80650, max: 215400 },
+                { rate: 0.0685, min: 215400, max: 1077550 },
+                { rate: 0.0965, min: 1077550, max: Infinity }
+            ],
+            married_joint: [
+                { rate: 0.04, min: 0, max: 17150 },
+                { rate: 0.045, min: 17150, max: 23600 },
+                { rate: 0.0525, min: 23600, max: 27900 },
+                { rate: 0.055, min: 27900, max: 161550 },
+                { rate: 0.06, min: 161550, max: 323200 },
+                { rate: 0.0685, min: 323200, max: 2155350 },
+                { rate: 0.0965, min: 2155350, max: Infinity }
+            ],
+            married_separate: [
+                { rate: 0.04, min: 0, max: 8500 },
+                { rate: 0.045, min: 8500, max: 11700 },
+                { rate: 0.0525, min: 11700, max: 13900 },
+                { rate: 0.055, min: 13900, max: 80650 },
+                { rate: 0.06, min: 80650, max: 215400 },
+                { rate: 0.0685, min: 215400, max: 1077550 },
+                { rate: 0.0965, min: 1077550, max: Infinity }
+            ],
+            head_of_household: [
+                { rate: 0.04, min: 0, max: 12800 },
+                { rate: 0.045, min: 12800, max: 17650 },
+                { rate: 0.0525, min: 17650, max: 20900 },
+                { rate: 0.055, min: 20900, max: 107650 },
+                { rate: 0.06, min: 107650, max: 269300 },
+                { rate: 0.0685, min: 269300, max: 1616450 },
+                { rate: 0.0965, min: 1616450, max: Infinity }
+            ]
+        },
+        notes: 'New York Form IT-112-R grants resident credit for taxes paid to other states.'
+    },
+    NJ: {
+        code: 'NJ',
+        name: 'New Jersey',
+        hasIncomeTax: true,
+        formResident: 'Form NJ-1040',
+        formNonResident: 'Form NJ-1040NR',
+        standardDeduction: {
+            single: 1000,
+            married_joint: 2000,
+            married_separate: 1000,
+            head_of_household: 1000
+        },
+        isFlat: false,
+        brackets: {
+            single: [
+                { rate: 0.014, min: 0, max: 20000 },
+                { rate: 0.0175, min: 20000, max: 35000 },
+                { rate: 0.035, min: 35000, max: 40000 },
+                { rate: 0.05525, min: 40000, max: 75000 },
+                { rate: 0.0637, min: 75000, max: 500000 },
+                { rate: 0.0897, min: 500000, max: 1000000 },
+                { rate: 0.1075, min: 1000000, max: Infinity }
+            ],
+            married_joint: [
+                { rate: 0.014, min: 0, max: 20000 },
+                { rate: 0.0175, min: 20000, max: 50000 },
+                { rate: 0.0245, min: 50000, max: 70000 },
+                { rate: 0.035, min: 70000, max: 80000 },
+                { rate: 0.05525, min: 80000, max: 150000 },
+                { rate: 0.0637, min: 150000, max: 500000 },
+                { rate: 0.0897, min: 500000, max: 1000000 },
+                { rate: 0.1075, min: 1000000, max: Infinity }
+            ],
+            married_separate: [
+                { rate: 0.014, min: 0, max: 20000 },
+                { rate: 0.0175, min: 20000, max: 35000 },
+                { rate: 0.035, min: 35000, max: 40000 },
+                { rate: 0.05525, min: 40000, max: 75000 },
+                { rate: 0.0637, min: 75000, max: 500000 },
+                { rate: 0.0897, min: 500000, max: 1000000 },
+                { rate: 0.1075, min: 1000000, max: Infinity }
+            ],
+            head_of_household: [
+                { rate: 0.014, min: 0, max: 20000 },
+                { rate: 0.0175, min: 20000, max: 35000 },
+                { rate: 0.035, min: 35000, max: 40000 },
+                { rate: 0.05525, min: 40000, max: 75000 },
+                { rate: 0.0637, min: 75000, max: 500000 },
+                { rate: 0.0897, min: 500000, max: 1000000 },
+                { rate: 0.1075, min: 1000000, max: Infinity }
+            ]
+        },
+        reciprocalWith: ['PA'],
+        notes: 'NJ and PA have a reciprocal agreement: W-2 wages are taxed only in your resident state. Schedule NJ-CO provides credit for other states (such as NY).'
+    },
+    PA: {
+        code: 'PA',
+        name: 'Pennsylvania',
+        hasIncomeTax: true,
+        formResident: 'Form PA-40',
+        formNonResident: 'Form PA-40 Non-Resident',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
+        isFlat: true,
+        flatRate: 0.0307,
+        reciprocalWith: ['NJ', 'MD', 'OH', 'VA', 'WV', 'IN'],
+        notes: 'Pennsylvania imposes a flat 3.07% tax rate with no standard deduction. Reciprocal with NJ, MD, OH, VA, WV, IN.'
+    },
+    IL: {
+        code: 'IL',
+        name: 'Illinois',
+        hasIncomeTax: true,
+        formResident: 'Form IL-1040',
+        formNonResident: 'Form IL-1040 Schedule NR',
+        standardDeduction: { single: 2775, married_joint: 5550, married_separate: 2775, head_of_household: 2775 },
+        isFlat: true,
+        flatRate: 0.0495,
+        reciprocalWith: ['IA', 'KY', 'MI', 'WI'],
+        notes: 'Flat 4.95% individual income tax rate. Reciprocal agreements with IA, KY, MI, WI.'
+    },
+    MA: {
+        code: 'MA',
+        name: 'Massachusetts',
+        hasIncomeTax: true,
+        formResident: 'Form 1',
+        formNonResident: 'Form 1-NR/PY',
+        standardDeduction: { single: 4400, married_joint: 8800, married_separate: 4400, head_of_household: 6800 },
+        isFlat: true,
+        flatRate: 0.05,
+        notes: 'Flat 5.0% income tax rate on earned wages.'
+    },
+    // NO INCOME TAX ON WAGES:
+    TX: { code: 'TX', name: 'Texas', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Texas has no state personal income tax.' },
+    FL: { code: 'FL', name: 'Florida', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Florida has no state personal income tax.' },
+    WA: { code: 'WA', name: 'Washington', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Washington has no state wage income tax.' },
+    NV: { code: 'NV', name: 'Nevada', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Nevada has no state personal income tax.' },
+    TN: { code: 'TN', name: 'Tennessee', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Tennessee has no state personal wage income tax.' },
+    WY: { code: 'WY', name: 'Wyoming', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Wyoming has no state personal income tax.' },
+    SD: { code: 'SD', name: 'South Dakota', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'South Dakota has no state personal income tax.' },
+    AK: { code: 'AK', name: 'Alaska', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Alaska has no state personal income tax.' }
+};
+export function getStateTaxRule(code) {
+    const upper = (code || '').toUpperCase().trim();
+    if (STATE_TAX_RULES[upper])
+        return STATE_TAX_RULES[upper];
+    return {
+        code: upper || 'OTHER',
+        name: upper || 'State',
+        hasIncomeTax: true,
+        formResident: `${upper} Resident Return`,
+        formNonResident: `${upper} Non-Resident Return`,
+        standardDeduction: { single: 4000, married_joint: 8000, married_separate: 4000, head_of_household: 6000 },
+        isFlat: true,
+        flatRate: 0.045,
+        notes: `Individual income tax return for ${upper}.`
+    };
+}
+export function computeStateTaxFromBrackets(taxable, brackets) {
+    if (taxable <= 0)
+        return 0;
+    let tax = 0;
+    for (const b of brackets) {
+        if (taxable > b.min) {
+            const chunk = Math.min(taxable, b.max) - b.min;
+            tax += chunk * b.rate;
+        }
+    }
+    return tax;
+}
 export function formatCurrency(num) {
     if (num === null || num === undefined || isNaN(num))
         return "$0";
@@ -521,6 +764,8 @@ export function calculateTaxes(state) {
         generalFormula: 'Effective Tax Rate = Total Tax Liability ÷ Gross Income',
         pluggedFormula: `Effective Rate = ${formatCurrencyExact(totalTaxLiability)} ÷ ${formatCurrency(grossIncome)} = ${formatPercent(effectiveRate)}`
     };
+    // 14. Multi-State Tax Return Engine & Unified Summary (Handles OSTC, Reciprocity, & Order Independence)
+    const { stateReturnsCalc, unifiedSummaryCalc } = calculateStateReturnsAndUnifiedSummary(state, w2List, totalW2Wages, grossIncome, filingStatus, totalTaxLiability, totalWithheld, netDifference, isRefund);
     return {
         year,
         filingStatus,
@@ -540,6 +785,342 @@ export function calculateTaxes(state) {
         finalResultCalc,
         ficaCalc,
         stateTaxCalc,
+        stateReturnsCalc,
+        unifiedSummaryCalc,
         effectiveRateCalc
     };
+}
+/**
+ * Multi-Pass State Return & Unified Tax Ledger Engine
+ * Handles order independence, reciprocity agreements (e.g. NJ & PA), and Other State Tax Credits (OSTC).
+ */
+export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFederalWages, grossIncome, filingStatus, totalFederalLiability, totalFederalWithholding, federalNetDifference, federalIsRefund) {
+    // 1. Determine resident state:
+    let residentState = 'CA';
+    if (state.residentState && state.residentState.trim().length > 0) {
+        residentState = state.residentState.toUpperCase().trim();
+    }
+    else if (w2List[0]?.states?.[0]?.state && w2List[0].states[0].state.trim().length > 0) {
+        residentState = w2List[0].states[0].state.toUpperCase().trim();
+    }
+    // 2. Discover all relevant states from W-2s and 1099s:
+    const stateCodesSet = new Set();
+    stateCodesSet.add(residentState);
+    w2List.forEach(w => {
+        (w.states || []).forEach(s => {
+            const code = (s.state || '').toUpperCase().trim();
+            if (code)
+                stateCodesSet.add(code);
+        });
+    });
+    (state.otherIncome?.sources || []).forEach(src => {
+        if (src.state) {
+            const code = src.state.toUpperCase().trim();
+            if (code)
+                stateCodesSet.add(code);
+        }
+    });
+    const stateCodes = Array.from(stateCodesSet);
+    const residentRule = getStateTaxRule(residentState);
+    const rawMap = new Map();
+    stateCodes.forEach(c => {
+        rawMap.set(c, {
+            code: c,
+            w2Wages: 0,
+            w2Withheld: 0,
+            localWithheld: 0,
+            other1099: 0,
+            sourceFieldIds: []
+        });
+    });
+    w2List.forEach((w, wIdx) => {
+        (w.states || []).forEach((s, sIdx) => {
+            const code = (s.state || residentState).toUpperCase().trim();
+            if (!rawMap.has(code)) {
+                rawMap.set(code, { code, w2Wages: 0, w2Withheld: 0, localWithheld: 0, other1099: 0, sourceFieldIds: [] });
+            }
+            const item = rawMap.get(code);
+            item.w2Wages += Number(s.stateWages) || 0;
+            item.w2Withheld += Number(s.stateTaxWithheld) || 0;
+            item.localWithheld += Number(s.localTaxWithheld) || 0;
+            item.sourceFieldIds.push(`w2-${w.id || wIdx}-state-${s.id || sIdx}-box16`);
+            item.sourceFieldIds.push(`w2-${w.id || wIdx}-state-${s.id || sIdx}-box17`);
+        });
+    });
+    (state.otherIncome?.sources || []).forEach((src, srcIdx) => {
+        const code = (src.state || residentState).toUpperCase().trim();
+        if (!rawMap.has(code)) {
+            rawMap.set(code, { code, w2Wages: 0, w2Withheld: 0, localWithheld: 0, other1099: 0, sourceFieldIds: [] });
+        }
+        const item = rawMap.get(code);
+        item.other1099 += Number(src.amount) || 0;
+        item.sourceFieldIds.push(`input-source-${src.id || srcIdx}-amount`);
+    });
+    // PASS 1: Calculate all Non-Resident States first!
+    const nonResidentReturns = [];
+    const nonResidentCodes = stateCodes.filter(c => c !== residentState);
+    for (const code of nonResidentCodes) {
+        const rule = getStateTaxRule(code);
+        const raw = rawMap.get(code);
+        const stateWages = raw.w2Wages + raw.other1099;
+        const withholding = raw.w2Withheld;
+        const localTax = raw.localWithheld;
+        // Check Reciprocity
+        const isReciprocal = (rule.reciprocalWith && rule.reciprocalWith.includes(residentState)) ||
+            (residentRule.reciprocalWith && residentRule.reciprocalWith.includes(code));
+        if (isReciprocal) {
+            const netOutcome = withholding; // 100% refund of any tax withheld in error
+            nonResidentReturns.push({
+                result: 0,
+                state: code,
+                stateName: rule.name,
+                residentStatus: 'non_resident',
+                formName: rule.formNonResident,
+                hasIncomeTax: rule.hasIncomeTax,
+                stateWages,
+                stateStandardDeduction: 0,
+                stateTaxableIncome: 0,
+                stateTaxBeforeCredit: 0,
+                creditForOtherStates: 0,
+                creditedStates: [],
+                reciprocityExemption: true,
+                reciprocityNote: `Reciprocal agreement active between ${residentRule.name} (${residentState}) and ${rule.name} (${code}). Your compensation is legally exempt from ${code} state tax and taxable only in your home state of ${residentState}.`,
+                stateTaxLiability: 0,
+                stateWithholding: withholding,
+                localTaxWithheld: localTax,
+                netOutcome,
+                isRefund: true,
+                sourceFields: raw.sourceFieldIds,
+                generalFormula: `Tax = $0 (Reciprocal Agreement: ${residentState} & ${code})`,
+                pluggedFormula: `Tax = $0.00 • 100% of ${formatCurrencyExact(withholding)} Withholding Refunded by ${code}`
+            });
+            continue;
+        }
+        if (!rule.hasIncomeTax) {
+            nonResidentReturns.push({
+                result: 0,
+                state: code,
+                stateName: rule.name,
+                residentStatus: 'non_resident',
+                formName: rule.formNonResident,
+                hasIncomeTax: false,
+                stateWages,
+                stateStandardDeduction: 0,
+                stateTaxableIncome: 0,
+                stateTaxBeforeCredit: 0,
+                creditForOtherStates: 0,
+                creditedStates: [],
+                reciprocityExemption: false,
+                stateTaxLiability: 0,
+                stateWithholding: withholding,
+                localTaxWithheld: localTax,
+                netOutcome: withholding,
+                isRefund: true,
+                sourceFields: raw.sourceFieldIds,
+                generalFormula: `${rule.name} imposes 0% personal income tax on wage compensation`,
+                pluggedFormula: `State Tax = $0.00 (No ${rule.name} Return Required)`
+            });
+            continue;
+        }
+        // Standard Non-Resident Calculation
+        const stdDed = rule.standardDeduction[filingStatus] || 0;
+        const taxable = Math.max(0, stateWages - stdDed);
+        let tax = 0;
+        if (rule.isFlat) {
+            tax = taxable * (rule.flatRate || 0);
+        }
+        else {
+            const bList = rule.brackets?.[filingStatus] || rule.brackets?.['single'] || [];
+            tax = computeStateTaxFromBrackets(taxable, bList);
+        }
+        const stateTaxLiability = Math.round(tax * 100) / 100;
+        const netDiff = withholding - stateTaxLiability;
+        const isRefund = netDiff >= 0;
+        const netOutcome = Math.abs(netDiff);
+        nonResidentReturns.push({
+            result: stateTaxLiability,
+            state: code,
+            stateName: rule.name,
+            residentStatus: 'non_resident',
+            formName: rule.formNonResident,
+            hasIncomeTax: true,
+            stateWages,
+            stateStandardDeduction: stdDed,
+            stateTaxableIncome: taxable,
+            stateTaxBeforeCredit: stateTaxLiability,
+            creditForOtherStates: 0,
+            creditedStates: [],
+            reciprocityExemption: false,
+            stateTaxLiability,
+            stateWithholding: withholding,
+            localTaxWithheld: localTax,
+            netOutcome,
+            isRefund,
+            sourceFields: raw.sourceFieldIds,
+            generalFormula: `${rule.formNonResident}: State Tax = max(0, State Sourced Wages − State Standard Deduction) × Rates`,
+            pluggedFormula: isRefund
+                ? `Refund = ${formatCurrencyExact(withholding)} (Withheld) − ${formatCurrencyExact(stateTaxLiability)} (Tax) = ${formatCurrencyExact(netOutcome)}`
+                : `Owed = ${formatCurrencyExact(stateTaxLiability)} (Tax) − ${formatCurrencyExact(withholding)} (Withheld) = ${formatCurrencyExact(netOutcome)}`
+        });
+    }
+    // PASS 2: Calculate Resident State Return (with Other State Tax Credit - OSTC)
+    const resRaw = rawMap.get(residentState);
+    const residentTotalWages = Math.max(resRaw.w2Wages + resRaw.other1099, grossIncome, totalFederalWages);
+    const resWithholding = resRaw.w2Withheld;
+    const resLocalTax = resRaw.localWithheld;
+    let residentReturn;
+    if (!residentRule.hasIncomeTax) {
+        residentReturn = {
+            result: 0,
+            state: residentState,
+            stateName: residentRule.name,
+            residentStatus: 'resident',
+            formName: residentRule.formResident,
+            hasIncomeTax: false,
+            stateWages: residentTotalWages,
+            stateStandardDeduction: 0,
+            stateTaxableIncome: 0,
+            stateTaxBeforeCredit: 0,
+            creditForOtherStates: 0,
+            creditedStates: [],
+            reciprocityExemption: false,
+            stateTaxLiability: 0,
+            stateWithholding: resWithholding,
+            localTaxWithheld: resLocalTax,
+            netOutcome: resWithholding,
+            isRefund: true,
+            sourceFields: resRaw.sourceFieldIds,
+            generalFormula: `${residentRule.name} imposes 0% personal income tax on wage compensation`,
+            pluggedFormula: `Tax = $0.00 (No ${residentRule.name} State Return Required)`
+        };
+    }
+    else {
+        const resStdDed = residentRule.standardDeduction[filingStatus] || 0;
+        const resTaxable = Math.max(0, residentTotalWages - resStdDed);
+        let resTentativeTax = 0;
+        if (residentRule.isFlat) {
+            resTentativeTax = resTaxable * (residentRule.flatRate || 0);
+        }
+        else {
+            const bList = residentRule.brackets?.[filingStatus] || residentRule.brackets?.['single'] || [];
+            resTentativeTax = computeStateTaxFromBrackets(resTaxable, bList);
+        }
+        resTentativeTax = Math.round(resTentativeTax * 100) / 100;
+        // Compute OSTC: Credit for taxes paid to non-resident states
+        const creditedStates = [];
+        let totalOtherStateCredit = 0;
+        for (const nr of nonResidentReturns) {
+            if (nr.stateTaxLiability > 0 && !nr.reciprocityExemption && nr.hasIncomeTax) {
+                const ratio = residentTotalWages > 0 ? Math.min(1.0, nr.stateWages / residentTotalWages) : 0;
+                const homeAttributable = Math.round(resTentativeTax * ratio * 100) / 100;
+                const creditAllowed = Math.min(nr.stateTaxLiability, homeAttributable);
+                if (creditAllowed > 0) {
+                    creditedStates.push({
+                        fromState: nr.state,
+                        sourceTaxPaid: nr.stateTaxLiability,
+                        homeAttributableTax: homeAttributable,
+                        creditAllowed
+                    });
+                    totalOtherStateCredit += creditAllowed;
+                }
+            }
+        }
+        const finalResLiability = Math.max(0, Math.round((resTentativeTax - totalOtherStateCredit) * 100) / 100);
+        const resNetDiff = resWithholding - finalResLiability;
+        const resIsRefund = resNetDiff >= 0;
+        const resNetOutcome = Math.abs(resNetDiff);
+        residentReturn = {
+            result: finalResLiability,
+            state: residentState,
+            stateName: residentRule.name,
+            residentStatus: 'resident',
+            formName: residentRule.formResident,
+            hasIncomeTax: true,
+            stateWages: residentTotalWages,
+            stateStandardDeduction: resStdDed,
+            stateTaxableIncome: resTaxable,
+            stateTaxBeforeCredit: resTentativeTax,
+            creditForOtherStates: totalOtherStateCredit,
+            creditedStates,
+            reciprocityExemption: false,
+            stateTaxLiability: finalResLiability,
+            stateWithholding: resWithholding,
+            localTaxWithheld: resLocalTax,
+            netOutcome: resNetOutcome,
+            isRefund: resIsRefund,
+            sourceFields: [
+                ...resRaw.sourceFieldIds,
+                ...creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-liability`)
+            ],
+            generalFormula: `${residentRule.formResident}: Net State Tax = max(0, Tentative Tax − Other State Tax Credit [OSTC])`,
+            pluggedFormula: creditedStates.length > 0
+                ? `Net Tax = ${formatCurrencyExact(resTentativeTax)} (Tentative) − ${formatCurrencyExact(totalOtherStateCredit)} (${creditedStates.map(c => c.fromState).join('/')} Credit) = ${formatCurrencyExact(finalResLiability)} ➔ ${resIsRefund ? 'Refund' : 'Owed'}: ${formatCurrencyExact(resNetOutcome)}`
+                : (resIsRefund
+                    ? `Refund = ${formatCurrencyExact(resWithholding)} (Withheld) − ${formatCurrencyExact(finalResLiability)} (Tax) = ${formatCurrencyExact(resNetOutcome)}`
+                    : `Owed = ${formatCurrencyExact(finalResLiability)} (Tax) − ${formatCurrencyExact(resWithholding)} (Withheld) = ${formatCurrencyExact(resNetOutcome)}`)
+        };
+    }
+    // Combined list of all state returns: resident state first, then non-resident states
+    const allStateReturns = [residentReturn, ...nonResidentReturns];
+    // PASS 3: Compute Unified Tax Summary (Federal + All States = Grand Total)
+    const lines = [];
+    // Federal Line
+    lines.push({
+        jurisdiction: 'United States (Federal)',
+        formName: 'IRS Form 1040',
+        taxLiability: totalFederalLiability,
+        withholding: totalFederalWithholding,
+        netOutcome: federalNetDifference,
+        isRefund: federalIsRefund,
+        badge: federalIsRefund ? 'Federal Refund (Line 35a)' : 'Federal Tax Owed (Line 37)'
+    });
+    // State Lines
+    let totalStateWithholding = 0;
+    let totalStateLiability = 0;
+    let totalStateNet = 0;
+    for (const sr of allStateReturns) {
+        totalStateWithholding += sr.stateWithholding;
+        totalStateLiability += sr.stateTaxLiability;
+        const signedNet = sr.isRefund ? sr.netOutcome : -sr.netOutcome;
+        totalStateNet += signedNet;
+        let badge = undefined;
+        if (sr.creditForOtherStates > 0) {
+            badge = `🛡️ OSTC Credit (-${formatCurrency(sr.creditForOtherStates)})`;
+        }
+        else if (sr.reciprocityExemption) {
+            badge = `🤝 Reciprocity Active (100% Refund)`;
+        }
+        else if (!sr.hasIncomeTax) {
+            badge = `🌴 0% Wage Tax State`;
+        }
+        lines.push({
+            jurisdiction: `${sr.stateName} (${sr.residentStatus === 'resident' ? 'Resident' : 'Nonresident'})`,
+            formName: sr.formName,
+            taxLiability: sr.stateTaxLiability,
+            withholding: sr.stateWithholding,
+            netOutcome: signedNet,
+            isRefund: sr.isRefund,
+            badge
+        });
+    }
+    const grandTotalNet = federalNetDifference + totalStateNet;
+    const isGrandTotalRefund = grandTotalNet >= 0;
+    const unifiedSummaryCalc = {
+        result: Math.abs(grandTotalNet),
+        lines,
+        federalNet: federalNetDifference,
+        federalIsRefund,
+        totalStateWithholding,
+        totalStateLiability,
+        totalStateNet,
+        grandTotalNet,
+        isGrandTotalRefund,
+        sourceFields: [
+            'calc-final-verdict',
+            ...allStateReturns.map(s => `calc-state-${s.state.toLowerCase()}-outcome`)
+        ],
+        generalFormula: 'Grand Total Net Outcome = Federal Net (Withholding − Tax) + ∑ State Nets (Withholding − Tax)',
+        pluggedFormula: `Grand Total = ${federalNetDifference >= 0 ? `+${formatCurrencyExact(federalNetDifference)}` : `-${formatCurrencyExact(Math.abs(federalNetDifference))}`} (Federal) + ${totalStateNet >= 0 ? `+${formatCurrencyExact(totalStateNet)}` : `-${formatCurrencyExact(Math.abs(totalStateNet))}`} (States) = ${grandTotalNet >= 0 ? `+${formatCurrencyExact(grandTotalNet)}` : `-${formatCurrencyExact(Math.abs(grandTotalNet))}`}`
+    };
+    return { stateReturnsCalc: allStateReturns, unifiedSummaryCalc };
 }

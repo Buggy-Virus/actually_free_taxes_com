@@ -13,7 +13,9 @@ import {
   TaxCalculationSummary,
   BracketDetail,
   CalculationResult,
-  DeductionMethod
+  DeductionMethod,
+  StateReturnCalculation,
+  StateOtherStateCredit
 } from './types.js';
 import { calculateTaxes, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
@@ -77,6 +79,7 @@ class TaxApp {
   private state: TaxAppState = {
     year: 2024,
     filingStatus: 'single',
+    residentState: 'CA',
     w2s: [
       {
         id: 0,
@@ -164,6 +167,15 @@ class TaxApp {
       statusSelect.value = this.state.filingStatus;
       statusSelect.addEventListener('change', (e: Event) => {
         this.state.filingStatus = (e.target as HTMLSelectElement).value as FilingStatus;
+        this.recalculateAndRender();
+      });
+    }
+
+    const resStateSelect = document.getElementById('select-resident-state') as HTMLSelectElement | null;
+    if (resStateSelect) {
+      resStateSelect.value = this.state.residentState || 'CA';
+      resStateSelect.addEventListener('change', (e: Event) => {
+        this.state.residentState = (e.target as HTMLSelectElement).value;
         this.recalculateAndRender();
       });
     }
@@ -631,8 +643,12 @@ class TaxApp {
           </button>
         </div>
 
-        <div style="margin-bottom: 0.5rem;">
-          <input type="text" class="w2-input" id="input-income-payer-${src.id}" value="${src.payer}" placeholder="Payer / Client Name" style="font-size: 0.85rem; font-weight: 600; padding: 0.35rem 0.6rem;">
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+          <input type="text" class="w2-input" id="input-income-payer-${src.id}" value="${src.payer}" placeholder="Payer / Client Name" style="font-size: 0.85rem; font-weight: 600; padding: 0.35rem 0.6rem; flex: 2;">
+          <select class="w2-input" id="select-income-state-${src.id}" style="font-size: 0.8rem; padding: 0.35rem 0.5rem; flex: 1;" title="State where this income was earned">
+            <option value="">Default (Home State)</option>
+            ${US_STATES.map(s => `<option value="${s.code}" ${src.state === s.code ? 'selected' : ''}>${s.code} - ${s.name}</option>`).join('')}
+          </select>
         </div>
 
         <div class="w2-input-wrapper">
@@ -640,7 +656,7 @@ class TaxApp {
           <input type="number" step="any" class="w2-input" id="input-income-source-${src.id}" value="${src.amount}" placeholder="0">
         </div>
         <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">
-          Reported on 1040 line &amp; feeds directly into Gross Income.
+          Reported on 1040 line &amp; feeds directly into Gross Income and State Sourced Income.
         </div>
         ${renderFieldExplanationDrawer(ratingKey, `drawer-explain-income-${src.id}`)}
       `;
@@ -651,6 +667,14 @@ class TaxApp {
       if (typeSelect) {
         typeSelect.addEventListener('change', (e) => {
           src.type = (e.target as HTMLSelectElement).value as any;
+          this.recalculateAndRender();
+        });
+      }
+
+      const stateSelect = card.querySelector(`#select-income-state-${src.id}`) as HTMLSelectElement | null;
+      if (stateSelect) {
+        stateSelect.addEventListener('change', (e) => {
+          src.state = (e.target as HTMLSelectElement).value || undefined;
           this.recalculateAndRender();
         });
       }
@@ -1420,7 +1444,7 @@ class TaxApp {
     });
   }
 
-  private buildConnections(): ConnectionDef[] {
+  private buildConnections(taxData?: TaxCalculationSummary): ConnectionDef[] {
     const connections: ConnectionDef[] = [];
 
     // 1. W2 Box 1 (Wages) -> Total Wages Calc
@@ -1692,16 +1716,59 @@ class TaxApp {
       });
     });
 
-    // 13. State Tax Withholding Connections (Box 17 -> State Summary)
+    // 13. State Tax Withholding & Wage Connections
     this.state.w2s.forEach(w => {
       (w.states || []).forEach(st => {
+        const stateKey = (st.state || '').toLowerCase();
+        connections.push({
+          id: `conn-w2-${w.id}-state-${st.id}-wages`,
+          sourceId: `w2-${w.id}-state-${st.id}-box16`,
+          targetId: `calc-state-${stateKey}-card`,
+          category: 'state',
+          label: `${st.state} State Sourced Wages (Box 16)`
+        });
         connections.push({
           id: `conn-w2-${w.id}-state-${st.id}-tax`,
           sourceId: `w2-${w.id}-state-${st.id}-box17`,
-          targetId: 'calc-state-tax-summary',
+          targetId: `calc-state-${stateKey}-card`,
           category: 'state',
-          label: `${st.state} State Tax Withheld`
+          label: `${st.state} State Tax Withheld (Box 17)`
         });
+      });
+    });
+
+    // 14. Cross-State Double Taxation Shield (OSTC) Connections
+    (taxData?.stateReturnsCalc || []).forEach((sr: StateReturnCalculation) => {
+      const homeStateKey = sr.state.toLowerCase();
+      (sr.creditedStates || []).forEach((c: StateOtherStateCredit) => {
+        const sourceStateKey = c.fromState.toLowerCase();
+        connections.push({
+          id: `conn-ostc-${sourceStateKey}-to-${homeStateKey}`,
+          sourceId: `calc-state-${sourceStateKey}-card`,
+          targetId: `calc-state-${homeStateKey}-card`,
+          category: 'state_credit',
+          label: `🛡️ ${c.fromState} Tax Credited to ${sr.state}`
+        });
+      });
+    });
+
+    // 15. Federal Verdict & State Outcomes -> Grand Total Unified Summary
+    connections.push({
+      id: 'conn-fed-to-unified',
+      sourceId: 'calc-final-verdict',
+      targetId: 'calc-unified-summary',
+      category: 'withholding',
+      label: 'Federal Outcome to Grand Total'
+    });
+
+    (taxData?.stateReturnsCalc || []).forEach((sr: StateReturnCalculation) => {
+      const stateKey = sr.state.toLowerCase();
+      connections.push({
+        id: `conn-state-${stateKey}-to-unified`,
+        sourceId: `calc-state-${stateKey}-card`,
+        targetId: 'calc-unified-summary',
+        category: 'state',
+        label: `${sr.state} Return Outcome to Grand Total`
       });
     });
 
@@ -1755,15 +1822,17 @@ class TaxApp {
     updateCard('calc-total-withholding', taxData.withholdingCalc, formatCurrencyExact(taxData.withholdingCalc.result));
 
     this.renderVerdict(taxData);
+    this.renderUnifiedSummary(taxData);
     updateCard('calc-fica-breakdown', taxData.ficaCalc, formatCurrencyExact(taxData.ficaCalc.totalFica));
 
-    // Render State Tax Summary Card
+    // Render State Tax Summary Card & Dynamic State Returns
     this.renderStateTaxSummary(taxData);
+    this.renderStateReturns(taxData);
 
     this.render1040Mirror(taxData);
     this.updateHeaderStats(taxData);
 
-    const connections = this.buildConnections();
+    const connections = this.buildConnections(taxData);
     if (this.arrowEngine) {
       this.arrowEngine.setConnections(connections);
     }
@@ -1771,6 +1840,150 @@ class TaxApp {
     this.updateTableOfContents();
     this.bindRatingPillEvents();
     this.bindExplainEvents();
+  }
+
+  private renderStateReturns(taxData: TaxCalculationSummary): void {
+    const container = document.getElementById('container-state-returns');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const stateReturns = taxData.stateReturnsCalc || [];
+
+    stateReturns.forEach(sr => {
+      const card = document.createElement('div');
+      card.className = 'state-return-card';
+      card.id = `calc-state-${sr.state.toLowerCase()}-card`;
+
+      const isRes = sr.residentStatus === 'resident';
+      const statusBadge = isRes
+        ? '<span class="state-status-badge badge-resident">🏠 Resident Return</span>'
+        : '<span class="state-status-badge badge-nonresident">💼 Nonresident Return</span>';
+
+      let extraBadge = '';
+      if (sr.creditForOtherStates > 0) {
+        extraBadge = `<span class="state-status-badge badge-shield" id="calc-state-${sr.state.toLowerCase()}-ostc" title="Credit for Taxes Paid to Other States">🛡️ Double-Tax Shield: -${formatCurrency(sr.creditForOtherStates)}</span>`;
+      } else if (sr.reciprocityExemption) {
+        extraBadge = `<span class="state-status-badge badge-reciprocal">🤝 Reciprocal Agreement Active</span>`;
+      } else if (!sr.hasIncomeTax) {
+        extraBadge = `<span class="state-status-badge badge-no-tax">🌴 0% Wage Tax State</span>`;
+      }
+
+      card.innerHTML = `
+        <div class="calc-card-header">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
+              <span class="step-indicator" style="color: #6d28d9; margin-bottom: 0;">State Return • ${sr.state}</span>
+              ${statusBadge}
+              ${extraBadge}
+            </div>
+            <h3 class="calc-card-title">${sr.stateName}: ${sr.formName}</h3>
+          </div>
+          <span class="irs-line-tag" style="background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe;">${sr.formName}</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">${sr.generalFormula}</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged" style="background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe;">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">${sr.pluggedFormula}</span>
+          </div>
+        </div>
+
+        ${sr.creditedStates.length > 0 ? `
+          <div style="background: #fdf4ff; border: 1px solid #f0abfc; border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; font-size: 0.82rem; color: #701a75;">
+            <strong>🛡️ Other State Tax Credit (OSTC) Detail:</strong>
+            ${sr.creditedStates.map(c => `
+              <div>• Credited from <strong>${c.fromState}</strong>: Source tax paid was ${formatCurrencyExact(c.sourceTaxPaid)}, resident attributable tax is ${formatCurrencyExact(c.homeAttributableTax)} ➔ Credit allowed: <strong>${formatCurrencyExact(c.creditAllowed)}</strong></div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        ${sr.reciprocityNote ? `
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; font-size: 0.82rem; color: #065f46;">
+            <strong>🤝 Reciprocity Note:</strong> ${sr.reciprocityNote}
+          </div>
+        ` : ''}
+
+        <div class="state-outcome-banner ${sr.isRefund ? 'is-refund' : 'is-owed'}" id="calc-state-${sr.state.toLowerCase()}-outcome">
+          <div>
+            <div style="font-size: 0.85rem; opacity: 0.9;">
+              ${sr.isRefund ? `Estimated ${sr.stateName} State Refund:` : `Estimated ${sr.stateName} State Tax Owed:`}
+            </div>
+            <div style="font-size: 0.75rem; opacity: 0.8;">
+              Box 17 Withholding (${formatCurrencyExact(sr.stateWithholding)}) vs. Tax Liability (${formatCurrencyExact(sr.stateTaxLiability)})
+            </div>
+          </div>
+          <div class="state-outcome-amount" id="calc-state-${sr.state.toLowerCase()}-liability">
+            ${sr.isRefund ? `+${formatCurrencyExact(sr.netOutcome)}` : `-${formatCurrencyExact(sr.netOutcome)}`}
+          </div>
+        </div>
+      `;
+
+      container.appendChild(card);
+    });
+  }
+
+  private renderUnifiedSummary(taxData: TaxCalculationSummary): void {
+    const card = document.getElementById('calc-unified-summary');
+    if (!card) return;
+
+    const banner = document.getElementById('unified-hero-banner');
+    const amountEl = document.getElementById('unified-hero-amount');
+    const subtitleEl = document.getElementById('unified-hero-subtitle');
+    const pluggedEl = document.getElementById('unified-formula-plugged');
+    const tbody = document.getElementById('unified-ledger-tbody');
+
+    const u = taxData.unifiedSummaryCalc;
+    if (!u) return;
+
+    if (banner) {
+      banner.className = `unified-hero-banner ${u.isGrandTotalRefund ? 'is-refund' : 'is-owed'}`;
+    }
+    if (amountEl) {
+      amountEl.textContent = `${u.isGrandTotalRefund ? '+' : '-'}${formatCurrencyExact(u.result)}`;
+    }
+    if (subtitleEl) {
+      subtitleEl.textContent = u.isGrandTotalRefund
+        ? 'Total combined refund check amount coming back to you across the IRS and all states!'
+        : 'Total combined balance due across the IRS and state tax revenue departments.';
+    }
+    if (pluggedEl) {
+      pluggedEl.textContent = u.pluggedFormula;
+    }
+
+    if (tbody) {
+      tbody.innerHTML = '';
+      u.lines.forEach(line => {
+        const tr = document.createElement('tr');
+        const isRef = line.netOutcome >= 0;
+        const outcomeColor = isRef ? 'val-refund' : 'val-owed';
+        const outcomeFormatted = `${isRef ? '+' : '-'}${formatCurrencyExact(Math.abs(line.netOutcome))}`;
+
+        tr.innerHTML = `
+          <td><strong>${line.jurisdiction}</strong></td>
+          <td><span class="irs-line-tag">${line.formName}</span></td>
+          <td>${formatCurrencyExact(line.taxLiability)}</td>
+          <td>${formatCurrencyExact(line.withholding)}</td>
+          <td class="${outcomeColor}">${outcomeFormatted} ${isRef ? 'Refund' : 'Owed'}</td>
+          <td>${line.badge ? `<span class="state-status-badge badge-shield">${line.badge}</span>` : '<span style="color: #94a3b8;">Standard Filing</span>'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Total row
+      const totalTr = document.createElement('tr');
+      totalTr.className = 'total-row';
+      const grandRef = u.isGrandTotalRefund;
+      totalTr.innerHTML = `
+        <td colspan="4" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em;">Grand Total Net Pocket Outcome:</td>
+        <td class="${grandRef ? 'val-refund' : 'val-owed'}">${grandRef ? '+' : '-'}${formatCurrencyExact(u.result)} ${grandRef ? 'NET REFUND' : 'NET OWED'}</td>
+        <td><strong>${grandRef ? '🎉 In Your Pocket' : '⚠️ Total Due'}</strong></td>
+      `;
+      tbody.appendChild(totalTr);
+    }
   }
 
   private renderStateTaxSummary(taxData: TaxCalculationSummary): void {

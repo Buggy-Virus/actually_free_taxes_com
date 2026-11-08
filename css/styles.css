@@ -1988,3 +1988,186 @@ body.filter-hide-niche .priority-skip {
   transition: opacity 0.2s ease;
 }
 
+/* Multi-State Return Cards & Allocation Styles */
+.state-return-card {
+  background: var(--bg-card);
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.05);
+  margin-top: 1.25rem;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.state-return-card:hover {
+  border-color: #8b5cf6;
+  box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.1);
+}
+
+.state-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-resident {
+  background: #ede9fe;
+  color: #6d28d9;
+  border: 1px solid #c4b5fd;
+}
+
+.badge-nonresident {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.badge-reciprocal {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.badge-shield {
+  background: #fdf4ff;
+  color: #a21caf;
+  border: 1px solid #f0abfc;
+}
+
+.badge-no-tax {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.state-outcome-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  font-weight: 700;
+}
+
+.state-outcome-banner.is-refund {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.state-outcome-banner.is-owed {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #c2410c;
+}
+
+.state-outcome-amount {
+  font-size: 1.35rem;
+  font-family: var(--font-mono);
+  font-weight: 800;
+}
+
+/* Grand Total Unified Tax Summary Ledger */
+.unified-summary-card {
+  background: #ffffff;
+  border: 2px solid #0f172a;
+  border-radius: 14px;
+  padding: 1.75rem;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12);
+  margin-top: 2rem;
+  position: relative;
+}
+
+.unified-hero-banner {
+  text-align: center;
+  padding: 1.5rem;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+}
+
+.unified-hero-banner.is-refund {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.unified-hero-banner.is-owed {
+  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+  color: white;
+}
+
+.unified-hero-title {
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  opacity: 0.95;
+  margin-bottom: 0.4rem;
+}
+
+.unified-hero-amount {
+  font-size: 2.75rem;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.unified-hero-subtitle {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin-top: 0.4rem;
+}
+
+.unified-ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin-top: 1rem;
+}
+
+.unified-ledger-table th {
+  text-align: left;
+  padding: 0.65rem 0.85rem;
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #475569;
+}
+
+.unified-ledger-table td {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.unified-ledger-table tr.total-row td {
+  border-top: 2px solid #0f172a;
+  border-bottom: none;
+  font-weight: 800;
+  font-size: 1.05rem;
+  background: #f8fafc;
+}
+
+.unified-ledger-table .val-refund {
+  color: #16a34a;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.unified-ledger-table .val-owed {
+  color: #ea580c;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+

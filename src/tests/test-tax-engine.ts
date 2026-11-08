@@ -447,4 +447,230 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   console.log("✓ TS Test 8: Field Explanations Engine & Inline Drawer Generation verified correctly!");
 }
 
-console.log("\nAll 8 TypeScript test suites PASSED with 100% accuracy!\n");
+// Test Case 9: Multi-State Return with OSTC (NY Nonresident Work + NJ Resident Home)
+{
+  const state: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    residentState: 'NJ',
+    w2s: [
+      {
+        id: 0,
+        employer: 'Manhattan Finance LLC',
+        ein: '13-9876543',
+        box1: 100000,
+        box2: 12000,
+        box3: 100000,
+        box4: 6200,
+        box5: 100000,
+        box6: 1450,
+        states: [
+          {
+            id: 0,
+            state: 'NY',
+            stateId: 'NY-13987',
+            stateWages: 100000,
+            stateTaxWithheld: 5500,
+            localWages: 0,
+            localTaxWithheld: 0,
+            localityName: ''
+          }
+        ]
+      }
+    ],
+    otherIncome: { interest: 0 },
+    adjustments: { studentLoan: 0, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 0 },
+    showAllArrows: true
+  };
+
+  const res = calculateTaxes(state);
+
+  // Check that 2 state returns were calculated: NJ (Resident) and NY (Nonresident)
+  assert.strictEqual(res.stateReturnsCalc.length, 2, 'Should have exactly 2 state returns (NJ & NY)');
+
+  const njReturn = res.stateReturnsCalc.find(s => s.state === 'NJ')!;
+  const nyReturn = res.stateReturnsCalc.find(s => s.state === 'NY')!;
+
+  assert.ok(njReturn, 'NJ resident return exists');
+  assert.ok(nyReturn, 'NY nonresident return exists');
+  assert.strictEqual(njReturn.residentStatus, 'resident', 'NJ is resident');
+  assert.strictEqual(nyReturn.residentStatus, 'non_resident', 'NY is nonresident');
+
+  // NY Nonresident Liability calculation:
+  // NY Taxable: 100,000 - 8,000 standard deduction = 92,000
+  // NY Tax: $4,951.75
+  assert.strictEqual(nyReturn.stateTaxableIncome, 92000, 'NY taxable income is 92,000');
+  assert.strictEqual(Math.round(nyReturn.stateTaxLiability), 4952, 'NY tax liability is approx $4,952');
+  assert.strictEqual(nyReturn.isRefund, true, 'NY is a refund because $5,500 withheld > $4,951.75 liability');
+
+  // NJ Resident Return with Other State Tax Credit (Schedule NJ-CO):
+  // NJ tentative tax on $100k - $1k NJ std deduction ($99k taxable) is $4,180.05
+  // Credit allowed = min(NY tax $4,951.75, NJ home attributable $4,180.05) = $4,180.05
+  // Final NJ liability = $4,180.05 - $4,180.05 = $0! Double taxation is completely wiped out.
+  assert.ok(njReturn.creditForOtherStates > 0, 'NJ applied OSTC credit');
+  assert.strictEqual(njReturn.creditedStates.length, 1, 'Credited 1 other state (NY)');
+  assert.strictEqual(njReturn.creditedStates[0].fromState, 'NY', 'Credit from NY');
+  assert.strictEqual(njReturn.stateTaxLiability, 0, 'NJ net tax liability is $0 due to 100% OSTC credit shield');
+
+  console.log("✓ TS Test 9: Multi-State Return with OSTC Double Taxation Shield (NY + NJ) verified correctly!");
+}
+
+// Test Case 10: Reciprocal State Commuter (NJ Resident + PA Work W-2)
+{
+  const state: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    residentState: 'NJ',
+    w2s: [
+      {
+        id: 0,
+        employer: 'Philly Pharma Inc',
+        ein: '23-1122334',
+        box1: 80000,
+        box2: 8500,
+        box3: 80000,
+        box4: 4960,
+        box5: 80000,
+        box6: 1160,
+        states: [
+          {
+            id: 0,
+            state: 'PA',
+            stateId: 'PA-23112',
+            stateWages: 80000,
+            stateTaxWithheld: 2456, // 3.07% PA withholding
+            localWages: 0,
+            localTaxWithheld: 0,
+            localityName: ''
+          }
+        ]
+      }
+    ],
+    otherIncome: { interest: 0 },
+    adjustments: { studentLoan: 0, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 0 },
+    showAllArrows: true
+  };
+
+  const res = calculateTaxes(state);
+
+  const paReturn = res.stateReturnsCalc.find(s => s.state === 'PA')!;
+  assert.ok(paReturn, 'PA nonresident return exists');
+  assert.strictEqual(paReturn.reciprocityExemption, true, 'PA has reciprocity exemption with NJ');
+  assert.strictEqual(paReturn.stateTaxLiability, 0, 'PA tax liability is $0 under reciprocity');
+  assert.strictEqual(paReturn.isRefund, true, 'PA returns 100% refund of withholding');
+  assert.strictEqual(paReturn.netOutcome, 2456, 'Full $2,456 PA withholding refunded');
+  assert(paReturn.reciprocityNote?.includes('Reciprocal agreement active'), 'Includes reciprocity explanation');
+
+  console.log("✓ TS Test 10: Reciprocal State Agreement (NJ & PA Commuter) verified correctly!");
+}
+
+// Test Case 11: 0% Income Tax State (Resident of Texas)
+{
+  const state: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    residentState: 'TX',
+    w2s: [
+      {
+        id: 0,
+        employer: 'Austin Tech LLC',
+        ein: '74-1234567',
+        box1: 95000,
+        box2: 11000,
+        box3: 95000,
+        box4: 5890,
+        box5: 95000,
+        box6: 1377.50,
+        states: [
+          {
+            id: 0,
+            state: 'TX',
+            stateId: 'TX-NONE',
+            stateWages: 95000,
+            stateTaxWithheld: 0,
+            localWages: 0,
+            localTaxWithheld: 0,
+            localityName: ''
+          }
+        ]
+      }
+    ],
+    otherIncome: { interest: 0 },
+    adjustments: { studentLoan: 0, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 0 },
+    showAllArrows: true
+  };
+
+  const res = calculateTaxes(state);
+  const txReturn = res.stateReturnsCalc.find(s => s.state === 'TX')!;
+  assert.ok(txReturn, 'TX return exists in report');
+  assert.strictEqual(txReturn.hasIncomeTax, false, 'TX has 0% income tax');
+  assert.strictEqual(txReturn.stateTaxLiability, 0, 'TX tax liability is $0');
+  assert(txReturn.pluggedFormula.includes('No Texas State Return Required'), 'Formula explains no return required');
+
+  console.log("✓ TS Test 11: 0% Income Tax State (Texas) verified correctly!");
+}
+
+// Test Case 12: Unified Multi-Jurisdiction Grand Total Ledger
+{
+  const state: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    residentState: 'CA',
+    w2s: [
+      {
+        id: 0,
+        employer: 'Job CA',
+        ein: '94-1111111',
+        box1: 50000,
+        box2: 6000,
+        box3: 50000,
+        box4: 3100,
+        box5: 50000,
+        box6: 725,
+        states: [
+          { id: 0, state: 'CA', stateId: 'CA-1', stateWages: 50000, stateTaxWithheld: 2000, localWages: 0, localTaxWithheld: 0, localityName: '' }
+        ]
+      },
+      {
+        id: 1,
+        employer: 'Job NY',
+        ein: '13-2222222',
+        box1: 40000,
+        box2: 4500,
+        box3: 40000,
+        box4: 2480,
+        box5: 40000,
+        box6: 580,
+        states: [
+          { id: 1, state: 'NY', stateId: 'NY-1', stateWages: 40000, stateTaxWithheld: 1800, localWages: 0, localTaxWithheld: 0, localityName: '' }
+        ]
+      }
+    ],
+    otherIncome: { interest: 0 },
+    adjustments: { studentLoan: 0, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 0 },
+    showAllArrows: true
+  };
+
+  const res = calculateTaxes(state);
+  const ledger = res.unifiedSummaryCalc;
+
+  assert.ok(ledger, 'Unified summary exists');
+  assert.strictEqual(ledger.lines.length, 3, 'Ledger has Federal + CA + NY (3 lines)');
+
+  // Verify that grandTotalNet = federalNet + sum(stateNet)
+  let expectedTotal = ledger.federalNet;
+  for (const sr of res.stateReturnsCalc) {
+    expectedTotal += sr.isRefund ? sr.netOutcome : -sr.netOutcome;
+  }
+  assert.strictEqual(ledger.grandTotalNet, expectedTotal, 'Grand total matches exact sum of Federal + all State nets');
+  assert.strictEqual(ledger.result, Math.abs(expectedTotal), 'Result matches absolute grand total');
+
+  console.log("✓ TS Test 12: Unified Multi-Jurisdiction Grand Total Ledger verified correctly!");
+}
+
+console.log("\nAll 12 TypeScript test suites PASSED with 100% accuracy!\n");
+

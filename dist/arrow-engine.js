@@ -14,6 +14,7 @@ export class ArrowEngine {
             ss: '#f59e0b',
             medicare: '#ec4899',
             state: '#8b5cf6',
+            state_credit: '#c026d3',
             adjustments: '#6366f1',
             status: '#4f46e5',
             tax: '#f97316',
