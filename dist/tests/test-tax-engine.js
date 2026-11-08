@@ -1,4 +1,5 @@
 import { calculateTaxes } from '../tax-engine.js';
+import { getFieldRating, renderRatingPill, renderRatingCardHtml } from '../field-ratings.js';
 import assert from 'assert';
 console.log("Running TypeScript Tax Engine Verification Suite...\n");
 // Test Case 1: Single filer with $75,000 W-2 in California
@@ -222,4 +223,29 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
     assert(res.grossIncomeCalc.sourceFields.includes('input-income-source-2'), 'Sources include dividends input');
     console.log("✓ TS Test 5: Additional Income Sources (1099-NEC + 1099-DIV) verified correctly!");
 }
-console.log("\nAll 5 TypeScript test suites PASSED with 100% accuracy!\n");
+// Test Case 6: Field Ratings & IRS Risk Assessment Engine
+{
+    const b1 = getFieldRating('w2-box1');
+    assert.strictEqual(b1.importance, 'critical', 'Box 1 is critical');
+    assert.strictEqual(b1.irsRisk, 'high', 'Box 1 has high IRS matching risk');
+    assert.strictEqual(b1.recommendation, 'must_be_accurate', 'Must be accurate');
+    const b2 = getFieldRating('w2-box2');
+    assert.strictEqual(b2.importance, 'critical', 'Box 2 is critical');
+    assert.strictEqual(b2.savingsPotential, 'high', 'Box 2 has high cash savings/refund potential');
+    const b3 = getFieldRating('w2-box3');
+    assert.strictEqual(b3.recommendation, 'safe_to_ignore', 'Box 3 is safe to ignore for single-job filers under cap');
+    const studentLoan = getFieldRating('adj-student-loan');
+    assert.strictEqual(studentLoan.recommendation, 'high_savings', 'Student loan deduction is high money saver');
+    assert.strictEqual(studentLoan.irsRisk, 'low', 'Student loan interest is low IRS risk');
+    const kids = getFieldRating('credits-children');
+    assert.strictEqual(kids.recommendation, 'high_savings', 'Child tax credit is high money saver');
+    const pillHtml = renderRatingPill('w2-box1');
+    assert(pillHtml.includes('Must be 100% Accurate'), 'Renders accurate pill text');
+    const cardHtml = renderRatingCardHtml('w2-box2');
+    assert(cardHtml.includes('If left blank:'), 'Includes importance dimension');
+    assert(cardHtml.includes('IRS & Audit Risk'), 'Includes IRS risk dimension');
+    assert(cardHtml.includes('Savings Potential'), 'Includes savings dimension');
+    assert(cardHtml.includes('Applicability'), 'Includes applicability dimension');
+    console.log("✓ TS Test 6: Field Ratings & IRS Risk Engine verified correctly!");
+}
+console.log("\nAll 6 TypeScript test suites PASSED with 100% accuracy!\n");

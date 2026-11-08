@@ -167,3 +167,35 @@ export interface ConnectionDef {
   category?: ArrowColorCategory;
   label?: string;
 }
+
+export type ImportanceLevel = 'critical' | 'important' | 'recommended' | 'optional';
+export type IrsRiskLevel = 'high' | 'medium' | 'low';
+export type SavingsPotentialLevel = 'high' | 'medium' | 'low' | 'none';
+export type ApplicabilityLevel = 'common' | 'moderate' | 'niche';
+export type RecommendationPriority = 'must_be_accurate' | 'high_savings' | 'verify_paper' | 'safe_to_ignore';
+
+export interface FieldRatingDefinition {
+  fieldKey: string;
+  fieldTitle: string;
+  formName: string;
+  importance: ImportanceLevel;
+  importanceScore: number; // 1 - 4
+  importanceLabel: string;
+  importanceDescription: string;
+  irsRisk: IrsRiskLevel;
+  irsRiskScore: number; // 1 - 3
+  irsRiskLabel: string;
+  irsRiskDescription: string;
+  savingsPotential: SavingsPotentialLevel;
+  savingsScore: number; // 0 - 3
+  savingsLabel: string;
+  savingsDescription: string;
+  applicability: ApplicabilityLevel;
+  applicabilityScore: number; // 1 - 4
+  applicabilityPercent: string;
+  applicabilityLabel: string;
+  applicabilityDescription: string;
+  recommendation: RecommendationPriority;
+  recommendationTag: string;
+  plainEnglishVerdict: string;
+}

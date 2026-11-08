@@ -164,7 +164,14 @@
 
       <div class="hero-controls">
         <div class="select-control">
-          <label for="select-tax-year">Tax Year</label>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+            <label for="select-tax-year" style="margin-bottom: 0;">Tax Year</label>
+            <span class="field-rating-pill badge-priority-must" data-rating-field="global-tax-year" title="Click for IRS Risk & Guidance Breakdown">
+              <span class="pill-icon">🔴</span>
+              <span class="pill-text">Required</span>
+              <span class="pill-info-icon">ⓘ</span>
+            </span>
+          </div>
           <select id="select-tax-year">
             <option value="2024" selected>2024 (Filed in 2025)</option>
             <option value="2025">2025 (Projected)</option>
@@ -172,7 +179,14 @@
         </div>
 
         <div class="select-control">
-          <label for="select-filing-status">Filing Status</label>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+            <label for="select-filing-status" style="margin-bottom: 0;">Filing Status</label>
+            <span class="field-rating-pill badge-priority-must" data-rating-field="global-filing-status" title="Click for IRS Risk & Guidance Breakdown">
+              <span class="pill-icon">🔴</span>
+              <span class="pill-text">100% Accurate</span>
+              <span class="pill-info-icon">ⓘ</span>
+            </span>
+          </div>
           <select id="select-filing-status">
             <option value="single" selected>Single</option>
             <option value="married_joint">Married Filing Jointly</option>
@@ -189,6 +203,18 @@
         <button type="button" class="preset-chip" data-preset="married-dual-140k">Dual-Income Married ($140k + 1 Kid)</button>
         <button type="button" class="preset-chip" data-preset="student-grad">College Grad with Student Loans</button>
         <button type="button" class="preset-chip" data-preset="blank">Blank Slate</button>
+      </div>
+
+      <!-- Ratings & Importance Filter Toolbar -->
+      <div class="ratings-filter-toolbar" id="ratings-filter-toolbar" style="margin-top: 1.25rem;">
+        <span class="filter-title">Field Guidance &amp; Risk:</span>
+        <button type="button" class="filter-chip active" data-filter="all">All Fields</button>
+        <button type="button" class="filter-chip" data-filter="must-only" title="Highlight fields that MUST be 100% correct">🔴 Must Be 100% Correct</button>
+        <button type="button" class="filter-chip" data-filter="savers-only" title="Highlight high savings deductions and refund drivers">💰 Money Savers</button>
+        <button type="button" class="filter-chip" data-filter="hide-niche" title="Dim obscure or niche fields you can likely ignore">⚪ Dim Niche / Optional</button>
+        <button type="button" class="btn btn-sm" id="btn-open-ratings-legend" style="margin-left: auto; font-size: 0.72rem; padding: 0.25rem 0.6rem;">
+          ℹ️ Guide to Ratings
+        </button>
       </div>
     </section>
 
@@ -241,8 +267,15 @@
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
         <!-- Taxable Interest -->
-        <div class="calc-card" id="card-other-interest" style="padding: 1.25rem;">
-          <div class="step-indicator">Form 1099-INT</div>
+        <div class="calc-card priority-must" id="card-other-interest" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+            <div class="step-indicator">Form 1099-INT</div>
+            <span class="field-rating-pill badge-priority-verify" data-rating-field="other-interest">
+              <span class="pill-icon">🟡</span>
+              <span class="pill-text">Verify >$10</span>
+              <span class="pill-info-icon">ⓘ</span>
+            </span>
+          </div>
           <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Taxable Interest</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
@@ -252,8 +285,15 @@
         </div>
 
         <!-- Student Loan Interest -->
-        <div class="calc-card" style="padding: 1.25rem;">
-          <div class="step-indicator">Schedule 1 Line 21</div>
+        <div class="calc-card priority-saver" id="card-student-loan" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+            <div class="step-indicator">Schedule 1 Line 21</div>
+            <span class="field-rating-pill badge-priority-saver" data-rating-field="adj-student-loan">
+              <span class="pill-icon">💰</span>
+              <span class="pill-text">Save up to $550</span>
+              <span class="pill-info-icon">ⓘ</span>
+            </span>
+          </div>
           <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Student Loan Interest</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
@@ -263,8 +303,15 @@
         </div>
 
         <!-- Traditional IRA Deduction -->
-        <div class="calc-card" style="padding: 1.25rem;">
-          <div class="step-indicator">Schedule 1 Line 20</div>
+        <div class="calc-card priority-saver" id="card-adj-ira" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+            <div class="step-indicator">Schedule 1 Line 20</div>
+            <span class="field-rating-pill badge-priority-saver" data-rating-field="adj-ira">
+              <span class="pill-icon">💰</span>
+              <span class="pill-text">High Saver</span>
+              <span class="pill-info-icon">ⓘ</span>
+            </span>
+          </div>
           <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Traditional IRA Deduction</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
@@ -274,8 +321,15 @@
         </div>
 
         <!-- Qualifying Children -->
-        <div class="calc-card" style="padding: 1.25rem;">
-          <div class="step-indicator">Tax Credits</div>
+        <div class="calc-card priority-saver" id="card-children-count" style="padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+            <div class="step-indicator">Tax Credits</div>
+            <span class="field-rating-pill badge-priority-saver" data-rating-field="credits-children">
+              <span class="pill-icon">💰</span>
+              <span class="pill-text">$2,000 / Child</span>
+              <span class="pill-info-icon">ⓘ</span>
+            </span>
+          </div>
           <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Qualifying Children under 17</div>
           <div class="w2-input-wrapper">
             <input type="number" min="0" max="10" step="1" class="w2-input" id="input-children-count" value="0" style="padding-left: 0.75rem; text-align: left;">
@@ -818,6 +872,16 @@
 
   </main>
   </div> <!-- Close app-layout -->
+
+  <!-- Interactive Field Guidance & IRS Risk Modal Dialog -->
+  <div class="guidance-modal-overlay" id="guidance-modal-overlay" role="dialog" aria-modal="true">
+    <div class="guidance-modal-dialog">
+      <button type="button" class="guidance-modal-close-btn" id="btn-close-guidance-modal" aria-label="Close guidance dialog">✕</button>
+      <div id="guidance-modal-body">
+        <!-- Dynamically populated by renderRatingCardHtml() -->
+      </div>
+    </div>
+  </div>
 
   <!-- Application Logic (Compiled TypeScript) -->
   <script type="module" src="dist/app.js"></script>

@@ -3,6 +3,7 @@
  */
 import { calculateTaxes, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
+import { renderRatingPill, renderRatingCardHtml } from './field-ratings.js';
 export const US_STATES = [
     { code: 'AL', name: 'Alabama', noIncomeTax: false },
     { code: 'AK', name: 'Alaska', noIncomeTax: true },
@@ -191,6 +192,82 @@ class TaxApp {
         bindInput('input-other-interest', val => this.state.otherIncome.interest = val);
         bindInput('input-children-count', val => this.state.dependents.childrenCount = val);
         this.bindCardInspectors();
+        this.bindGuidanceModalEvents();
+        this.bindFilterToolbar();
+        this.bindRatingPillEvents();
+    }
+    openGuidanceModal(fieldKey) {
+        const modalEl = document.getElementById('guidance-modal-overlay');
+        const bodyEl = document.getElementById('guidance-modal-body');
+        if (!modalEl || !bodyEl)
+            return;
+        bodyEl.innerHTML = renderRatingCardHtml(fieldKey);
+        modalEl.classList.add('open');
+    }
+    closeGuidanceModal() {
+        const modalEl = document.getElementById('guidance-modal-overlay');
+        if (modalEl) {
+            modalEl.classList.remove('open');
+        }
+    }
+    bindGuidanceModalEvents() {
+        const modalEl = document.getElementById('guidance-modal-overlay');
+        const closeBtn = document.getElementById('btn-close-guidance-modal');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeGuidanceModal());
+        }
+        if (modalEl) {
+            modalEl.addEventListener('click', (e) => {
+                if (e.target === modalEl) {
+                    this.closeGuidanceModal();
+                }
+            });
+        }
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.closeGuidanceModal();
+            }
+        });
+    }
+    bindRatingPillEvents() {
+        document.querySelectorAll('[data-rating-field]').forEach(pill => {
+            pill.onclick = (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const fieldKey = pill.dataset.ratingField;
+                if (fieldKey) {
+                    this.openGuidanceModal(fieldKey);
+                }
+            };
+        });
+    }
+    bindFilterToolbar() {
+        const toolbar = document.getElementById('ratings-filter-toolbar');
+        if (!toolbar)
+            return;
+        toolbar.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                toolbar.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                const filter = chip.dataset.filter;
+                document.body.classList.remove('filter-must-only', 'filter-savers-only', 'filter-hide-niche');
+                if (filter === 'must-only') {
+                    document.body.classList.add('filter-must-only');
+                }
+                else if (filter === 'savers-only') {
+                    document.body.classList.add('filter-savers-only');
+                }
+                else if (filter === 'hide-niche') {
+                    document.body.classList.add('filter-hide-niche');
+                }
+            });
+        });
+        const legendBtn = document.getElementById('btn-open-ratings-legend');
+        if (legendBtn) {
+            legendBtn.addEventListener('click', () => {
+                this.openGuidanceModal('w2-box1');
+            });
+        }
     }
     bindCardInspectors() {
         const cardMap = [
@@ -328,13 +405,27 @@ class TaxApp {
         container.innerHTML = '';
         const sources = this.state.otherIncome.sources || [];
         sources.forEach(src => {
+            let ratingKey = 'income-1099-nec';
+            let priorityClass = 'priority-must';
+            if (src.type === '1099-DIV') {
+                ratingKey = 'income-1099-div';
+                priorityClass = 'priority-verify';
+            }
+            else if (src.type === '1099-MISC' || src.type === 'Other') {
+                ratingKey = 'income-1099-misc';
+                priorityClass = 'priority-skip';
+            }
+            else if (src.type === '1099-INT') {
+                ratingKey = 'other-interest';
+                priorityClass = 'priority-verify';
+            }
             const card = document.createElement('div');
-            card.className = 'calc-card';
+            card.className = `calc-card ${priorityClass}`;
             card.id = `income-source-card-${src.id}`;
             card.style.padding = '1.25rem';
             card.style.position = 'relative';
             card.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.4rem;">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <select class="w2-input" id="select-income-type-${src.id}" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 700; width: auto; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px;">
               <option value="1099-NEC" ${src.type === '1099-NEC' ? 'selected' : ''}>Form 1099-NEC (Freelance/Contract)</option>
@@ -343,6 +434,7 @@ class TaxApp {
               <option value="1099-INT" ${src.type === '1099-INT' ? 'selected' : ''}>Form 1099-INT (Interest)</option>
               <option value="Other" ${src.type === 'Other' ? 'selected' : ''}>Other Taxable Income</option>
             </select>
+            ${renderRatingPill(ratingKey)}
           </div>
           <button type="button" class="btn" id="btn-del-income-${src.id}" title="Remove this income source" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #ef4444; border-color: #fecaca; background: #fef2f2;">
             ✕
@@ -633,10 +725,13 @@ class TaxApp {
             const stateRowsHtml = w2.states.map((st, sIdx) => `
         <div class="w2-state-row" id="w2-${w2.id}-state-${st.id}-row">
           <!-- Box 15: State -->
-          <div class="w2-box highlight-state" id="w2-${w2.id}-state-${st.id}-box15-state">
+          <div class="w2-box highlight-state priority-must" id="w2-${w2.id}-state-${st.id}-box15-state">
             <div class="w2-box-header">
-              <span class="w2-box-number">15</span>
-              <span class="w2-box-label">State</span>
+              <div>
+                <span class="w2-box-number">15</span>
+                <span class="w2-box-label">State</span>
+              </div>
+              ${renderRatingPill('w2-box15-state')}
             </div>
             <select class="state-select-input" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="state">
               ${this.renderStateOptions(st.state)}
@@ -644,20 +739,26 @@ class TaxApp {
           </div>
 
           <!-- Box 15: State ID -->
-          <div class="w2-box">
+          <div class="w2-box priority-skip">
             <div class="w2-box-header">
-              <span class="w2-box-number">15</span>
-              <span class="w2-box-label">Employer's state ID no.</span>
+              <div>
+                <span class="w2-box-number">15</span>
+                <span class="w2-box-label">State ID No.</span>
+              </div>
+              ${renderRatingPill('w2-box15-stateId')}
             </div>
             <input type="text" class="w2-input-text" value="${st.stateId}" placeholder="ID No."
                    data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateId">
           </div>
 
           <!-- Box 16: State wages -->
-          <div class="w2-box" id="w2-${w2.id}-state-${st.id}-box16-container">
+          <div class="w2-box priority-must" id="w2-${w2.id}-state-${st.id}-box16-container">
             <div class="w2-box-header">
-              <span class="w2-box-number">16</span>
-              <span class="w2-box-label">State wages, tips</span>
+              <div>
+                <span class="w2-box-number">16</span>
+                <span class="w2-box-label">State wages</span>
+              </div>
+              ${renderRatingPill('w2-box16')}
             </div>
             <div class="w2-input-wrapper">
               <span class="currency-symbol">$</span>
@@ -667,13 +768,13 @@ class TaxApp {
           </div>
 
           <!-- Box 17: State income tax withheld (KEY INPUT) -->
-          <div class="w2-box highlight-state" id="w2-${w2.id}-state-${st.id}-box17-container">
+          <div class="w2-box highlight-state priority-must priority-saver" id="w2-${w2.id}-state-${st.id}-box17-container">
             <div class="w2-box-header">
               <div>
                 <span class="w2-box-number">17</span>
-                <span class="w2-box-label">State income tax</span>
+                <span class="w2-box-label">State tax withheld</span>
               </div>
-              <span class="w2-box-badge state">${st.state} Tax</span>
+              ${renderRatingPill('w2-box17')}
             </div>
             <div class="w2-input-wrapper">
               <span class="currency-symbol">$</span>
@@ -683,10 +784,13 @@ class TaxApp {
           </div>
 
           <!-- Box 18: Local wages -->
-          <div class="w2-box">
+          <div class="w2-box priority-skip">
             <div class="w2-box-header">
-              <span class="w2-box-number">18</span>
-              <span class="w2-box-label">Local wages</span>
+              <div>
+                <span class="w2-box-number">18</span>
+                <span class="w2-box-label">Local wages</span>
+              </div>
+              ${renderRatingPill('w2-box18-20')}
             </div>
             <div class="w2-input-wrapper">
               <span class="currency-symbol">$</span>
@@ -696,10 +800,13 @@ class TaxApp {
           </div>
 
           <!-- Box 19 & 20: Local tax & Locality -->
-          <div class="w2-box">
+          <div class="w2-box priority-skip">
             <div class="w2-box-header">
-              <span class="w2-box-number">19/20</span>
-              <span class="w2-box-label">Local tax / Locality</span>
+              <div>
+                <span class="w2-box-number">19/20</span>
+                <span class="w2-box-label">Local tax / Locality</span>
+              </div>
+              ${renderRatingPill('w2-box18-20')}
             </div>
             <div style="display: flex; gap: 0.35rem;">
               <div class="w2-input-wrapper" style="flex: 1;">
@@ -749,7 +856,7 @@ class TaxApp {
 
           <div class="w2-grid">
             <!-- Box a: SSN -->
-            <div class="w2-box">
+            <div class="w2-box priority-must">
               <div class="w2-box-header">
                 <span class="w2-box-number">a</span>
                 <span class="w2-box-label">Employee's social security number</span>
@@ -758,13 +865,13 @@ class TaxApp {
             </div>
 
             <!-- Box 1: Wages, tips, other compensation (KEY INPUT) -->
-            <div class="w2-box highlight-wages" id="w2-${w2.id}-box1-container">
+            <div class="w2-box highlight-wages priority-must" id="w2-${w2.id}-box1-container">
               <div class="w2-box-header">
                 <div>
                   <span class="w2-box-number">1</span>
                   <span class="w2-box-label">Wages, tips, other comp.</span>
                 </div>
-                <span class="w2-box-badge wages">Income Flow</span>
+                ${renderRatingPill('w2-box1')}
               </div>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
@@ -773,13 +880,13 @@ class TaxApp {
             </div>
 
             <!-- Box 2: Federal income tax withheld (KEY INPUT) -->
-            <div class="w2-box highlight-withholding" id="w2-${w2.id}-box2-container">
+            <div class="w2-box highlight-withholding priority-must priority-saver" id="w2-${w2.id}-box2-container">
               <div class="w2-box-header">
                 <div>
                   <span class="w2-box-number">2</span>
-                  <span class="w2-box-label">Federal income tax withheld</span>
+                  <span class="w2-box-label">Federal tax withheld</span>
                 </div>
-                <span class="w2-box-badge withholding">Payment Flow</span>
+                ${renderRatingPill('w2-box2')}
               </div>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
@@ -788,22 +895,25 @@ class TaxApp {
             </div>
 
             <!-- Box b: EIN -->
-            <div class="w2-box">
+            <div class="w2-box priority-must">
               <div class="w2-box-header">
-                <span class="w2-box-number">b</span>
-                <span class="w2-box-label">Employer identification number (EIN)</span>
+                <div>
+                  <span class="w2-box-number">b</span>
+                  <span class="w2-box-label">Employer identification number</span>
+                </div>
+                ${renderRatingPill('w2-ein')}
               </div>
               <input type="text" class="w2-input-text" value="${w2.ein}" data-w2-field="ein" data-w2-id="${w2.id}">
             </div>
 
             <!-- Box 3: Social Security wages -->
-            <div class="w2-box highlight-ss" id="w2-${w2.id}-box3-container">
+            <div class="w2-box highlight-ss priority-skip" id="w2-${w2.id}-box3-container">
               <div class="w2-box-header">
                 <div>
                   <span class="w2-box-number">3</span>
                   <span class="w2-box-label">Social security wages</span>
                 </div>
-                <span class="w2-box-badge ss">FICA</span>
+                ${renderRatingPill('w2-box3')}
               </div>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
@@ -812,13 +922,13 @@ class TaxApp {
             </div>
 
             <!-- Box 4: Social Security tax withheld -->
-            <div class="w2-box highlight-ss" id="w2-${w2.id}-box4-container">
+            <div class="w2-box highlight-ss priority-skip" id="w2-${w2.id}-box4-container">
               <div class="w2-box-header">
                 <div>
                   <span class="w2-box-number">4</span>
-                  <span class="w2-box-label">Social security tax withheld</span>
+                  <span class="w2-box-label">SS tax withheld</span>
                 </div>
-                <span class="w2-box-badge ss">6.2%</span>
+                ${renderRatingPill('w2-box3')}
               </div>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
@@ -827,7 +937,7 @@ class TaxApp {
             </div>
 
             <!-- Box c: Employer's name, address -->
-            <div class="w2-box">
+            <div class="w2-box priority-must">
               <div class="w2-box-header">
                 <span class="w2-box-number">c</span>
                 <span class="w2-box-label">Employer's name, address, and ZIP</span>
@@ -836,13 +946,13 @@ class TaxApp {
             </div>
 
             <!-- Box 5: Medicare wages -->
-            <div class="w2-box highlight-medicare" id="w2-${w2.id}-box5-container">
+            <div class="w2-box highlight-medicare priority-skip" id="w2-${w2.id}-box5-container">
               <div class="w2-box-header">
                 <div>
                   <span class="w2-box-number">5</span>
-                  <span class="w2-box-label">Medicare wages and tips</span>
+                  <span class="w2-box-label">Medicare wages</span>
                 </div>
-                <span class="w2-box-badge medicare">FICA</span>
+                ${renderRatingPill('w2-box5')}
               </div>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
@@ -851,17 +961,35 @@ class TaxApp {
             </div>
 
             <!-- Box 6: Medicare tax withheld -->
-            <div class="w2-box highlight-medicare" id="w2-${w2.id}-box6-container">
+            <div class="w2-box highlight-medicare priority-skip" id="w2-${w2.id}-box6-container">
               <div class="w2-box-header">
                 <div>
                   <span class="w2-box-number">6</span>
                   <span class="w2-box-label">Medicare tax withheld</span>
                 </div>
-                <span class="w2-box-badge medicare">1.45%</span>
+                ${renderRatingPill('w2-box5')}
               </div>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
                 <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box6" value="${w2.box6}" placeholder="0">
+              </div>
+            </div>
+
+            <!-- Box 12: Deferred Compensation / Benefits -->
+            <div class="w2-box priority-verify" id="w2-${w2.id}-box12-container">
+              <div class="w2-box-header">
+                <div>
+                  <span class="w2-box-number">12</span>
+                  <span class="w2-box-label">Codes (D, W, DD, etc.)</span>
+                </div>
+                ${renderRatingPill('w2-box12')}
+              </div>
+              <div style="display: flex; gap: 0.35rem;">
+                <input type="text" class="w2-input-text" style="width: 55px; text-transform: uppercase; font-weight: 700; text-align: center;" value="${w2.box12Code || ''}" placeholder="Code" data-w2-id="${w2.id}" data-w2-field="box12Code">
+                <div class="w2-input-wrapper" style="flex: 1;">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box12-amt" value="${w2.box12Amount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12Amount">
+                </div>
               </div>
             </div>
 
@@ -1247,6 +1375,7 @@ class TaxApp {
             this.arrowEngine.setConnections(connections);
         }
         this.updateTableOfContents();
+        this.bindRatingPillEvents();
     }
     renderStateTaxSummary(taxData) {
         const card = document.getElementById('calc-state-tax-summary');
