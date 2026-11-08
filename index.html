@@ -92,6 +92,7 @@
       <div class="presets-container">
         <span>Try a sample scenario:</span>
         <button type="button" class="preset-chip" data-preset="single-75k">Single ($75k)</button>
+        <button type="button" class="preset-chip" data-preset="multi-state-dual">Multi-State Workers (CA + NY)</button>
         <button type="button" class="preset-chip" data-preset="married-dual-140k">Dual-Income Married ($140k + 1 Kid)</button>
         <button type="button" class="preset-chip" data-preset="student-grad">College Grad with Student Loans</button>
         <button type="button" class="preset-chip" data-preset="blank">Blank Slate</button>
@@ -103,14 +104,22 @@
       <div class="w2-section-header">
         <div class="w2-section-title">
           <h2>1. Your W-2 Wage & Tax Statement(s)</h2>
+          <button type="button" class="btn btn-primary" id="btn-add-w2-section" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+            + Add Additional W-2
+          </button>
         </div>
         <div style="font-size: 0.85rem; color: #64748b;">
-          Enter the numbers from your physical or PDF Form W-2.
+          Enter the numbers from your physical or PDF Form W-2. Supports multiple jobs & states.
         </div>
       </div>
 
       <!-- Container where W-2s are injected -->
       <div id="w2-list-container"></div>
+
+      <!-- Large action banner to add additional W-2 -->
+      <button type="button" class="btn-add-w2-banner" id="btn-add-w2-bottom">
+        <span style="font-size: 1.3rem;">➕</span> Add Additional W-2 (Different State / Job / Spouse)
+      </button>
     </section>
 
     <!-- SECTION 2: OTHER INCOME & ADJUSTMENTS (OPTIONAL ABOVE-THE-LINE) -->
@@ -539,11 +548,60 @@
         </div>
       </div>
 
-      <!-- Step 13: Official Form 1040 Line-by-Line Mirror -->
+      <!-- Step 13: State & Local Taxes Summary -->
+      <div class="calc-card" id="calc-state-tax-summary">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator"><span class="step-number">13</span> State & Local Allocation</div>
+            <h3 class="calc-card-title">State Income Taxes Withheld</h3>
+          </div>
+          <span class="irs-line-tag" style="background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe;">W-2 Boxes 15–20</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Total State Withholding = ∑(W-2 Box 17)</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged" style="background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe;">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Total State Tax = $0.00</span>
+          </div>
+        </div>
+
+        <div class="calc-output-row">
+          <span class="calc-output-label">Total State Income Tax Withheld:</span>
+          <span class="calc-output-value" style="color: #7c3aed;">$0.00</span>
+        </div>
+
+        <!-- Per-State Breakdown Table -->
+        <div style="margin-top: 1.25rem;">
+          <div style="font-weight: 700; font-size: 0.85rem; color: #334155; margin-bottom: 0.35rem;">
+            Breakdown by State:
+          </div>
+          <table class="state-summary-table">
+            <thead>
+              <tr>
+                <th>State</th>
+                <th>State Wages (Box 16)</th>
+                <th>State Tax Withheld (Box 17)</th>
+                <th>Local Tax (Box 19)</th>
+              </tr>
+            </thead>
+            <tbody id="state-summary-tbody"></tbody>
+          </table>
+        </div>
+
+        <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.75rem;">
+          💡 <strong>SALT Deduction Note:</strong> State and local income taxes paid can be deducted on federal Schedule A (itemized deductions) up to a federal cap of $10,000 ($5,000 if married filing separately).
+        </div>
+      </div>
+
+      <!-- Step 14: Official Form 1040 Line-by-Line Mirror -->
       <div class="calc-card">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">13</span> IRS Form 1040 Mapping</div>
+            <div class="step-indicator"><span class="step-number">14</span> IRS Form 1040 Mapping</div>
             <h3 class="calc-card-title">Line-by-Line 1040 Mirror</h3>
           </div>
           <span class="irs-line-tag">Official Summary</span>

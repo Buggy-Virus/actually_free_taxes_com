@@ -13,7 +13,8 @@
   --color-withholding: #0284c7;
   --color-ss: #f59e0b;
   --color-medicare: #ec4899;
-  --color-adjustments: #8b5cf6;
+  --color-state: #8b5cf6;
+  --color-adjustments: #6366f1;
   --color-tax: #f97316;
   --color-refund: #10b981;
   --color-owed: #ef4444;
@@ -519,6 +520,15 @@ body {
   color: #db2777;
 }
 
+.w2-box.highlight-state {
+  border-left: 4px solid var(--color-state);
+}
+
+.w2-box-badge.state {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
 .w2-input-wrapper {
   position: relative;
   display: flex;
@@ -937,13 +947,114 @@ body {
   color: #0f172a;
 }
 
+/* State Tax Section in W-2 */
+.w2-state-container {
+  grid-column: span 3;
+  display: flex;
+  flex-direction: column;
+  background-color: #64748b;
+  gap: 1px;
+}
+
+.w2-state-row {
+  display: grid;
+  grid-template-columns: 100px 1.2fr 1fr 1fr 1fr 1fr auto;
+  gap: 1px;
+  background-color: #64748b;
+}
+
+.w2-state-row .w2-box {
+  min-height: 52px;
+}
+
+.state-select-input {
+  width: 100%;
+  padding: 0.35rem 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  outline: none;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.state-select-input:focus {
+  background: #ffffff;
+  border-color: #8b5cf6;
+}
+
+.state-control-bar {
+  grid-column: span 3;
+  background: #f8fafc;
+  padding: 0.5rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #cbd5e1;
+}
+
+.btn-add-w2-banner {
+  width: 100%;
+  border: 2px dashed #94a3b8;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.btn-add-w2-banner:hover {
+  border-color: #10b981;
+  background: #f0fdf4;
+  color: #059669;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.15);
+}
+
+.state-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.state-summary-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+.state-summary-table td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .w2-grid {
     grid-template-columns: 1fr;
   }
-  .w2-box.span-2, .w2-box.span-3 {
+  .w2-box.span-2, .w2-box.span-3, .w2-state-container, .state-control-bar {
     grid-column: span 1;
+  }
+  .w2-state-row {
+    grid-template-columns: 1fr 1fr;
   }
   .header-container {
     flex-direction: column;

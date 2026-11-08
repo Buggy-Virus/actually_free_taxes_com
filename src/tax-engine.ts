@@ -7,6 +7,8 @@ import {
   TaxYear,
   FilingStatus,
   TaxAppState,
+  W2Data,
+  StateTaxLine,
   BracketDef,
   BracketDetail,
   CalculationResult,
@@ -14,6 +16,7 @@ import {
   FinalResultCalculation,
   FicaCalculation,
   EffectiveRateCalculation,
+  StateTaxCalculation,
   TaxCalculationSummary
 } from './types.js';
 
@@ -203,7 +206,9 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
   const filingStatus = state.filingStatus || 'single';
   const rules = TAX_CONSTANTS[year] || TAX_CONSTANTS[2024];
 
-  const w2List = state.w2s && state.w2s.length > 0 ? state.w2s : [{ id: 0, employer: '', ein: '', box1: 0, box2: 0, box3: 0, box4: 0, box5: 0, box6: 0 }];
+  const w2List: W2Data[] = state.w2s && state.w2s.length > 0
+    ? state.w2s
+    : [{ id: 0, employer: '', ein: '', box1: 0, box2: 0, box3: 0, box4: 0, box5: 0, box6: 0, states: [] }];
 
   // 1. Total W-2 Wages (Box 1)
   const box1Values = w2List.map(w => Number(w.box1) || 0);
@@ -416,6 +421,44 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     pluggedFormula: `Total FICA = ${formatCurrencyExact(totalSSTax)} + ${formatCurrencyExact(totalMedTax)} = ${formatCurrencyExact(totalFicaWithheld)}`
   };
 
+  // 13. State & Local Tax Summary (Boxes 15-20 across all W-2s)
+  const stateLines = w2List.flatMap(w => (w.states || []).map((s: StateTaxLine) => ({ ...s, w2Id: w.id })));
+  const totalStateWages = stateLines.reduce((sum, s) => sum + (Number(s.stateWages) || 0), 0);
+  const totalStateTaxWithheld = stateLines.reduce((sum, s) => sum + (Number(s.stateTaxWithheld) || 0), 0);
+  const totalLocalTaxWithheld = stateLines.reduce((sum, s) => sum + (Number(s.localTaxWithheld) || 0), 0);
+
+  const stateMap = new Map<string, { state: string; stateWages: number; stateTaxWithheld: number; localTaxWithheld: number; sourceFieldIds: string[] }>();
+  stateLines.forEach(s => {
+    const st = (s.state || 'OTHER').toUpperCase().trim();
+    if (!stateMap.has(st)) {
+      stateMap.set(st, { state: st, stateWages: 0, stateTaxWithheld: 0, localTaxWithheld: 0, sourceFieldIds: [] });
+    }
+    const item = stateMap.get(st)!;
+    item.stateWages += Number(s.stateWages) || 0;
+    item.stateTaxWithheld += Number(s.stateTaxWithheld) || 0;
+    item.localTaxWithheld += Number(s.localTaxWithheld) || 0;
+    item.sourceFieldIds.push(`w2-${s.w2Id}-state-${s.id}-box17`);
+  });
+
+  const byState = Array.from(stateMap.values());
+  const stateWithheldValues = stateLines.map(s => ({
+    state: (s.state || 'State').toUpperCase(),
+    amount: Number(s.stateTaxWithheld) || 0
+  })).filter(x => x.amount > 0);
+
+  const stateTaxCalc: StateTaxCalculation = {
+    result: totalStateTaxWithheld,
+    totalStateWages,
+    totalStateWithheld: totalStateTaxWithheld,
+    totalLocalWithheld: totalLocalTaxWithheld,
+    byState,
+    sourceFields: stateLines.map(s => `w2-${s.w2Id}-state-${s.id}-box17`),
+    generalFormula: 'Total State Withholding = ∑(W-2 Box 17)',
+    pluggedFormula: stateWithheldValues.length > 0
+      ? `Total State Tax = ${stateWithheldValues.map(v => `${v.state}: ${formatCurrencyExact(v.amount)}`).join(' + ')} = ${formatCurrencyExact(totalStateTaxWithheld)}`
+      : 'Total State Tax = $0.00'
+  };
+
   // Effective Tax Rate
   const effectiveRate = grossIncome > 0 ? (totalTaxLiability / grossIncome) : 0;
   const effectiveRateCalc: EffectiveRateCalculation = {
@@ -441,6 +484,7 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     withholdingCalc,
     finalResultCalc,
     ficaCalc,
+    stateTaxCalc,
     effectiveRateCalc
   };
 }

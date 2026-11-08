@@ -6,6 +6,17 @@ export type FilingStatus = 'single' | 'married_joint' | 'married_separate' | 'he
 
 export type TaxYear = 2024 | 2025;
 
+export interface StateTaxLine {
+  id: number;
+  state: string; // 2-letter state code, e.g. 'CA', 'NY', 'TX'
+  stateId: string; // Employer's state ID number
+  stateWages: number; // Box 16
+  stateTaxWithheld: number; // Box 17
+  localWages: number; // Box 18
+  localTaxWithheld: number; // Box 19
+  localityName: string; // Box 20
+}
+
 export interface W2Data {
   id: number;
   employer: string;
@@ -18,6 +29,7 @@ export interface W2Data {
   box6: number; // Medicare tax withheld
   box12Code?: string;
   box12Amount?: number;
+  states: StateTaxLine[];
 }
 
 export interface OtherIncome {
@@ -91,6 +103,21 @@ export interface EffectiveRateCalculation {
   pluggedFormula: string;
 }
 
+export interface StateBreakdownItem {
+  state: string;
+  stateWages: number;
+  stateTaxWithheld: number;
+  localTaxWithheld: number;
+  sourceFieldIds: string[];
+}
+
+export interface StateTaxCalculation extends CalculationResult {
+  totalStateWages: number;
+  totalStateWithheld: number;
+  totalLocalWithheld: number;
+  byState: StateBreakdownItem[];
+}
+
 export interface TaxCalculationSummary {
   year: TaxYear;
   filingStatus: FilingStatus;
@@ -107,6 +134,7 @@ export interface TaxCalculationSummary {
   withholdingCalc: CalculationResult;
   finalResultCalc: FinalResultCalculation;
   ficaCalc: FicaCalculation;
+  stateTaxCalc: StateTaxCalculation;
   effectiveRateCalc: EffectiveRateCalculation;
 }
 
@@ -115,6 +143,7 @@ export type ArrowColorCategory =
   | 'withholding'
   | 'ss'
   | 'medicare'
+  | 'state'
   | 'adjustments'
   | 'status'
   | 'tax'

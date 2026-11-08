@@ -23,8 +23,9 @@ export class ArrowEngine {
     withholding: '#0284c7', // Sky Blue
     ss: '#f59e0b',          // Amber
     medicare: '#ec4899',    // Pink
-    adjustments: '#8b5cf6', // Violet
-    status: '#6366f1',      // Indigo
+    state: '#8b5cf6',       // Violet for State Tax
+    adjustments: '#6366f1', // Indigo
+    status: '#4f46e5',      // Deep Indigo
     tax: '#f97316',         // Orange
     credits: '#14b8a6',     // Teal
     refund: '#10b981',      // Green
