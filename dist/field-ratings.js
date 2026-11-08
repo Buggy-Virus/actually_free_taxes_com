@@ -949,7 +949,7 @@ export function renderRatingCircles(keyOrDef) {
 /**
  * Render a compact inline badge chip to place next to an input label, featuring the 3 rating circles.
  */
-export function renderRatingPill(key) {
+export function renderRatingPill(key, compact = false) {
     const r = getFieldRating(key);
     let badgeClass = 'badge-priority-must';
     let shortText = 'Must be 100% Accurate';
@@ -966,6 +966,13 @@ export function renderRatingPill(key) {
         shortText = 'Verify with Form';
     }
     const circlesHtml = renderRatingCircles(r);
+    if (compact) {
+        return `
+      <span class="field-rating-pill compact ${badgeClass}" data-rating-field="${r.fieldKey}" role="button" tabindex="0" title="${r.fieldTitle} (${shortText}) — Click for Risk & Guidance Breakdown">
+        ${circlesHtml}
+      </span>
+    `.trim();
+    }
     return `
     <span class="field-rating-pill ${badgeClass}" data-rating-field="${r.fieldKey}" role="button" tabindex="0" title="${r.fieldTitle} — Click for IRS Risk & Guidance Breakdown">
       ${circlesHtml}
@@ -1165,12 +1172,13 @@ export function renderFieldExplanationDrawer(fieldKey, customId) {
 /**
  * Render the clickable toggle button placed next to a field to expand/collapse its explanation.
  */
-export function renderExplainToggleBtn(targetId, shortLabel = 'What is this?') {
+export function renderExplainToggleBtn(targetId, shortLabel) {
+    const hasLabel = shortLabel !== undefined && shortLabel !== '';
+    const btnClass = hasLabel ? 'btn-explain-toggle' : 'btn-explain-toggle icon-only';
     return `
-    <button type="button" class="btn-explain-toggle" data-explain-target="${targetId}" aria-expanded="false" title="Click to view plain-English explanation">
+    <button type="button" class="${btnClass}" data-explain-target="${targetId}" aria-expanded="false" title="Click to view plain-English explanation">
       <span class="explain-btn-icon">💡</span>
-      <span class="explain-btn-text">${shortLabel}</span>
-      <span class="explain-btn-arrow">▾</span>
+      ${hasLabel ? `<span class="explain-btn-text">${shortLabel}</span><span class="explain-btn-arrow">▾</span>` : ''}
     </button>
   `.trim();
 }

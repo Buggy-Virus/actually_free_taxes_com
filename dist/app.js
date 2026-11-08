@@ -113,6 +113,87 @@ function getDefaultTaxAppState() {
         showAllArrows: true
     };
 }
+function getOfficialIrsMailingAddress(stateCode, isRefund) {
+    const austinStates = ['FL', 'GA', 'MS', 'NC', 'SC'];
+    const kansasCityStates = ['AL', 'AR', 'CT', 'DE', 'DC', 'IL', 'IN', 'IA', 'KY', 'LA', 'ME', 'MD', 'MA', 'MN', 'MO', 'NH', 'NJ', 'NY', 'RI', 'TN', 'VT', 'VA', 'WV'];
+    if (isRefund) {
+        if (austinStates.includes(stateCode)) {
+            return {
+                centerName: "Austin Submission Processing Center",
+                addressLines: [
+                    "Department of the Treasury",
+                    "Internal Revenue Service",
+                    "Austin, TX 73301-0002"
+                ],
+                destState: stateCode,
+                destType: "Refund Return"
+            };
+        }
+        else if (kansasCityStates.includes(stateCode)) {
+            return {
+                centerName: "Kansas City Submission Processing Center",
+                addressLines: [
+                    "Department of the Treasury",
+                    "Internal Revenue Service",
+                    "Kansas City, MO 64999-0002"
+                ],
+                destState: stateCode,
+                destType: "Refund Return"
+            };
+        }
+        else {
+            return {
+                centerName: "Ogden Submission Processing Center",
+                addressLines: [
+                    "Department of the Treasury",
+                    "Internal Revenue Service",
+                    "Ogden, UT 84201-0002"
+                ],
+                destState: stateCode,
+                destType: "Refund Return"
+            };
+        }
+    }
+    else {
+        // Payment enclosed
+        if (austinStates.includes(stateCode)) {
+            return {
+                centerName: "Charlotte Payment Lockbox",
+                addressLines: [
+                    "Internal Revenue Service",
+                    "P.O. Box 1214",
+                    "Charlotte, NC 28201-1214"
+                ],
+                destState: stateCode,
+                destType: "Payment Enclosed"
+            };
+        }
+        else if (kansasCityStates.includes(stateCode)) {
+            return {
+                centerName: "Louisville Payment Lockbox",
+                addressLines: [
+                    "Internal Revenue Service",
+                    "P.O. Box 931000",
+                    "Louisville, KY 40293-1000"
+                ],
+                destState: stateCode,
+                destType: "Payment Enclosed"
+            };
+        }
+        else {
+            return {
+                centerName: "Cincinnati Payment Lockbox",
+                addressLines: [
+                    "Internal Revenue Service",
+                    "P.O. Box 802501",
+                    "Cincinnati, OH 45280-2501"
+                ],
+                destState: stateCode,
+                destType: "Payment Enclosed"
+            };
+        }
+    }
+}
 class TaxApp {
     constructor() {
         this.state = getDefaultTaxAppState();
@@ -186,6 +267,13 @@ class TaxApp {
         if (typeof window === 'undefined' || typeof localStorage === 'undefined')
             return;
         try {
+            if (window.location) {
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('preset') || urlParams.get('notos') === '1') {
+                    this.isTosAccepted = true;
+                    return;
+                }
+            }
             const accepted = localStorage.getItem(STORAGE_KEY_TOS);
             if (accepted === 'true') {
                 this.isTosAccepted = true;
@@ -558,6 +646,326 @@ class TaxApp {
                 }
             });
         }
+        // Filing Walkthrough & Download modal buttons
+        const btnOpenFiling = document.getElementById('btn-open-filing-modal');
+        if (btnOpenFiling) {
+            btnOpenFiling.addEventListener('click', () => this.openFilingModal('tab-print'));
+        }
+        const btnQuickPrint = document.getElementById('btn-quick-print-1040');
+        if (btnQuickPrint) {
+            btnQuickPrint.addEventListener('click', () => this.printOfficialPacket());
+        }
+        const btnQuickExport = document.getElementById('btn-quick-export-json');
+        if (btnQuickExport) {
+            btnQuickExport.addEventListener('click', () => this.exportDraft());
+        }
+        ['btn-close-filing-modal', 'btn-close-filing-bottom'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                btn.addEventListener('click', () => this.closeFilingModal());
+            }
+        });
+        const btnPrintPacket = document.getElementById('btn-print-official-packet');
+        if (btnPrintPacket) {
+            btnPrintPacket.addEventListener('click', () => this.printOfficialPacket());
+        }
+        const btnDownloadPacketJson = document.getElementById('btn-download-packet-json');
+        if (btnDownloadPacketJson) {
+            btnDownloadPacketJson.addEventListener('click', () => this.exportDraft());
+        }
+        document.querySelectorAll('[data-filing-tab]').forEach(tabBtn => {
+            tabBtn.addEventListener('click', (e) => {
+                const target = e.target.closest('[data-filing-tab]');
+                const tabId = target.dataset.filingTab;
+                if (tabId) {
+                    this.switchFilingTab(tabId);
+                }
+            });
+        });
+        const btnSubmitEfile = document.getElementById('btn-submit-mock-efile');
+        if (btnSubmitEfile) {
+            btnSubmitEfile.addEventListener('click', () => this.submitMockEfile());
+        }
+    }
+    /* --------------------------------------------------------------------------
+       Filing Walkthrough, Auto-Address & Download Methods
+       -------------------------------------------------------------------------- */
+    openFilingModal(initialTab = 'tab-print') {
+        const taxData = calculateTaxes(this.state);
+        const addr = getOfficialIrsMailingAddress(this.state.residentState || 'CA', taxData.finalResultCalc.isRefund);
+        // Update snapshots
+        const snapWages = document.getElementById('fmodal-snap-wages');
+        const snapTaxable = document.getElementById('fmodal-snap-taxable');
+        const snapState = document.getElementById('fmodal-snap-state');
+        const snapVerdict = document.getElementById('fmodal-snap-verdict');
+        if (snapWages)
+            snapWages.textContent = formatCurrency(taxData.w2WagesCalc.result);
+        if (snapTaxable)
+            snapTaxable.textContent = formatCurrency(taxData.taxableIncomeCalc.result);
+        if (snapState)
+            snapState.textContent = this.state.residentState || 'CA';
+        if (snapVerdict) {
+            if (taxData.finalResultCalc.isRefund) {
+                snapVerdict.className = 'snapshot-value is-refund';
+                snapVerdict.textContent = `REFUND: ${formatCurrencyExact(taxData.finalResultCalc.result)}`;
+            }
+            else {
+                snapVerdict.className = 'snapshot-value is-owed';
+                snapVerdict.textContent = `OWED: ${formatCurrencyExact(taxData.finalResultCalc.result)}`;
+            }
+        }
+        // Update Tab 1: Print & Mail
+        const destStateEl = document.getElementById('envelope-dest-state');
+        const destTypeEl = document.getElementById('envelope-dest-type');
+        const addrEl = document.getElementById('envelope-official-address');
+        if (destStateEl)
+            destStateEl.textContent = addr.destState;
+        if (destTypeEl)
+            destTypeEl.textContent = addr.destType;
+        if (addrEl)
+            addrEl.innerHTML = addr.addressLines.join('<br>');
+        // Update Tab 2: Direct File
+        const dfWages = document.getElementById('cs-df-wages');
+        const dfWithheld = document.getElementById('cs-df-withheld');
+        const dfAgi = document.getElementById('cs-df-agi');
+        const dfDeduction = document.getElementById('cs-df-deduction');
+        const dfCredits = document.getElementById('cs-df-credits');
+        const dfVerdict = document.getElementById('cs-df-verdict');
+        const dfBanner = document.getElementById('direct-file-state-banner');
+        if (dfWages)
+            dfWages.textContent = formatCurrency(taxData.w2WagesCalc.result);
+        if (dfWithheld)
+            dfWithheld.textContent = formatCurrencyExact(taxData.withholdingCalc.result);
+        if (dfAgi)
+            dfAgi.textContent = formatCurrency(taxData.agiCalc.result);
+        if (dfDeduction)
+            dfDeduction.textContent = formatCurrency(taxData.deductionCalc.result);
+        if (dfCredits)
+            dfCredits.textContent = formatCurrency(taxData.creditsCalc.result);
+        if (dfVerdict) {
+            dfVerdict.textContent = taxData.finalResultCalc.isRefund
+                ? `Refund: ${formatCurrencyExact(taxData.finalResultCalc.result)}`
+                : `Owed: ${formatCurrencyExact(taxData.finalResultCalc.result)}`;
+            dfVerdict.style.color = taxData.finalResultCalc.isRefund ? '#16a34a' : '#dc2626';
+        }
+        const directFileStates = ['AZ', 'CA', 'FL', 'MA', 'NV', 'NH', 'NY', 'NC', 'PA', 'SD', 'TN', 'TX', 'WA', 'WI', 'WY'];
+        const isDfState = directFileStates.includes(this.state.residentState || 'CA');
+        if (dfBanner) {
+            if (isDfState) {
+                dfBanner.innerHTML = `✅ <strong>IRS Direct File is available in your home state (${this.state.residentState || 'CA'})!</strong> You can file both your federal return and state transition through this free government tool.`;
+                dfBanner.style.background = "#ecfdf5";
+                dfBanner.style.borderColor = "#a7f3d0";
+                dfBanner.style.color = "#065f46";
+            }
+            else {
+                dfBanner.innerHTML = `ℹ️ <strong>IRS Direct File rollout notice:</strong> Your state (${this.state.residentState || 'CA'}) may not be on the initial Direct File pilot roster, but you can always use <strong>Option 1 (Print & Mail)</strong> or <strong>Option 3 (Free File Fillable Forms)</strong> for 100% free filing.`;
+                dfBanner.style.background = "#eff6ff";
+                dfBanner.style.borderColor = "#bfdbfe";
+                dfBanner.style.color = "#1e40af";
+            }
+        }
+        // Update Tab 3: Free File Fillable Forms
+        const setT3 = (id, val) => {
+            const el = document.getElementById(id);
+            if (el)
+                el.textContent = val;
+        };
+        setT3('cs-ff-1z', formatCurrency(taxData.w2WagesCalc.result));
+        setT3('cs-ff-9', formatCurrency(taxData.grossIncomeCalc.result));
+        setT3('cs-ff-10', formatCurrency(taxData.adjustmentsCalc.result));
+        setT3('cs-ff-11', formatCurrency(taxData.agiCalc.result));
+        setT3('cs-ff-12', formatCurrency(taxData.deductionCalc.result));
+        setT3('cs-ff-15', formatCurrency(taxData.taxableIncomeCalc.result));
+        setT3('cs-ff-16', formatCurrencyExact(taxData.taxBeforeCreditsCalc.result));
+        setT3('cs-ff-19', formatCurrency(taxData.creditsCalc.result));
+        setT3('cs-ff-24', formatCurrencyExact(taxData.totalTaxCalc.result));
+        setT3('cs-ff-25d', formatCurrencyExact(taxData.withholdingCalc.result));
+        setT3('cs-ff-final', taxData.finalResultCalc.isRefund
+            ? `Line 34 (Refund): ${formatCurrencyExact(taxData.finalResultCalc.result)}`
+            : `Line 37 (Owed): ${formatCurrencyExact(taxData.finalResultCalc.result)}`);
+        this.switchFilingTab(initialTab);
+        const overlay = document.getElementById('filing-modal-overlay');
+        if (overlay)
+            overlay.classList.add('open');
+    }
+    closeFilingModal() {
+        const overlay = document.getElementById('filing-modal-overlay');
+        if (overlay)
+            overlay.classList.remove('open');
+    }
+    switchFilingTab(tabId) {
+        document.querySelectorAll('.filing-tab-btn').forEach(btn => {
+            if (btn.dataset.filingTab === tabId) {
+                btn.classList.add('active');
+            }
+            else {
+                btn.classList.remove('active');
+            }
+        });
+        document.querySelectorAll('.filing-tab-panel').forEach(panel => {
+            if (panel.id === tabId) {
+                panel.classList.add('active');
+            }
+            else {
+                panel.classList.remove('active');
+            }
+        });
+    }
+    printOfficialPacket() {
+        const taxData = calculateTaxes(this.state);
+        const addr = getOfficialIrsMailingAddress(this.state.residentState || 'CA', taxData.finalResultCalc.isRefund);
+        const w = window.open('', '_blank');
+        if (!w) {
+            alert("Please allow popups to open the printable Form 1040 packet.");
+            return;
+        }
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>IRS Form 1040 & Mailing Slip — ActuallyFreeTaxes</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 2.5rem; color: #0f172a; max-width: 820px; margin: 0 auto; line-height: 1.5; }
+          .header { border-bottom: 3px solid #0f172a; padding-bottom: 0.75rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: flex-end; }
+          .title { font-size: 1.5rem; font-weight: 800; margin: 0; }
+          .subtitle { font-size: 0.9rem; color: #64748b; }
+          .envelope-slip { border: 2px dashed #475569; padding: 1.5rem; border-radius: 8px; margin: 2rem 0; page-break-after: always; position: relative; }
+          .envelope-label { position: absolute; top: -12px; left: 16px; background: #fff; padding: 0 8px; font-weight: 800; font-size: 0.75rem; color: #475569; }
+          .envelope-grid { display: flex; justify-content: space-between; margin-bottom: 1.5rem; font-size: 0.85rem; }
+          .stamp-box { border: 1px dotted #94a3b8; width: 60px; height: 70px; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; text-align: center; }
+          .dest-address { font-family: monospace; font-size: 1.1rem; font-weight: 700; background: #f8fafc; padding: 1rem 1.5rem; border-radius: 6px; border: 1px solid #e2e8f0; }
+          table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem; }
+          th { background: #f1f5f9; padding: 0.6rem; text-align: left; border-bottom: 2px solid #cbd5e1; }
+          td { padding: 0.6rem; border-bottom: 1px solid #e2e8f0; }
+          .td-num { font-weight: 700; font-family: monospace; text-align: right; }
+          .highlight { background: #f0fdf4; font-weight: 800; }
+          @media print {
+            button { display: none !important; }
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div style="text-align: right; margin-bottom: 1rem;">
+          <button onclick="window.print()" style="padding: 0.5rem 1rem; font-weight: 700; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer;">🖨️ Print Now</button>
+        </div>
+        <div class="header">
+          <div>
+            <h1 class="title">Form 1040 U.S. Individual Income Tax Return Summary</h1>
+            <div class="subtitle">Tax Year ${this.state.year} • Generated by ActuallyFreeTaxes.com</div>
+          </div>
+          <div style="text-align: right; font-size: 0.85rem;">
+            <strong>Filing Status:</strong> ${this.state.filingStatus.toUpperCase()}<br>
+            <strong>State:</strong> ${this.state.residentState || 'CA'}
+          </div>
+        </div>
+
+        <h3>1. Filing Instructions &amp; Paper Checklist</h3>
+        <ol style="font-size: 0.9rem; color: #334155; line-height: 1.6;">
+          <li>Print this page and the cut-out mailing slip below.</li>
+          <li>Staple <strong>Copy B</strong> of your Form(s) W-2 to the front left margin.</li>
+          <li>Sign and date Page 2, Line 38 in ink before mailing (both spouses if Married Filing Jointly).</li>
+          <li>Cut out the address slip below, tape it to a standard #10 envelope, affix postage, and drop into any USPS mailbox.</li>
+        </ol>
+
+        <div class="envelope-slip">
+          <div class="envelope-label">✂️ CUT OUT AND AFFIX TO ENVELOPE</div>
+          <div class="envelope-grid">
+            <div>
+              <strong>From:</strong><br>
+              [Your Name]<br>
+              [Your Street Address]<br>
+              [City, State ZIP]
+            </div>
+            <div class="stamp-box">AFFIX<br>USPS<br>STAMP</div>
+          </div>
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: #64748b; margin-bottom: 0.25rem;">
+            Send to: ${addr.centerName} (${addr.destType})
+          </div>
+          <div class="dest-address">
+            ${addr.addressLines.join('<br>')}
+          </div>
+        </div>
+
+        <h3>2. Official Form 1040 Line-by-Line Breakdown</h3>
+        <table>
+          <thead>
+            <tr><th>Line</th><th>IRS Form 1040 Description</th><th style="text-align: right;">Calculated Amount</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Line 1z</td><td>Total amount from Form(s) W-2, Box 1</td><td class="td-num">${formatCurrency(taxData.w2WagesCalc.result)}</td></tr>
+            <tr><td>Line 9</td><td>Total Income</td><td class="td-num">${formatCurrency(taxData.grossIncomeCalc.result)}</td></tr>
+            <tr><td>Line 10</td><td>Adjustments to Income from Schedule 1</td><td class="td-num">${formatCurrency(taxData.adjustmentsCalc.result)}</td></tr>
+            <tr><td>Line 11</td><td><strong>Adjusted Gross Income (AGI)</strong></td><td class="td-num">${formatCurrency(taxData.agiCalc.result)}</td></tr>
+            <tr><td>Line 12</td><td>Standard or Itemized Deduction</td><td class="td-num">${formatCurrency(taxData.deductionCalc.result)}</td></tr>
+            <tr><td>Line 15</td><td><strong>Taxable Income</strong></td><td class="td-num">${formatCurrency(taxData.taxableIncomeCalc.result)}</td></tr>
+            <tr><td>Line 16</td><td>Tax (From Rate Schedules)</td><td class="td-num">${formatCurrencyExact(taxData.taxBeforeCreditsCalc.result)}</td></tr>
+            <tr><td>Line 19</td><td>Child Tax Credit / Dependent Credits</td><td class="td-num">${formatCurrency(taxData.creditsCalc.result)}</td></tr>
+            <tr><td>Line 24</td><td><strong>Total Tax Liability</strong></td><td class="td-num">${formatCurrencyExact(taxData.totalTaxCalc.result)}</td></tr>
+            <tr><td>Line 25d</td><td>Federal Income Tax Withheld</td><td class="td-num">${formatCurrencyExact(taxData.withholdingCalc.result)}</td></tr>
+            <tr class="highlight">
+              <td>${taxData.finalResultCalc.isRefund ? 'Line 34' : 'Line 37'}</td>
+              <td><strong>${taxData.finalResultCalc.isRefund ? 'AMOUNT OVERPAID (YOUR REFUND)' : 'AMOUNT YOU OWE TO THE IRS'}</strong></td>
+              <td class="td-num" style="font-size: 1.1rem; color: ${taxData.finalResultCalc.isRefund ? '#16a34a' : '#dc2626'};">${formatCurrencyExact(taxData.finalResultCalc.result)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+    }
+    submitMockEfile() {
+        const emailInp = document.getElementById('efile-input-email');
+        const phoneInp = document.getElementById('efile-input-phone');
+        const tcpaChk = document.getElementById('efile-tcpa-consent');
+        const simBox = document.getElementById('efile-simulation-status');
+        const simTitle = document.getElementById('efile-sim-title');
+        const simDesc = document.getElementById('efile-sim-desc');
+        const submitBtn = document.getElementById('btn-submit-mock-efile');
+        if (!emailInp || !emailInp.value.trim() || !emailInp.value.includes('@')) {
+            alert("Please provide a valid contact email for IRS transmission notifications.");
+            emailInp?.focus();
+            return;
+        }
+        if (!phoneInp || !phoneInp.value.trim() || phoneInp.value.trim().length < 7) {
+            alert("Please provide a valid mobile cell number for SMS filing alerts.");
+            phoneInp?.focus();
+            return;
+        }
+        if (!tcpaChk || !tcpaChk.checked) {
+            alert("Please check the consent box to receive automated SMS updates regarding your filing status.");
+            tcpaChk?.focus();
+            return;
+        }
+        if (submitBtn)
+            submitBtn.disabled = true;
+        if (simBox)
+            simBox.classList.add('active');
+        if (simTitle && simDesc) {
+            simTitle.textContent = "⏳ 1/3: Validating IRS MeF XML Schema...";
+            simDesc.textContent = "Checking W-2 wage totals and withholding cross-references...";
+        }
+        setTimeout(() => {
+            if (simTitle && simDesc) {
+                simTitle.textContent = "🔒 2/3: Transmitting to IRS EFIN Gateway...";
+                simDesc.textContent = `Encrypting packet via TLS 1.3 and relaying to IRS Submission Center (Contact: ${emailInp.value})...`;
+            }
+        }, 1200);
+        setTimeout(() => {
+            const trackingId = 'AFT-' + this.state.year + '-' + Math.floor(100000 + Math.random() * 900000);
+            if (simTitle && simDesc) {
+                simTitle.textContent = "✅ 3/3: Submission Successful! IRS Tracking ID: #" + trackingId;
+                simDesc.innerHTML = `Your return has been received by the IRS Modernized e-File system (Status: <strong>PENDING_IRS_ACCEPTANCE</strong>). Confirmation and SMS updates dispatched to <strong>${emailInp.value}</strong> and <strong>${phoneInp.value}</strong>!`;
+            }
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "✓ e-Filing Transmitted (ID: #" + trackingId + ")";
+                submitBtn.style.background = "#059669";
+            }
+        }, 2800);
     }
     openGuidanceModal(fieldKey) {
         const modalEl = document.getElementById('guidance-modal-overlay');
@@ -1178,7 +1586,7 @@ class TaxApp {
         container.innerHTML = '';
         this.state.w2s.forEach((w2, index) => {
             const card = document.createElement('div');
-            card.className = 'w2-card-wrapper';
+            card.className = 'w2-literal-card';
             card.id = `w2-card-${w2.id}`;
             if (!w2.states || w2.states.length === 0) {
                 w2.states = [{
@@ -1192,326 +1600,385 @@ class TaxApp {
                         localityName: ''
                     }];
             }
-            // Render state rows (Boxes 15-20)
-            const stateRowsHtml = w2.states.map((st, sIdx) => `
-        <div class="w2-state-row" id="w2-${w2.id}-state-${st.id}-row">
-          <!-- Box 15: State -->
-          <div class="w2-box highlight-state priority-must" id="w2-${w2.id}-state-${st.id}-box15-state">
-            <div class="w2-box-header">
-              <div>
-                <span class="w2-box-number">15</span>
-                <span class="w2-box-label">State</span>
-              </div>
-              ${renderRatingPill('w2-box15-state')}
-            </div>
-            <select class="state-select-input" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="state">
-              ${this.renderStateOptions(st.state)}
-            </select>
+            const st0 = w2.states[0];
+            const st1 = w2.states.length > 1 ? w2.states[1] : null;
+            const extraStates = w2.states.length > 2 ? w2.states.slice(2) : [];
+            // Extra states HTML for states 3+
+            const extraStatesHtml = extraStates.length > 0 ? `
+        <div class="w2-extra-states-container">
+          <div style="font-size: 0.8rem; font-weight: 800; color: #334155; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+            <span>Additional State & Local Lines (States 3+)</span>
+            <button type="button" class="btn btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" data-add-state="${w2.id}">
+              + Add Another State Line
+            </button>
           </div>
-
-          <!-- Box 15: State ID -->
-          <div class="w2-box priority-skip">
-            <div class="w2-box-header">
-              <div>
-                <span class="w2-box-number">15</span>
-                <span class="w2-box-label">State ID No.</span>
+          <div class="w2-grid" style="grid-template-columns: 1fr 1.2fr 1.2fr 1.2fr 1fr 1fr auto;">
+            ${extraStates.map(st => `
+              <div class="w2-box priority-must">
+                <div class="w2-box-header"><span class="w2-box-label">Box 15 State</span></div>
+                <select class="state-select-input" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="state">
+                  ${this.renderStateOptions(st.state)}
+                </select>
               </div>
-              ${renderRatingPill('w2-box15-stateId')}
-            </div>
-            <input type="text" class="w2-input-text" value="${st.stateId}" placeholder="ID No."
-                   data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateId">
+              <div class="w2-box priority-skip">
+                <div class="w2-box-header"><span class="w2-box-label">Box 15 ID</span></div>
+                <input type="text" class="w2-input-text" value="${st.stateId}" placeholder="ID No." data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateId">
+              </div>
+              <div class="w2-box priority-must" id="w2-${w2.id}-state-${st.id}-box16-container">
+                <div class="w2-box-header">
+                  <span class="w2-box-label">Box 16 Wages</span>
+                  ${renderRatingPill('w2-box16')}
+                </div>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="w2-${w2.id}-state-${st.id}-box16" value="${st.stateWages}" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateWages">
+                </div>
+              </div>
+              <div class="w2-box highlight-state priority-must priority-saver" id="w2-${w2.id}-state-${st.id}-box17-container">
+                <div class="w2-box-header">
+                  <span class="w2-box-label">Box 17 Tax</span>
+                  ${renderRatingPill('w2-box17')}
+                </div>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="w2-${w2.id}-state-${st.id}-box17" value="${st.stateTaxWithheld}" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateTaxWithheld">
+                </div>
+              </div>
+              <div class="w2-box priority-skip">
+                <div class="w2-box-header"><span class="w2-box-label">Box 18 Local Wg</span></div>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" value="${st.localWages}" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="localWages">
+                </div>
+              </div>
+              <div class="w2-box priority-skip">
+                <div class="w2-box-header"><span class="w2-box-label">Box 19/20 Local</span></div>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" value="${st.localTaxWithheld}" placeholder="Tax" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="localTaxWithheld">
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: center; padding: 0 0.5rem; background: white;">
+                <button type="button" class="btn btn-sm" style="color: #ef4444; padding: 0.2rem 0.4rem;" data-remove-state="${w2.id}:${st.id}">✕</button>
+              </div>
+            `).join('')}
           </div>
-
-          <!-- Box 16: State wages -->
-          <div class="w2-box priority-must" id="w2-${w2.id}-state-${st.id}-box16-container">
-            <div class="w2-box-header">
-              <div>
-                <span class="w2-box-number">16</span>
-                <span class="w2-box-label">State wages</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 0.35rem;">
-                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st.id}-box16`)}
-                ${renderRatingPill('w2-box16')}
-              </div>
-            </div>
-            <div class="w2-input-wrapper">
-              <span class="currency-symbol">$</span>
-              <input type="number" step="any" class="w2-input" id="w2-${w2.id}-state-${st.id}-box16" value="${st.stateWages}" placeholder="0"
-                     data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateWages">
-            </div>
-            ${renderFieldExplanationDrawer('w2-box16', `drawer-explain-w2-${w2.id}-st-${st.id}-box16`)}
-          </div>
-
-          <!-- Box 17: State income tax withheld (KEY INPUT) -->
-          <div class="w2-box highlight-state priority-must priority-saver" id="w2-${w2.id}-state-${st.id}-box17-container">
-            <div class="w2-box-header">
-              <div>
-                <span class="w2-box-number">17</span>
-                <span class="w2-box-label">State tax withheld</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 0.35rem;">
-                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st.id}-box17`)}
-                ${renderRatingPill('w2-box17')}
-              </div>
-            </div>
-            <div class="w2-input-wrapper">
-              <span class="currency-symbol">$</span>
-              <input type="number" step="any" class="w2-input" id="w2-${w2.id}-state-${st.id}-box17" value="${st.stateTaxWithheld}" placeholder="0"
-                     data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateTaxWithheld">
-            </div>
-            ${renderFieldExplanationDrawer('w2-box17', `drawer-explain-w2-${w2.id}-st-${st.id}-box17`)}
-          </div>
-
-          <!-- Box 18: Local wages -->
-          <div class="w2-box priority-skip">
-            <div class="w2-box-header">
-              <div>
-                <span class="w2-box-number">18</span>
-                <span class="w2-box-label">Local wages</span>
-              </div>
-              ${renderRatingPill('w2-box18-20')}
-            </div>
-            <div class="w2-input-wrapper">
-              <span class="currency-symbol">$</span>
-              <input type="number" step="any" class="w2-input" value="${st.localWages}" placeholder="0"
-                     data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="localWages">
+        </div>
+      ` : '';
+            card.innerHTML = `
+        <!-- Card Header Toolbar -->
+        <div class="w2-literal-toolbar">
+          <div class="toolbar-left">
+            <span class="doc-badge">Official IRS W-2 Overlay</span>
+            <span class="w2-title">W-2 #${index + 1}: ${w2.employer || 'Employer'}</span>
+            <div class="state-tag-list">
+              ${w2.states.map(s => `<span class="state-tag">${s.state}</span>`).join('')}
             </div>
           </div>
-
-          <!-- Box 19 & 20: Local tax & Locality -->
-          <div class="w2-box priority-skip">
-            <div class="w2-box-header">
-              <div>
-                <span class="w2-box-number">19/20</span>
-                <span class="w2-box-label">Local tax / Locality</span>
-              </div>
-              ${renderRatingPill('w2-box18-20')}
-            </div>
-            <div style="display: flex; gap: 0.35rem;">
-              <div class="w2-input-wrapper" style="flex: 1;">
-                <span class="currency-symbol" style="font-size: 0.8rem;">$</span>
-                <input type="number" step="any" class="w2-input" style="font-size: 0.85rem;" value="${st.localTaxWithheld}" placeholder="0"
-                       data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="localTaxWithheld">
-              </div>
-              <input type="text" class="w2-input-text" style="width: 70px; font-size: 0.8rem;" value="${st.localityName}" placeholder="Locality"
-                     data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="localityName">
-            </div>
-          </div>
-
-          <!-- Delete state line action -->
-          <div style="display: flex; align-items: center; justify-content: center; background: white; padding: 0 0.4rem;">
-            ${w2.states.length > 1 ? `
-              <button type="button" class="btn btn-sm" style="color: #ef4444; padding: 0.2rem 0.4rem; font-size: 0.75rem;"
-                      data-remove-state="${w2.id}:${st.id}" title="Remove this state line">✕</button>
+          <div class="toolbar-right">
+            <button type="button" class="btn btn-sm" style="background: rgba(255,255,255,0.15); color: #ffffff; border-color: rgba(255,255,255,0.3); font-weight: 700; font-size: 0.8rem;" data-add-state="${w2.id}">
+              + Add State Line
+            </button>
+            ${this.state.w2s.length > 1 ? `
+              <button type="button" class="btn btn-sm" style="color: #fca5a5; border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.1); font-weight: 700; font-size: 0.8rem;" data-remove-w2="${w2.id}">
+                ✕ Remove W-2
+              </button>
             ` : ''}
           </div>
         </div>
-      `).join('');
-            card.innerHTML = `
-        <div class="w2-form">
-          <div class="w2-top-strip">
-            <div>
-              <div class="w2-omb">OMB No. 1545-0008</div>
-              <div style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">
-                W-2 #${index + 1}: ${w2.employer || 'Employer'} 
-                <span style="font-weight: 500; color: #64748b; font-size: 0.75rem;">
-                  ${w2.states.map(s => s.state).join(', ')}
-                </span>
+
+        <!-- Scrollable Document Canvas with Literal IRS Form W-2 Background -->
+        <div class="w2-literal-scroll">
+          <div class="w2-literal-container" id="w2-${w2.id}-doc-canvas">
+            <!-- Box a: Employee's Social Security Number -->
+            <div class="w2-overlay-box box-a">
+              <input type="text" class="w2-overlay-input" value="***-**-1234" readonly style="letter-spacing: 0.1em; color: #475569;">
+            </div>
+
+            <!-- Box b: Employer Identification Number (EIN) -->
+            <div class="w2-overlay-box box-b">
+              <div class="w2-overlay-header">
+                ${renderRatingPill('w2-ein', true)}
+                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-ein`, '')}
+              </div>
+              <input type="text" class="w2-overlay-input" value="${w2.ein}" data-w2-field="ein" data-w2-id="${w2.id}" placeholder="00-0000000">
+            </div>
+
+            <!-- Box c: Employer's name, address, and ZIP code -->
+            <div class="w2-overlay-box box-c">
+              <textarea class="w2-overlay-textarea" data-w2-field="employer" data-w2-id="${w2.id}" placeholder="Employer Name, Address, City, State ZIP">${w2.employer}</textarea>
+            </div>
+
+            <!-- Box d: Control number -->
+            <div class="w2-overlay-box box-d">
+              <input type="text" class="w2-overlay-input" placeholder="Optional" value="">
+            </div>
+
+            <!-- Box e: Employee's first name and initial, last name -->
+            <div class="w2-overlay-box box-e">
+              <input type="text" class="w2-overlay-input" placeholder="Employee Name" value="Jane Q. Taxpayer">
+            </div>
+
+            <!-- Box f: Employee's address and ZIP code -->
+            <div class="w2-overlay-box box-f">
+              <input type="text" class="w2-overlay-input" placeholder="123 Main St, Apt 4B, City, State ZIP" value="123 Taxpayer Way, San Francisco, CA 94105">
+            </div>
+
+            <!-- Box 1: Wages, tips, other compensation (KEY ARROW SOURCE) -->
+            <div class="w2-overlay-box box-1 box-highlight-wages" id="w2-${w2.id}-box1-container">
+              <div class="w2-overlay-header">
+                ${renderRatingPill('w2-box1', true)}
+                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box1`, '')}
+              </div>
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box1" value="${w2.box1}" placeholder="0">
               </div>
             </div>
-            <div class="w2-form-title">
-              <div class="doc-code">Form W-2</div>
-              <div class="doc-desc">Wage and Tax Statement</div>
+
+            <!-- Box 2: Federal income tax withheld (KEY ARROW SOURCE) -->
+            <div class="w2-overlay-box box-2 box-highlight-withholding" id="w2-${w2.id}-box2-container">
+              <div class="w2-overlay-header">
+                ${renderRatingPill('w2-box2', true)}
+                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box2`, '')}
+              </div>
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box2" value="${w2.box2}" placeholder="0">
+              </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-              <div class="w2-year-badge current-tax-year-text">${this.state.year}</div>
-              ${this.state.w2s.length > 1 ? `
-                <button type="button" class="btn btn-sm" style="color: #ef4444; border-color: #fecaca; padding: 0.25rem 0.6rem; font-size: 0.8rem; font-weight: 700;" data-remove-w2="${w2.id}">
-                  ✕ Remove W-2
+
+            <!-- Box 3: Social security wages -->
+            <div class="w2-overlay-box box-3 box-highlight-ss" id="w2-${w2.id}-box3-container">
+              <div class="w2-overlay-header">
+                ${renderRatingPill('w2-box3', true)}
+                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box3`, '')}
+              </div>
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box3" value="${w2.box3}" placeholder="0">
+              </div>
+            </div>
+
+            <!-- Box 4: Social security tax withheld (KEY ARROW SOURCE) -->
+            <div class="w2-overlay-box box-4 box-highlight-ss" id="w2-${w2.id}-box4-container">
+              <div class="w2-overlay-header">
+                ${renderRatingPill('w2-box3', true)}
+              </div>
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box4" value="${w2.box4}" placeholder="0">
+              </div>
+            </div>
+
+            <!-- Box 5: Medicare wages and tips -->
+            <div class="w2-overlay-box box-5 box-highlight-medicare" id="w2-${w2.id}-box5-container">
+              <div class="w2-overlay-header">
+                ${renderRatingPill('w2-box5', true)}
+                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box5`, '')}
+              </div>
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box5" value="${w2.box5}" placeholder="0">
+              </div>
+            </div>
+
+            <!-- Box 6: Medicare tax withheld (KEY ARROW SOURCE) -->
+            <div class="w2-overlay-box box-6 box-highlight-medicare" id="w2-${w2.id}-box6-container">
+              <div class="w2-overlay-header">
+                ${renderRatingPill('w2-box5', true)}
+              </div>
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box6" value="${w2.box6}" placeholder="0">
+              </div>
+            </div>
+
+            <!-- Box 7: Social security tips -->
+            <div class="w2-overlay-box box-7">
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" value="" placeholder="0">
+              </div>
+            </div>
+
+            <!-- Box 8: Allocated tips -->
+            <div class="w2-overlay-box box-8">
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" value="" placeholder="0">
+              </div>
+            </div>
+
+            <!-- Box 10: Dependent care benefits -->
+            <div class="w2-overlay-box box-10">
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" value="" placeholder="0">
+              </div>
+            </div>
+
+            <!-- Box 11: Nonqualified plans -->
+            <div class="w2-overlay-box box-11">
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" value="" placeholder="0">
+              </div>
+            </div>
+
+            <!-- Box 12: Deferred Compensation / Benefits (Code & Amount) -->
+            <div class="w2-overlay-box box-12" id="w2-${w2.id}-box12-container">
+              <div class="w2-overlay-header">
+                ${renderRatingPill('w2-box12', true)}
+                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box12`, '')}
+              </div>
+              <div style="display: flex; gap: 4px; align-items: center; width: 100%;">
+                <input type="text" class="w2-overlay-input" style="width: 44px; text-transform: uppercase; text-align: center; font-weight: 800;" value="${w2.box12Code || ''}" placeholder="Code" data-w2-id="${w2.id}" data-w2-field="box12Code">
+                <div class="w2-overlay-input-wrap" style="flex: 1;">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12-amt" value="${w2.box12Amount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12Amount">
+                </div>
+              </div>
+            </div>
+
+            <!-- Box 14: Other (e.g. SDI / VPDI) -->
+            <div class="w2-overlay-box box-14">
+              <input type="text" class="w2-overlay-input" placeholder="CA SDI / VPDI / Other" value="">
+            </div>
+
+            <!-- STATE ROW 1: Boxes 15-20 (Overlaid directly on printed Row 1) -->
+            <div class="w2-overlay-box row1-box-15-state box-highlight-state" id="w2-${w2.id}-state-${st0.id}-box15-state">
+              <div class="w2-overlay-header">${renderRatingPill('w2-box15-state', true)}</div>
+              <select class="w2-overlay-select" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="state">
+                ${this.renderStateOptions(st0.state)}
+              </select>
+            </div>
+
+            <div class="w2-overlay-box row1-box-15-id">
+              <input type="text" class="w2-overlay-input" value="${st0.stateId}" placeholder="State ID No." data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="stateId">
+            </div>
+
+            <div class="w2-overlay-box row1-box-16 box-highlight-state" id="w2-${w2.id}-state-${st0.id}-box16-container">
+              <div class="w2-overlay-header">
+                ${renderRatingPill('w2-box16', true)}
+                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st0.id}-box16`, '')}
+              </div>
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-state-${st0.id}-box16" value="${st0.stateWages}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="stateWages">
+              </div>
+            </div>
+
+            <div class="w2-overlay-box row1-box-17 box-highlight-state" id="w2-${w2.id}-state-${st0.id}-box17-container">
+              <div class="w2-overlay-header">
+                ${renderRatingPill('w2-box17', true)}
+                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st0.id}-box17`, '')}
+              </div>
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-state-${st0.id}-box17" value="${st0.stateTaxWithheld}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="stateTaxWithheld">
+              </div>
+            </div>
+
+            <div class="w2-overlay-box row1-box-18">
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" value="${st0.localWages}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="localWages">
+              </div>
+            </div>
+
+            <div class="w2-overlay-box row1-box-19">
+              <div class="w2-overlay-input-wrap">
+                <span class="w2-overlay-curr">$</span>
+                <input type="number" step="any" class="w2-overlay-input num" value="${st0.localTaxWithheld}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="localTaxWithheld">
+              </div>
+            </div>
+
+            <div class="w2-overlay-box row1-box-20">
+              <input type="text" class="w2-overlay-input" value="${st0.localityName}" placeholder="Locality" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="localityName">
+            </div>
+
+            <!-- STATE ROW 2: Boxes 15-20 (Overlaid directly on printed Row 2) -->
+            ${st1 ? `
+              <div class="w2-overlay-box row2-box-15-state box-highlight-state" id="w2-${w2.id}-state-${st1.id}-box15-state">
+                <div class="w2-overlay-header">${renderRatingPill('w2-box15-state', true)}</div>
+                <select class="w2-overlay-select" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="state">
+                  ${this.renderStateOptions(st1.state)}
+                </select>
+              </div>
+
+              <div class="w2-overlay-box row2-box-15-id">
+                <input type="text" class="w2-overlay-input" value="${st1.stateId}" placeholder="State ID No." data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="stateId">
+              </div>
+
+              <div class="w2-overlay-box row2-box-16 box-highlight-state" id="w2-${w2.id}-state-${st1.id}-box16-container">
+                <div class="w2-overlay-header">
+                  ${renderRatingPill('w2-box16', true)}
+                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st1.id}-box16`, '')}
+                </div>
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-state-${st1.id}-box16" value="${st1.stateWages}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="stateWages">
+                </div>
+              </div>
+
+              <div class="w2-overlay-box row2-box-17 box-highlight-state" id="w2-${w2.id}-state-${st1.id}-box17-container">
+                <div class="w2-overlay-header">
+                  ${renderRatingPill('w2-box17', true)}
+                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st1.id}-box17`, '')}
+                </div>
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-state-${st1.id}-box17" value="${st1.stateTaxWithheld}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="stateTaxWithheld">
+                </div>
+              </div>
+
+              <div class="w2-overlay-box row2-box-18">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" value="${st1.localWages}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="localWages">
+                </div>
+              </div>
+
+              <div class="w2-overlay-box row2-box-19">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" value="${st1.localTaxWithheld}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="localTaxWithheld">
+                </div>
+              </div>
+
+              <div class="w2-overlay-box row2-box-20">
+                <input type="text" class="w2-overlay-input" value="${st1.localityName}" placeholder="Locality" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="localityName">
+                <button type="button" class="btn-remove-row2-state" data-remove-state="${w2.id}:${st1.id}" title="Remove State Line 2">✕</button>
+              </div>
+            ` : `
+              <!-- Placeholder button to add State Row 2 directly onto Row 2 of W-2 -->
+              <div class="w2-overlay-box row2-box-16" style="display: flex; align-items: center; justify-content: center; width: 45%;">
+                <button type="button" class="btn btn-sm" style="height: 22px; font-size: 0.72rem; padding: 0 0.6rem; background: rgba(255,255,255,0.92); border: 1px dashed #3b82f6; font-weight: 700; color: #2563eb; cursor: pointer;" data-add-state="${w2.id}">
+                  + Add 2nd State to Row 2
                 </button>
-              ` : ''}
-            </div>
+              </div>
+            `}
           </div>
+        </div>
 
-          <div class="w2-grid">
-            <!-- Box a: SSN -->
-            <div class="w2-box priority-must">
-              <div class="w2-box-header">
-                <span class="w2-box-number">a</span>
-                <span class="w2-box-label">Employee's social security number</span>
-              </div>
-              <input type="text" class="w2-input-text" value="***-**-1234" readonly>
-            </div>
+        <!-- Extra States Extension (for states 3+) -->
+        ${extraStatesHtml}
 
-            <!-- Box 1: Wages, tips, other compensation (KEY INPUT) -->
-            <div class="w2-box highlight-wages priority-must" id="w2-${w2.id}-box1-container">
-              <div class="w2-box-header">
-                <div>
-                  <span class="w2-box-number">1</span>
-                  <span class="w2-box-label">Wages, tips, other comp.</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.35rem;">
-                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box1`)}
-                  ${renderRatingPill('w2-box1')}
-                </div>
-              </div>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box1" value="${w2.box1}" placeholder="0">
-              </div>
-              ${renderFieldExplanationDrawer('w2-box1', `drawer-explain-w2-${w2.id}-box1`)}
-            </div>
-
-            <!-- Box 2: Federal income tax withheld (KEY INPUT) -->
-            <div class="w2-box highlight-withholding priority-must priority-saver" id="w2-${w2.id}-box2-container">
-              <div class="w2-box-header">
-                <div>
-                  <span class="w2-box-number">2</span>
-                  <span class="w2-box-label">Federal tax withheld</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.35rem;">
-                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box2`)}
-                  ${renderRatingPill('w2-box2')}
-                </div>
-              </div>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box2" value="${w2.box2}" placeholder="0">
-              </div>
-              ${renderFieldExplanationDrawer('w2-box2', `drawer-explain-w2-${w2.id}-box2`)}
-            </div>
-
-            <!-- Box b: EIN -->
-            <div class="w2-box priority-must">
-              <div class="w2-box-header">
-                <div>
-                  <span class="w2-box-number">b</span>
-                  <span class="w2-box-label">Employer identification number</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.35rem;">
-                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-ein`)}
-                  ${renderRatingPill('w2-ein')}
-                </div>
-              </div>
-              <input type="text" class="w2-input-text" value="${w2.ein}" data-w2-field="ein" data-w2-id="${w2.id}">
-              ${renderFieldExplanationDrawer('w2-ein', `drawer-explain-w2-${w2.id}-ein`)}
-            </div>
-
-            <!-- Box 3: Social Security wages -->
-            <div class="w2-box highlight-ss priority-skip" id="w2-${w2.id}-box3-container">
-              <div class="w2-box-header">
-                <div>
-                  <span class="w2-box-number">3</span>
-                  <span class="w2-box-label">Social security wages</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.35rem;">
-                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box3`)}
-                  ${renderRatingPill('w2-box3')}
-                </div>
-              </div>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box3" value="${w2.box3}" placeholder="0">
-              </div>
-              ${renderFieldExplanationDrawer('w2-box3', `drawer-explain-w2-${w2.id}-box3`)}
-            </div>
-
-            <!-- Box 4: Social Security tax withheld -->
-            <div class="w2-box highlight-ss priority-skip" id="w2-${w2.id}-box4-container">
-              <div class="w2-box-header">
-                <div>
-                  <span class="w2-box-number">4</span>
-                  <span class="w2-box-label">SS tax withheld</span>
-                </div>
-                ${renderRatingPill('w2-box3')}
-              </div>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box4" value="${w2.box4}" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box c: Employer's name, address -->
-            <div class="w2-box priority-must">
-              <div class="w2-box-header">
-                <span class="w2-box-number">c</span>
-                <span class="w2-box-label">Employer's name, address, and ZIP</span>
-              </div>
-              <input type="text" class="w2-input-text" value="${w2.employer}" data-w2-field="employer" data-w2-id="${w2.id}">
-            </div>
-
-            <!-- Box 5: Medicare wages -->
-            <div class="w2-box highlight-medicare priority-skip" id="w2-${w2.id}-box5-container">
-              <div class="w2-box-header">
-                <div>
-                  <span class="w2-box-number">5</span>
-                  <span class="w2-box-label">Medicare wages</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.35rem;">
-                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box5`)}
-                  ${renderRatingPill('w2-box5')}
-                </div>
-              </div>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box5" value="${w2.box5}" placeholder="0">
-              </div>
-              ${renderFieldExplanationDrawer('w2-box5', `drawer-explain-w2-${w2.id}-box5`)}
-            </div>
-
-            <!-- Box 6: Medicare tax withheld -->
-            <div class="w2-box highlight-medicare priority-skip" id="w2-${w2.id}-box6-container">
-              <div class="w2-box-header">
-                <div>
-                  <span class="w2-box-number">6</span>
-                  <span class="w2-box-label">Medicare tax withheld</span>
-                </div>
-                ${renderRatingPill('w2-box5')}
-              </div>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box6" value="${w2.box6}" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 12: Deferred Compensation / Benefits -->
-            <div class="w2-box priority-verify" id="w2-${w2.id}-box12-container">
-              <div class="w2-box-header">
-                <div>
-                  <span class="w2-box-number">12</span>
-                  <span class="w2-box-label">Codes (D, W, DD, etc.)</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.35rem;">
-                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box12`)}
-                  ${renderRatingPill('w2-box12')}
-                </div>
-              </div>
-              <div style="display: flex; gap: 0.35rem;">
-                <input type="text" class="w2-input-text" style="width: 55px; text-transform: uppercase; font-weight: 700; text-align: center;" value="${w2.box12Code || ''}" placeholder="Code" data-w2-id="${w2.id}" data-w2-field="box12Code">
-                <div class="w2-input-wrapper" style="flex: 1;">
-                  <span class="currency-symbol">$</span>
-                  <input type="number" step="any" class="w2-input" id="w2-${w2.id}-box12-amt" value="${w2.box12Amount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12Amount">
-                </div>
-              </div>
-              ${renderFieldExplanationDrawer('w2-box12', `drawer-explain-w2-${w2.id}-box12`)}
-            </div>
-
-            <!-- Boxes 15-20: State and Local Taxes Section -->
-            <div class="w2-state-container">
-              <div style="background: #e2e8f0; padding: 0.35rem 0.75rem; font-size: 0.75rem; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center;">
-                <span>Boxes 15–20: State & Local Income Tax Reporting</span>
-                <button type="button" class="btn btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" data-add-state="${w2.id}">
-                  + Add State Line to W-2 #${index + 1}
-                </button>
-              </div>
-              ${stateRowsHtml}
-            </div>
-          </div>
-
-          <div class="w2-footer-note">
-            <span>Copy B — To Be Filed With Employee's FEDERAL Tax Return</span>
-            <span>Department of the Treasury — Internal Revenue Service</span>
-          </div>
+        <!-- Attached Collapsible Explanations for this W-2 -->
+        <div class="w2-drawers-container">
+          ${renderFieldExplanationDrawer('w2-box1', `drawer-explain-w2-${w2.id}-box1`)}
+          ${renderFieldExplanationDrawer('w2-box2', `drawer-explain-w2-${w2.id}-box2`)}
+          ${renderFieldExplanationDrawer('w2-box3', `drawer-explain-w2-${w2.id}-box3`)}
+          ${renderFieldExplanationDrawer('w2-box5', `drawer-explain-w2-${w2.id}-box5`)}
+          ${renderFieldExplanationDrawer('w2-box12', `drawer-explain-w2-${w2.id}-box12`)}
+          ${renderFieldExplanationDrawer('w2-ein', `drawer-explain-w2-${w2.id}-ein`)}
+          ${renderFieldExplanationDrawer('w2-box16', `drawer-explain-w2-${w2.id}-st-${st0.id}-box16`)}
+          ${renderFieldExplanationDrawer('w2-box17', `drawer-explain-w2-${w2.id}-st-${st0.id}-box17`)}
+          ${st1 ? `
+            ${renderFieldExplanationDrawer('w2-box16', `drawer-explain-w2-${w2.id}-st-${st1.id}-box16`)}
+            ${renderFieldExplanationDrawer('w2-box17', `drawer-explain-w2-${w2.id}-st-${st1.id}-box17`)}
+          ` : ''}
         </div>
       `;
             container.appendChild(card);

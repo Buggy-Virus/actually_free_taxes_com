@@ -171,6 +171,9 @@
         <a href="#section-1040-mirror" class="toc-link" data-toc-target="section-1040-mirror">
           <span>Part 7: 1040 Mirror</span>
         </a>
+        <a href="#section-filing-options" class="toc-link" data-toc-target="section-filing-options" style="color: #2563eb; font-weight: 750;">
+          <span>🚀 Part 8: Ready to File</span>
+        </a>
       </div>
     </aside>
 
@@ -1695,6 +1698,33 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Dotted Divider: Part 8 -->
+      <div class="section-divider-dotted">
+        <span class="divider-badge">PART 8 • OFFICIAL FILING &amp; DOWNLOAD GUIDE</span>
+      </div>
+
+      <!-- Filing Walkthrough CTA Card -->
+      <div class="calc-card filing-cta-card" id="section-filing-options">
+        <div class="filing-cta-content">
+          <div class="filing-cta-badge">CALCULATION VERIFIED • READY FOR SUBMISSION</div>
+          <h2 class="filing-cta-title">Ready to File Your Return?</h2>
+          <p class="filing-cta-desc">
+            We never trap you behind surprise paywalls. Walk through your 4 transparent options—from 100% free paper filing with auto-generated IRS envelope slips, to direct government e-filing and rapid 1-click convenience submission.
+          </p>
+          <div class="filing-cta-actions">
+            <button type="button" class="btn btn-primary btn-lg" id="btn-open-filing-modal">
+              🚀 Walk Me Through Filing &amp; Downloading
+            </button>
+            <button type="button" class="btn btn-outline" id="btn-quick-print-1040" style="background: #ffffff;">
+              🖨️ Print Form 1040 &amp; Address Slip
+            </button>
+            <button type="button" class="btn btn-outline" id="btn-quick-export-json" style="background: #ffffff;">
+              💾 Download Data Packet (.json)
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- Footer -->
@@ -1712,6 +1742,353 @@
 
   </main>
   </div> <!-- Close app-layout -->
+
+  <!-- Interactive Filing & Download Walkthrough Modal Dialog -->
+  <div class="filing-modal-overlay" id="filing-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="filing-modal-title">
+    <div class="filing-modal-dialog">
+      <div class="filing-modal-header">
+        <h2 class="filing-header-title" id="filing-modal-title">
+          <span>📋</span> Filing &amp; Download Walkthrough
+        </h2>
+        <button type="button" class="filing-modal-close-btn" id="btn-close-filing-modal" aria-label="Close filing guide">✕</button>
+      </div>
+
+      <!-- Live Return Snapshot Strip -->
+      <div class="filing-snapshot-strip">
+        <div class="snapshot-item">
+          <span class="snapshot-label">Gross Wages:</span>
+          <span class="snapshot-value" id="fmodal-snap-wages">$0</span>
+        </div>
+        <div class="snapshot-item">
+          <span class="snapshot-label">Taxable Income:</span>
+          <span class="snapshot-value" id="fmodal-snap-taxable">$0</span>
+        </div>
+        <div class="snapshot-item">
+          <span class="snapshot-label">Tax Year:</span>
+          <span class="snapshot-value current-tax-year-text">2024</span>
+        </div>
+        <div class="snapshot-item">
+          <span class="snapshot-label">Home State:</span>
+          <span class="snapshot-value" id="fmodal-snap-state">CA</span>
+        </div>
+        <div class="snapshot-item">
+          <span class="snapshot-label">Verdict:</span>
+          <span class="snapshot-value is-refund" id="fmodal-snap-verdict">REFUND: $0</span>
+        </div>
+      </div>
+
+      <!-- Tabs Navigation -->
+      <div class="filing-tab-nav" role="tablist">
+        <button type="button" class="filing-tab-btn active" data-filing-tab="tab-print">
+          🖨️ 1. Print &amp; Mail (100% Free)
+        </button>
+        <button type="button" class="filing-tab-btn" data-filing-tab="tab-directfile">
+          🏛️ 2. IRS Direct File (100% Free)
+        </button>
+        <button type="button" class="filing-tab-btn" data-filing-tab="tab-fillable">
+          📑 3. Free File Fillable Forms (100% Free)
+        </button>
+        <button type="button" class="filing-tab-btn" data-filing-tab="tab-efile">
+          ⚡ 4. 1-Click e-File ($15 Convenience)
+        </button>
+      </div>
+
+      <!-- Tab Content Area -->
+      <div class="filing-tab-content-area">
+
+        <!-- Tab 1: Print & Mail -->
+        <div class="filing-tab-panel active" id="tab-print">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; color: #0f172a;">Option 1: 5-Minute Paper Filing by Mail</h3>
+            <span class="storage-privacy-badge">100% Free Forever • Zero Catch</span>
+          </div>
+          <p style="font-size: 0.88rem; color: #475569; margin-bottom: 1rem;">
+            Print your completed Form 1040 along with the auto-generated IRS mailing address below. You can cut out the address slip and tape it directly to any standard #10 envelope.
+          </p>
+
+          <!-- Cutout Envelope Address Card -->
+          <div class="envelope-cutout">
+            <span class="cutout-scissors-label">✂️ Cut out &amp; affix to envelope</span>
+            <div class="envelope-grid">
+              <div class="envelope-from">
+                <strong>From:</strong><br>
+                <span id="envelope-sender-name">[Your Legal Name]</span><br>
+                <span id="envelope-sender-address">[Your Street Address]</span><br>
+                <span id="envelope-sender-city">[City, State ZIP]</span>
+              </div>
+              <div class="envelope-stamp-box">
+                <span>AFFIX<br>USPS<br>STAMP</span>
+              </div>
+              <div class="envelope-to-address">
+                <div style="font-size: 0.72rem; color: #64748b; text-transform: uppercase; margin-bottom: 0.25rem;">
+                  Official IRS Processing Center (Auto-Selected for <span id="envelope-dest-state">CA</span> • <span id="envelope-dest-type">Refund</span>):
+                </div>
+                <div id="envelope-official-address">
+                  Department of the Treasury<br>
+                  Internal Revenue Service<br>
+                  Ogden, UT 84201-0002
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step-by-Step Instructions -->
+          <div class="filing-step-list">
+            <div class="filing-step-item">
+              <span class="filing-step-num">1</span>
+              <div>
+                <strong>Print Your Documents:</strong> Click the button below to generate a print-ready IRS Form 1040 and address slip.
+              </div>
+            </div>
+            <div class="filing-step-item">
+              <span class="filing-step-num">2</span>
+              <div>
+                <strong>Attach W-2(s):</strong> Staple <em>Copy B</em> of each Form W-2 to the front left margin of Page 1.
+              </div>
+            </div>
+            <div class="filing-step-item">
+              <span class="filing-step-num">3</span>
+              <div>
+                <strong>Sign in Ink:</strong> Sign and date Page 2, Line 38. If Married Filing Jointly, both spouses must sign.
+              </div>
+            </div>
+            <div class="filing-step-item">
+              <span class="filing-step-num">4</span>
+              <div id="filing-step-payment-text">
+                <strong>Affix Postage &amp; Mail:</strong> Attach a First-Class stamp and drop in any USPS mailbox. If you owe tax, you can pay online for free via <a href="https://www.irs.gov/payments" target="_blank" rel="noopener" style="color: #2563eb; font-weight: 700;">IRS Direct Pay</a> instead of mailing a check.
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1.25rem;">
+            <button type="button" class="btn btn-primary" id="btn-print-official-packet">
+              🖨️ Print Form 1040 &amp; Address Slip
+            </button>
+            <button type="button" class="btn btn-outline" id="btn-download-packet-json">
+              💾 Download Data Packet (.json)
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 2: IRS Direct File -->
+        <div class="filing-tab-panel" id="tab-directfile">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; color: #0f172a;">Option 2: IRS Direct File (The Government's Own Portal)</h3>
+            <span class="storage-privacy-badge">Official IRS System • $0 Fee</span>
+          </div>
+          <p style="font-size: 0.88rem; color: #475569; margin-bottom: 1rem;">
+            <strong>IRS Direct File</strong> allows taxpayers in participating states to e-file directly with the IRS for free without private tax software. Use your pre-calculated cheat-sheet below to answer their questionnaire in minutes:
+          </p>
+
+          <div id="direct-file-state-banner" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 0.85rem 1rem; color: #1e40af; font-size: 0.85rem; margin-bottom: 1rem;">
+            <!-- Updated dynamically based on state -->
+          </div>
+
+          <table class="cheat-sheet-table">
+            <thead>
+              <tr>
+                <th>IRS Direct File Question</th>
+                <th>Source in ActuallyFreeTaxes</th>
+                <th style="text-align: right;">Your Verified Number</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Total W-2 Wages (Box 1)</td>
+                <td>Line 1z Mirror</td>
+                <td class="td-val" id="cs-df-wages">$0</td>
+              </tr>
+              <tr>
+                <td>Federal Income Tax Withheld (Box 2)</td>
+                <td>Line 25d Mirror</td>
+                <td class="td-val" id="cs-df-withheld">$0</td>
+              </tr>
+              <tr>
+                <td>Adjusted Gross Income (AGI)</td>
+                <td>Line 11 Mirror</td>
+                <td class="td-val" id="cs-df-agi">$0</td>
+              </tr>
+              <tr>
+                <td>Deduction Method</td>
+                <td>Line 12 Mirror</td>
+                <td class="td-val" id="cs-df-deduction">$0</td>
+              </tr>
+              <tr>
+                <td>Child Tax Credit Allowed</td>
+                <td>Line 19 Mirror</td>
+                <td class="td-val" id="cs-df-credits">$0</td>
+              </tr>
+              <tr>
+                <td>Expected Federal Result</td>
+                <td>Line 34 / 37 Mirror</td>
+                <td class="td-val" id="cs-df-verdict" style="color: #16a34a;">$0</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top: 1.5rem;">
+            <a href="https://directfile.irs.gov/" target="_blank" rel="noopener" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none;">
+              <span>🚀 Open IRS Direct File Portal</span> <span>↗</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Tab 3: Free File Fillable Forms -->
+        <div class="filing-tab-panel" id="tab-fillable">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; color: #0f172a;">Option 3: IRS Free File Fillable Forms (All 50 States)</h3>
+            <span class="storage-privacy-badge">Available to All Incomes • Zero Caps</span>
+          </div>
+          <p style="font-size: 0.88rem; color: #475569; margin-bottom: 1rem;">
+            The IRS provides <strong>Free File Fillable Forms</strong> for every taxpayer regardless of income. Most people find it confusing because it is a blank tax form. <strong>Because our 1040 Mirror already computed every line</strong>, you can simply type your pre-calculated line numbers:
+          </p>
+
+          <table class="cheat-sheet-table">
+            <thead>
+              <tr>
+                <th>Form 1040 Line</th>
+                <th>IRS Line Description</th>
+                <th style="text-align: right;">Value to Enter</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Line 1z</strong></td>
+                <td>W-2 Wages</td>
+                <td class="td-val" id="cs-ff-1z">$0</td>
+              </tr>
+              <tr>
+                <td><strong>Line 9</strong></td>
+                <td>Total Income</td>
+                <td class="td-val" id="cs-ff-9">$0</td>
+              </tr>
+              <tr>
+                <td><strong>Line 10</strong></td>
+                <td>Schedule 1 Adjustments</td>
+                <td class="td-val" id="cs-ff-10">$0</td>
+              </tr>
+              <tr>
+                <td><strong>Line 11</strong></td>
+                <td>Adjusted Gross Income (AGI)</td>
+                <td class="td-val" id="cs-ff-11" style="color: #10b981;">$0</td>
+              </tr>
+              <tr>
+                <td><strong>Line 12</strong></td>
+                <td>Standard or Itemized Deduction</td>
+                <td class="td-val" id="cs-ff-12">$0</td>
+              </tr>
+              <tr>
+                <td><strong>Line 15</strong></td>
+                <td>Taxable Income</td>
+                <td class="td-val" id="cs-ff-15" style="color: #10b981;">$0</td>
+              </tr>
+              <tr>
+                <td><strong>Line 16</strong></td>
+                <td>Tax (From Rate Schedules)</td>
+                <td class="td-val" id="cs-ff-16">$0</td>
+              </tr>
+              <tr>
+                <td><strong>Line 19</strong></td>
+                <td>Child &amp; Dependent Credits</td>
+                <td class="td-val" id="cs-ff-19">$0</td>
+              </tr>
+              <tr>
+                <td><strong>Line 24</strong></td>
+                <td>Total Federal Tax</td>
+                <td class="td-val" id="cs-ff-24" style="color: #f97316;">$0</td>
+              </tr>
+              <tr>
+                <td><strong>Line 25d</strong></td>
+                <td>Federal Tax Withheld</td>
+                <td class="td-val" id="cs-ff-25d" style="color: #0284c7;">$0</td>
+              </tr>
+              <tr>
+                <td><strong>Line 34 / 37</strong></td>
+                <td>Refund or Balance Owed</td>
+                <td class="td-val" id="cs-ff-final" style="color: #16a34a; font-size: 1rem;">$0</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top: 1.5rem;">
+            <a href="https://www.freefilefillableforms.com/" target="_blank" rel="noopener" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none;">
+              <span>📑 Launch Free File Fillable Forms</span> <span>↗</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Tab 4: 1-Click e-File Convenience -->
+        <div class="filing-tab-panel" id="tab-efile">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; color: #0f172a;">Option 4: 1-Click Electronic Filing</h3>
+            <span style="font-size: 0.72rem; font-weight: 700; background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; padding: 0.2rem 0.55rem; border-radius: 6px;">
+              Optional Convenience Gateway
+            </span>
+          </div>
+          <p style="font-size: 0.88rem; color: #475569; margin-bottom: 1rem;">
+            If you want instant transmission to the IRS without retyping anything into government portals, our authorized API partner transmits your return directly to the IRS Modernized e-File (MeF) gateway.
+          </p>
+
+          <div class="efile-box">
+            <div class="efile-price-tag">
+              <span class="efile-price">$15.00</span>
+              <span class="efile-price-sub">flat pass-through transmission fee (covers federal &amp; resident state)</span>
+            </div>
+
+            <div style="font-size: 0.82rem; color: #475569;">
+              🔒 <strong>Security &amp; Zero-PII Vault:</strong> Your W-2 and income inputs are tokenized directly through the certified API provider. ActuallyFreeTaxes never stores your SSN on our servers.
+            </div>
+
+            <div class="efile-input-grid">
+              <div class="efile-input-group">
+                <label for="efile-input-email">Contact Email (for IRS confirmation):</label>
+                <input type="email" id="efile-input-email" placeholder="name@example.com">
+              </div>
+              <div class="efile-input-group">
+                <label for="efile-input-phone">Cell Phone (for SMS status alerts):</label>
+                <input type="tel" id="efile-input-phone" placeholder="(555) 000-0000">
+              </div>
+            </div>
+
+            <!-- TCPA Compliance Checkbox -->
+            <label style="display: flex; align-items: flex-start; gap: 0.55rem; font-size: 0.78rem; color: #475569; cursor: pointer;">
+              <input type="checkbox" id="efile-tcpa-consent" style="margin-top: 0.15rem;">
+              <span>
+                I agree to receive automated SMS text alerts regarding my IRS return status (Submitted, Accepted, or Rejected). Consent is not a condition of purchase. Msg &amp; data rates may apply.
+              </span>
+            </label>
+
+            <!-- Checkout / Submit Button -->
+            <div>
+              <button type="button" class="btn btn-primary" id="btn-submit-mock-efile" style="width: 100%; padding: 0.85rem; font-size: 1rem;">
+                ⚡ Submit Electronic Filing ($15.00)
+              </button>
+            </div>
+
+            <!-- Live Status Simulation Panel -->
+            <div class="efile-simulation-status" id="efile-simulation-status">
+              <div style="font-weight: 800; font-size: 0.92rem; margin-bottom: 0.35rem;" id="efile-sim-title">
+                ⏳ Transmitting to IRS Modernized e-File (MeF)...
+              </div>
+              <div id="efile-sim-desc" style="font-size: 0.82rem; line-height: 1.45;">
+                Validating schema and encrypting tax data...
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div> <!-- Close filing-tab-content-area -->
+
+      <!-- Footer -->
+      <div style="padding: 1rem 1.75rem; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; color: #64748b;">
+        <span>🔒 Client-side verified. Zero data uploaded without your command.</span>
+        <button type="button" class="btn btn-sm btn-outline" id="btn-close-filing-bottom">
+          Close Guide
+        </button>
+      </div>
+
+    </div>
+  </div>
 
   <!-- Legal Advisory & Terms of Service Modal Dialog -->
   <div class="tos-modal-overlay" id="tos-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="tos-modal-title">
