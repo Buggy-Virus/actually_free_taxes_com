@@ -205,4 +205,45 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   console.log("✓ TS Test 4: Multi-State W-2s (CA + NY + NJ) verified correctly!");
 }
 
-console.log("\nAll 4 TypeScript test suites PASSED with 100% accuracy!\n");
+// Test Case 5: Additional Income Sources (1099-NEC Freelance + 1099-DIV Dividends + Interest)
+{
+  const state: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    w2s: [
+      {
+        id: 0,
+        employer: 'Fulltime Job',
+        ein: '12-3456789',
+        box1: 70000,
+        box2: 8000,
+        box3: 70000,
+        box4: 4340,
+        box5: 70000,
+        box6: 1015,
+        states: []
+      }
+    ],
+    otherIncome: {
+      interest: 1200,
+      sources: [
+        { id: 1, type: '1099-NEC', payer: 'Freelance Design', amount: 8000 },
+        { id: 2, type: '1099-DIV', payer: 'Vanguard ETF', amount: 1500 }
+      ]
+    },
+    adjustments: { studentLoan: 500, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 0 },
+    showAllArrows: true
+  };
+
+  const res = calculateTaxes(state);
+  // Total Gross Income: 70,000 (W2) + 1,200 (INT) + 8,000 (NEC) + 1,500 (DIV) = 80,700
+  assert.strictEqual(res.grossIncomeCalc.result, 80700, 'Gross income with extra income sources');
+  assert.strictEqual(res.agiCalc.result, 80200, 'AGI with $500 student loan interest adjustment');
+  assert(res.grossIncomeCalc.sourceFields.includes('input-income-source-1'), 'Sources include freelance input');
+  assert(res.grossIncomeCalc.sourceFields.includes('input-income-source-2'), 'Sources include dividends input');
+
+  console.log("✓ TS Test 5: Additional Income Sources (1099-NEC + 1099-DIV) verified correctly!");
+}
+
+console.log("\nAll 5 TypeScript test suites PASSED with 100% accuracy!\n");

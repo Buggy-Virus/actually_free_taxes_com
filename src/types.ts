@@ -32,8 +32,16 @@ export interface W2Data {
   states: StateTaxLine[];
 }
 
+export interface IncomeSource {
+  id: number;
+  type: '1099-NEC' | '1099-DIV' | '1099-INT' | '1099-MISC' | 'Other';
+  payer: string;
+  amount: number;
+}
+
 export interface OtherIncome {
   interest: number;
+  sources?: IncomeSource[];
 }
 
 export interface Adjustments {

@@ -58,8 +58,101 @@
     </div>
   </header>
 
-  <!-- Main Scrollable Content -->
-  <main class="main-content">
+  <div class="app-layout">
+
+    <!-- Left Sticky Table of Contents (Dynamically Updated) -->
+    <aside class="toc-sidebar" id="toc-sidebar">
+      <div class="toc-header">
+        <span class="toc-title">📑 Tax Navigator</span>
+        <span class="toc-badge" id="toc-section-counter">6 Parts</span>
+      </div>
+
+      <!-- Group: W-2 Forms (Updated dynamically as W-2s are added/removed) -->
+      <div class="toc-group">
+        <div class="toc-group-label">
+          <span>W-2 Statements</span>
+          <span class="toc-badge" id="toc-w2-count">1 W-2</span>
+        </div>
+        <div id="toc-w2-list" class="toc-group"></div>
+        <button type="button" class="toc-add-btn" id="btn-add-w2-toc">
+          <span>+</span> Add Another W-2
+        </button>
+      </div>
+
+      <!-- Group: Incomes & Adjustments (Updated dynamically as income sources are added/removed) -->
+      <div class="toc-group">
+        <div class="toc-group-label">
+          <span>Income Sources</span>
+          <span class="toc-badge" id="toc-income-count">1 Source</span>
+        </div>
+        <div id="toc-income-list" class="toc-group"></div>
+        <button type="button" class="toc-add-btn" id="btn-add-income-toc">
+          <span>+</span> Add Income Source
+        </button>
+        <a href="#section-other-inputs" class="toc-link" data-toc-target="section-other-inputs" style="margin-top: 0.25rem;">
+          <span>Part 2: Adjustments &amp; Credits</span>
+        </a>
+      </div>
+
+      <!-- Group: Calculation Engine -->
+      <div class="toc-group">
+        <div class="toc-group-label">
+          <span>Part 3: Calculations</span>
+        </div>
+        <a href="#calc-total-w2-wages" class="toc-link" data-toc-target="calc-total-w2-wages">
+          <span>Step 1: Total Wages</span>
+        </a>
+        <a href="#calc-gross-income" class="toc-link" data-toc-target="calc-gross-income">
+          <span>Step 2: Gross Income</span>
+        </a>
+        <a href="#calc-total-adjustments" class="toc-link" data-toc-target="calc-total-adjustments">
+          <span>Step 3: Adjustments</span>
+        </a>
+        <a href="#calc-agi" class="toc-link" data-toc-target="calc-agi">
+          <span>Step 4: AGI (Line 11)</span>
+        </a>
+        <a href="#calc-standard-deduction" class="toc-link" data-toc-target="calc-standard-deduction">
+          <span>Step 5: Deduction</span>
+        </a>
+        <a href="#calc-taxable-income" class="toc-link" data-toc-target="calc-taxable-income">
+          <span>Step 6: Taxable Income</span>
+        </a>
+        <a href="#calc-tax-before-credits" class="toc-link" data-toc-target="calc-tax-before-credits">
+          <span>Step 7: Tax Brackets</span>
+        </a>
+        <a href="#calc-total-credits" class="toc-link" data-toc-target="calc-total-credits">
+          <span>Step 8: Tax Credits</span>
+        </a>
+        <a href="#calc-total-tax-liability" class="toc-link" data-toc-target="calc-total-tax-liability">
+          <span>Step 9: Total Tax</span>
+        </a>
+        <a href="#calc-total-withholding" class="toc-link" data-toc-target="calc-total-withholding">
+          <span>Step 10: Withholding</span>
+        </a>
+        <a href="#calc-fica-breakdown" class="toc-link" data-toc-target="calc-fica-breakdown">
+          <span>Step 12: FICA Breakdown</span>
+        </a>
+      </div>
+
+      <!-- Group: Verdict & State & 1040 -->
+      <div class="toc-group">
+        <div class="toc-group-label">
+          <span>Results & Summary</span>
+        </div>
+        <a href="#calc-final-verdict" class="toc-link" data-toc-target="calc-final-verdict" style="color: #059669; font-weight: 700;">
+          <span>🎉 Final Tax Verdict</span>
+        </a>
+        <a href="#calc-state-tax-summary" class="toc-link" data-toc-target="calc-state-tax-summary">
+          <span>Part 5: State Taxes</span>
+        </a>
+        <a href="#section-1040-mirror" class="toc-link" data-toc-target="section-1040-mirror">
+          <span>Part 6: 1040 Mirror</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Scrollable Content -->
+    <main class="main-content">
 
     <!-- Hero Introduction -->
     <section class="hero-banner">
@@ -99,6 +192,11 @@
       </div>
     </section>
 
+    <!-- Dotted Divider: Part 1 -->
+    <div class="section-divider-dotted">
+      <span class="divider-badge">PART 1 • W-2 WAGE &amp; TAX STATEMENTS</span>
+    </div>
+
     <!-- SECTION 1: W-2 FORMS (THE TOP INPUTS) -->
     <section id="section-w2-inputs">
       <div class="w2-section-header">
@@ -122,17 +220,28 @@
       </button>
     </section>
 
+    <!-- Dotted Divider: Part 2 -->
+    <div class="section-divider-dotted">
+      <span class="divider-badge">PART 2 • ADJUSTMENTS &amp; OTHER INCOME SOURCES</span>
+    </div>
+
     <!-- SECTION 2: OTHER INCOME & ADJUSTMENTS (OPTIONAL ABOVE-THE-LINE) -->
     <section id="section-other-inputs">
       <div class="w2-section-header">
         <div class="w2-section-title">
           <h2>2. Adjustments & Other Common Incomes</h2>
         </div>
+        <button type="button" class="btn" id="btn-add-income-source" style="gap: 0.4rem;">
+          <span style="font-weight: 800; color: #0284c7;">+</span> Add Income Source (1099-NEC, 1099-DIV, etc.)
+        </button>
       </div>
+
+      <!-- Container for Dynamic Extra Income Sources (1099-NEC, 1099-DIV, etc.) -->
+      <div id="dynamic-income-sources-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem;"></div>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
         <!-- Taxable Interest -->
-        <div class="calc-card" style="padding: 1.25rem;">
+        <div class="calc-card" id="card-other-interest" style="padding: 1.25rem;">
           <div class="step-indicator">Form 1099-INT</div>
           <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Taxable Interest</div>
           <div class="w2-input-wrapper">
@@ -178,6 +287,11 @@
 
     <!-- SECTION 3: DOWNSTREAM STEP-BY-STEP CALCULATIONS & EQUATIONS -->
     <section class="step-container">
+      <!-- Dotted Divider: Part 3 -->
+      <div class="section-divider-dotted">
+        <span class="divider-badge">PART 3 • STEP-BY-STEP CALCULATION ENGINE</span>
+      </div>
+
       <div class="w2-section-header">
         <div class="w2-section-title">
           <h2>3. Step-by-Step Calculation Engine</h2>
@@ -349,6 +463,9 @@
         </div>
       </div>
 
+      <!-- Dotted Line: Entering Tax Brackets -->
+      <div class="step-divider-dotted"></div>
+
       <!-- Step 7: Marginal Tax Brackets Engine -->
       <div class="calc-card" id="calc-tax-before-credits">
         <div class="calc-card-header">
@@ -478,6 +595,11 @@
         </div>
       </div>
 
+      <!-- Dotted Divider: Part 4 -->
+      <div class="section-divider-dotted">
+        <span class="divider-badge">PART 4 • THE BOTTOM LINE: YOUR TAX VERDICT</span>
+      </div>
+
       <!-- Step 11: The Ultimate Verdict (Refund or Amount Owed) -->
       <div class="verdict-card is-refund" id="calc-final-verdict">
         <div class="verdict-header">🎉 Your Estimated Federal Tax Refund</div>
@@ -548,6 +670,11 @@
         </div>
       </div>
 
+      <!-- Dotted Divider: Part 5 -->
+      <div class="section-divider-dotted">
+        <span class="divider-badge">PART 5 • STATE &amp; LOCAL TAX ALLOCATION</span>
+      </div>
+
       <!-- Step 13: State & Local Taxes Summary -->
       <div class="calc-card" id="calc-state-tax-summary">
         <div class="calc-card-header">
@@ -597,8 +724,13 @@
         </div>
       </div>
 
+      <!-- Dotted Divider: Part 6 -->
+      <div class="section-divider-dotted">
+        <span class="divider-badge">PART 6 • OFFICIAL IRS FORM 1040 MIRROR</span>
+      </div>
+
       <!-- Step 14: Official Form 1040 Line-by-Line Mirror -->
-      <div class="calc-card">
+      <div class="calc-card" id="section-1040-mirror">
         <div class="calc-card-header">
           <div>
             <div class="step-indicator"><span class="step-number">14</span> IRS Form 1040 Mapping</div>
@@ -685,6 +817,7 @@
     </footer>
 
   </main>
+  </div> <!-- Close app-layout -->
 
   <!-- Application Logic (Compiled TypeScript) -->
   <script type="module" src="dist/app.js"></script>

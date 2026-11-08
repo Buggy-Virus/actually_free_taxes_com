@@ -226,17 +226,38 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
 
   // Additional Incomes
   const interestIncome = Number(state.otherIncome?.interest) || 0;
-  const otherIncomeTotal = interestIncome;
+  const extraSources = state.otherIncome?.sources || [];
+  const extraSourcesTotal = extraSources.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+  const otherIncomeTotal = interestIncome + extraSourcesTotal;
 
   // 2. Total Gross Income
   const grossIncome = totalW2Wages + otherIncomeTotal;
+  const grossIncomeSourceFields = [
+    'calc-total-w2-wages',
+    ...(interestIncome > 0 ? ['input-other-interest'] : []),
+    ...extraSources.filter(s => (Number(s.amount) || 0) > 0).map(s => `input-income-source-${s.id}`)
+  ];
+
+  const pluggedFormulaParts = [formatCurrency(totalW2Wages)];
+  if (interestIncome > 0) {
+    pluggedFormulaParts.push(formatCurrency(interestIncome));
+  }
+  extraSources.forEach(s => {
+    if ((Number(s.amount) || 0) > 0) {
+      pluggedFormulaParts.push(formatCurrency(Number(s.amount) || 0));
+    }
+  });
+  if (pluggedFormulaParts.length === 1) {
+    pluggedFormulaParts.push('$0');
+  }
+
   const grossIncomeCalc: CalculationResult = {
     result: grossIncome,
-    sourceFields: ['calc-total-w2-wages', ...(interestIncome > 0 ? ['input-other-interest'] : [])],
-    generalFormula: 'Gross Income = Total W-2 Wages + Other Incomes',
-    pluggedFormula: interestIncome > 0
-      ? `Gross Income = ${formatCurrency(totalW2Wages)} + ${formatCurrency(interestIncome)} = ${formatCurrency(grossIncome)}`
-      : `Gross Income = ${formatCurrency(totalW2Wages)} + $0 = ${formatCurrency(grossIncome)}`
+    sourceFields: grossIncomeSourceFields,
+    generalFormula: extraSources.length > 0 
+      ? 'Gross Income = Total W-2 Wages + Interest + Additional Incomes'
+      : 'Gross Income = Total W-2 Wages + Other Incomes',
+    pluggedFormula: `Gross Income = ${pluggedFormulaParts.join(' + ')} = ${formatCurrency(grossIncome)}`
   };
 
   // 3. Adjustments to Income (Above-the-line deductions)

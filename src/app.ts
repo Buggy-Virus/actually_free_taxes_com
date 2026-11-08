@@ -8,6 +8,7 @@ import {
   FilingStatus,
   W2Data,
   StateTaxLine,
+  IncomeSource,
   ConnectionDef,
   TaxCalculationSummary,
   BracketDetail,
@@ -100,7 +101,8 @@ class TaxApp {
       }
     ],
     otherIncome: {
-      interest: 0
+      interest: 0,
+      sources: []
     },
     adjustments: {
       studentLoan: 0,
@@ -116,6 +118,8 @@ class TaxApp {
   private arrowEngine: ArrowEngine | null = null;
   private w2Counter: number = 1;
   private stateLineCounter: number = 1;
+  private incomeSourceCounter: number = 1;
+  private scrollspyAttached: boolean = false;
 
   constructor() {
     this.init();
@@ -128,6 +132,7 @@ class TaxApp {
     }
 
     this.renderW2Forms();
+    this.renderIncomeSources();
     this.bindGlobalEvents();
     this.recalculateAndRender();
   }
@@ -163,12 +168,22 @@ class TaxApp {
       });
     }
 
-    // Bind all Add W-2 buttons (header, section header, and bottom banner)
-    ['btn-add-w2', 'btn-add-w2-section', 'btn-add-w2-bottom'].forEach(btnId => {
+    // Bind all Add W-2 buttons (header, section header, bottom banner, and left TOC button)
+    ['btn-add-w2', 'btn-add-w2-section', 'btn-add-w2-bottom', 'btn-add-w2-toc'].forEach(btnId => {
       const btn = document.getElementById(btnId);
       if (btn) {
         btn.addEventListener('click', () => {
           this.addW2();
+        });
+      }
+    });
+
+    // Bind all Add Income Source buttons (section header and left TOC button)
+    ['btn-add-income-source', 'btn-add-income-toc'].forEach(btnId => {
+      const btn = document.getElementById(btnId);
+      if (btn) {
+        btn.addEventListener('click', () => {
+          this.addIncomeSource();
         });
       }
     });
@@ -315,6 +330,121 @@ class TaxApp {
     w2.states = w2.states.filter(s => s.id !== stateLineId);
     this.renderW2Forms();
     this.recalculateAndRender();
+  }
+
+  public addIncomeSource(type: '1099-NEC' | '1099-DIV' | '1099-INT' | '1099-MISC' | 'Other' = '1099-NEC'): void {
+    if (!this.state.otherIncome.sources) {
+      this.state.otherIncome.sources = [];
+    }
+    const newId = this.incomeSourceCounter++;
+    const defaultPayer = type === '1099-NEC' ? 'Client Freelance Project' : (type === '1099-DIV' ? 'Vanguard Dividend Fund' : 'Consulting / Other');
+    const defaultAmount = type === '1099-NEC' ? 4500 : (type === '1099-DIV' ? 1200 : 2000);
+
+    this.state.otherIncome.sources.push({
+      id: newId,
+      type,
+      payer: defaultPayer,
+      amount: defaultAmount
+    });
+
+    this.renderIncomeSources();
+    this.recalculateAndRender();
+
+    const newCard = document.getElementById(`income-source-card-${newId}`);
+    if (newCard) {
+      newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      newCard.classList.add('flash-highlight');
+      setTimeout(() => newCard.classList.remove('flash-highlight'), 1200);
+    }
+  }
+
+  public removeIncomeSource(id: number): void {
+    if (!this.state.otherIncome.sources) return;
+    this.state.otherIncome.sources = this.state.otherIncome.sources.filter(s => s.id !== id);
+    this.renderIncomeSources();
+    this.recalculateAndRender();
+  }
+
+  private renderIncomeSources(): void {
+    const container = document.getElementById('dynamic-income-sources-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const sources = this.state.otherIncome.sources || [];
+
+    sources.forEach(src => {
+      const card = document.createElement('div');
+      card.className = 'calc-card';
+      card.id = `income-source-card-${src.id}`;
+      card.style.padding = '1.25rem';
+      card.style.position = 'relative';
+
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <select class="w2-input" id="select-income-type-${src.id}" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 700; width: auto; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px;">
+              <option value="1099-NEC" ${src.type === '1099-NEC' ? 'selected' : ''}>Form 1099-NEC (Freelance/Contract)</option>
+              <option value="1099-DIV" ${src.type === '1099-DIV' ? 'selected' : ''}>Form 1099-DIV (Dividends)</option>
+              <option value="1099-MISC" ${src.type === '1099-MISC' ? 'selected' : ''}>Form 1099-MISC (Prizes/Other)</option>
+              <option value="1099-INT" ${src.type === '1099-INT' ? 'selected' : ''}>Form 1099-INT (Interest)</option>
+              <option value="Other" ${src.type === 'Other' ? 'selected' : ''}>Other Taxable Income</option>
+            </select>
+          </div>
+          <button type="button" class="btn" id="btn-del-income-${src.id}" title="Remove this income source" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #ef4444; border-color: #fecaca; background: #fef2f2;">
+            ✕
+          </button>
+        </div>
+
+        <div style="margin-bottom: 0.5rem;">
+          <input type="text" class="w2-input" id="input-income-payer-${src.id}" value="${src.payer}" placeholder="Payer / Client Name" style="font-size: 0.85rem; font-weight: 600; padding: 0.35rem 0.6rem;">
+        </div>
+
+        <div class="w2-input-wrapper">
+          <span class="currency-symbol">$</span>
+          <input type="number" step="any" class="w2-input" id="input-income-source-${src.id}" value="${src.amount}" placeholder="0">
+        </div>
+        <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">
+          Reported on 1040 line &amp; feeds directly into Gross Income.
+        </div>
+      `;
+
+      container.appendChild(card);
+
+      const typeSelect = card.querySelector(`#select-income-type-${src.id}`) as HTMLSelectElement | null;
+      if (typeSelect) {
+        typeSelect.addEventListener('change', (e) => {
+          src.type = (e.target as HTMLSelectElement).value as any;
+          this.recalculateAndRender();
+        });
+      }
+
+      const payerInput = card.querySelector(`#input-income-payer-${src.id}`) as HTMLInputElement | null;
+      if (payerInput) {
+        payerInput.addEventListener('input', (e) => {
+          src.payer = (e.target as HTMLInputElement).value;
+          this.updateTableOfContents();
+        });
+      }
+
+      const amtInput = card.querySelector(`#input-income-source-${src.id}`) as HTMLInputElement | null;
+      if (amtInput) {
+        amtInput.addEventListener('input', (e) => {
+          src.amount = Number((e.target as HTMLInputElement).value) || 0;
+          this.recalculateAndRender();
+        });
+        amtInput.addEventListener('focus', () => this.arrowEngine?.setActiveSource(`input-income-source-${src.id}`));
+        amtInput.addEventListener('blur', () => this.arrowEngine?.clearActive());
+        amtInput.addEventListener('mouseenter', () => this.arrowEngine?.setActiveSource(`input-income-source-${src.id}`));
+        amtInput.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
+      }
+
+      const delBtn = card.querySelector(`#btn-del-income-${src.id}`) as HTMLButtonElement | null;
+      if (delBtn) {
+        delBtn.addEventListener('click', () => {
+          this.removeIncomeSource(src.id);
+        });
+      }
+    });
   }
 
   private loadPreset(presetName: string): void {
@@ -510,7 +640,9 @@ class TaxApp {
     setVal('input-other-interest', this.state.otherIncome.interest);
     setVal('input-children-count', this.state.dependents.childrenCount);
 
+    this.state.otherIncome.sources = [];
     this.renderW2Forms();
+    this.renderIncomeSources();
     this.recalculateAndRender();
   }
 
@@ -1017,6 +1149,18 @@ class TaxApp {
       });
     }
 
+    (this.state.otherIncome.sources || []).forEach(src => {
+      if (src.amount > 0) {
+        connections.push({
+          id: `conn-income-source-${src.id}-gross`,
+          sourceId: `input-income-source-${src.id}`,
+          targetId: 'calc-gross-income',
+          category: 'wages',
+          label: `${src.type} (${src.payer}) to Gross Income`
+        });
+      }
+    });
+
     // 4. Adjustments -> Total Adjustments
     connections.push({
       id: 'conn-adj-student-loan',
@@ -1195,6 +1339,8 @@ class TaxApp {
     if (this.arrowEngine) {
       this.arrowEngine.setConnections(connections);
     }
+
+    this.updateTableOfContents();
   }
 
   private renderStateTaxSummary(taxData: TaxCalculationSummary): void {
@@ -1366,6 +1512,161 @@ class TaxApp {
         owedRow.style.display = 'table-row';
         setLine('line-1040-37', taxData.finalResultCalc.result);
       }
+    }
+  }
+
+  private updateTableOfContents(): void {
+    const listContainer = document.getElementById('toc-w2-list');
+    const counterEl = document.getElementById('toc-w2-count');
+    if (listContainer) {
+      listContainer.innerHTML = '';
+
+      if (counterEl) {
+        counterEl.textContent = `${this.state.w2s.length} ${this.state.w2s.length === 1 ? 'W-2' : 'W-2s'}`;
+      }
+
+      this.state.w2s.forEach((w2, index) => {
+        const link = document.createElement('a');
+        link.className = 'toc-link is-w2';
+        link.href = `#w2-card-${w2.id}`;
+        link.dataset.tocTarget = `w2-card-${w2.id}`;
+
+        const statesLabel = (w2.states && w2.states.length > 0)
+          ? w2.states.map(s => s.state).join('/')
+          : 'Federal';
+
+        const empName = w2.employer ? (w2.employer.length > 13 ? w2.employer.substring(0, 13) + '…' : w2.employer) : `W-2 #${index + 1}`;
+
+        link.innerHTML = `
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            W-2 #${index + 1}: ${empName}
+          </span>
+          <span class="toc-badge">${statesLabel}</span>
+        `;
+
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const target = document.getElementById(`w2-card-${w2.id}`);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.add('flash-highlight');
+            setTimeout(() => target.classList.remove('flash-highlight'), 1200);
+          }
+        });
+
+        listContainer.appendChild(link);
+      });
+    }
+
+    // Dynamic Income Sources in Table of Contents
+    const incomeListContainer = document.getElementById('toc-income-list');
+    const incomeCounterEl = document.getElementById('toc-income-count');
+    if (incomeListContainer) {
+      incomeListContainer.innerHTML = '';
+      const sources = this.state.otherIncome.sources || [];
+      const totalIncomeCount = 1 + sources.length; // 1099-INT + dynamic sources
+
+      if (incomeCounterEl) {
+        incomeCounterEl.textContent = `${totalIncomeCount} ${totalIncomeCount === 1 ? 'Source' : 'Sources'}`;
+      }
+
+      // Default Taxable Interest
+      const intLink = document.createElement('a');
+      intLink.className = 'toc-link is-income';
+      intLink.href = '#card-other-interest';
+      intLink.dataset.tocTarget = 'card-other-interest';
+      intLink.innerHTML = `
+        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          Taxable Interest
+        </span>
+        <span class="toc-badge">1099-INT</span>
+      `;
+      intLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        const target = document.getElementById('card-other-interest');
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          target.classList.add('flash-highlight');
+          setTimeout(() => target.classList.remove('flash-highlight'), 1200);
+        }
+      });
+      incomeListContainer.appendChild(intLink);
+
+      // Extra Income Sources
+      sources.forEach((src, idx) => {
+        const link = document.createElement('a');
+        link.className = 'toc-link is-income';
+        link.href = `#income-source-card-${src.id}`;
+        link.dataset.tocTarget = `income-source-card-${src.id}`;
+
+        const name = src.payer ? (src.payer.length > 13 ? src.payer.substring(0, 13) + '…' : src.payer) : `Income #${idx + 1}`;
+
+        link.innerHTML = `
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            ${name}
+          </span>
+          <span class="toc-badge">${src.type}</span>
+        `;
+
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const target = document.getElementById(`income-source-card-${src.id}`);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.add('flash-highlight');
+            setTimeout(() => target.classList.remove('flash-highlight'), 1200);
+          }
+        });
+
+        incomeListContainer.appendChild(link);
+      });
+    }
+
+    this.bindTocScrollspy();
+  }
+
+  private bindTocScrollspy(): void {
+    document.querySelectorAll<HTMLAnchorElement>('.toc-link:not(.is-w2):not(.is-income)').forEach(link => {
+      link.onclick = (e) => {
+        e.preventDefault();
+        const targetId = link.dataset.tocTarget;
+        if (targetId) {
+          const target = document.getElementById(targetId);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.add('flash-highlight');
+            setTimeout(() => target.classList.remove('flash-highlight'), 1200);
+          }
+        }
+      };
+    });
+
+    if (!this.scrollspyAttached) {
+      this.scrollspyAttached = true;
+      window.addEventListener('scroll', () => {
+        const links = document.querySelectorAll<HTMLAnchorElement>('.toc-link');
+        const scrollPos = window.scrollY + 200;
+
+        let currentActive: HTMLAnchorElement | null = null;
+        for (const link of Array.from(links)) {
+          const targetId = link.dataset.tocTarget;
+          if (targetId) {
+            const el = document.getElementById(targetId);
+            if (el) {
+              const top = el.offsetTop;
+              const height = el.offsetHeight;
+              if (scrollPos >= top && scrollPos < top + height + 70) {
+                currentActive = link;
+              }
+            }
+          }
+        }
+
+        if (currentActive) {
+          links.forEach(l => l.classList.remove('active'));
+          (currentActive as HTMLAnchorElement).classList.add('active');
+        }
+      }, { passive: true });
     }
   }
 }
