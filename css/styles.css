@@ -817,22 +817,22 @@ body {
 .box-14 { left: 54.60%; top: 52.25%; width: 22.34%; height: 20.22%; }
 
 /* State Row 1 */
-.row1-box-15-state { left: 0.73%; top: 72.47%; width: 13.50%; height: 6.74%; }
-.row1-box-15-id    { left: 14.23%; top: 72.47%; width: 15.40%; height: 6.74%; }
+.row1-box-15-state { left: 0.73%; top: 72.47%; width: 6.20%; height: 6.74%; }
+.row1-box-15-id    { left: 6.93%; top: 72.47%; width: 22.71%; height: 6.74%; }
 .row1-box-16       { left: 29.64%; top: 72.47%; width: 15.77%; height: 6.74%; }
 .row1-box-17       { left: 45.40%; top: 72.47%; width: 14.45%; height: 6.74%; }
 .row1-box-18       { left: 59.85%; top: 72.47%; width: 15.77%; height: 6.74%; }
-.row1-box-19       { left: 75.62%; top: 72.47%; width: 11.61%; height: 6.74%; }
-.row1-box-20       { left: 87.23%; top: 72.47%; width: 12.04%; height: 6.74%; }
+.row1-box-19       { left: 75.62%; top: 72.47%; width: 14.45%; height: 6.74%; }
+.row1-box-20       { left: 90.07%; top: 72.47%; width: 9.20%; height: 6.74%; }
 
 /* State Row 2 */
-.row2-box-15-state { left: 0.73%; top: 79.21%; width: 13.50%; height: 6.74%; }
-.row2-box-15-id    { left: 14.23%; top: 79.21%; width: 15.40%; height: 6.74%; }
+.row2-box-15-state { left: 0.73%; top: 79.21%; width: 6.20%; height: 6.74%; }
+.row2-box-15-id    { left: 6.93%; top: 79.21%; width: 22.71%; height: 6.74%; }
 .row2-box-16       { left: 29.64%; top: 79.21%; width: 15.77%; height: 6.74%; }
 .row2-box-17       { left: 45.40%; top: 79.21%; width: 14.45%; height: 6.74%; }
 .row2-box-18       { left: 59.85%; top: 79.21%; width: 15.77%; height: 6.74%; }
-.row2-box-19       { left: 75.62%; top: 79.21%; width: 11.61%; height: 6.74%; }
-.row2-box-20       { left: 87.23%; top: 79.21%; width: 12.04%; height: 6.74%; }
+.row2-box-19       { left: 75.62%; top: 79.21%; width: 14.45%; height: 6.74%; }
+.row2-box-20       { left: 90.07%; top: 79.21%; width: 9.20%; height: 6.74%; }
 
 .btn-remove-row2-state {
   position: absolute;

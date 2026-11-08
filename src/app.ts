@@ -1653,9 +1653,12 @@ class TaxApp {
     });
   }
 
-  private renderStateOptions(selectedCode: string): string {
+  private renderStateOptions(selectedCode: string, shortDisplay: boolean = false): string {
     return US_STATES.map(s => {
       const isSel = s.code === selectedCode ? 'selected' : '';
+      if (shortDisplay) {
+        return `<option value="${s.code}" ${isSel} title="${s.code} — ${s.name}">${s.code}</option>`;
+      }
       const noTax = s.noIncomeTax ? ' (No Income Tax)' : '';
       return `<option value="${s.code}" ${isSel}>${s.code} — ${s.name}${noTax}</option>`;
     }).join('');
@@ -1936,8 +1939,8 @@ class TaxApp {
             <!-- STATE ROW 1: Boxes 15-20 (Overlaid directly on printed Row 1) -->
             <div class="w2-overlay-box row1-box-15-state box-highlight-state" id="w2-${w2.id}-state-${st0.id}-box15-state">
               <div class="w2-overlay-header">${renderRatingPill('w2-box15-state', true)}</div>
-              <select class="w2-overlay-select" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="state">
-                ${this.renderStateOptions(st0.state)}
+              <select class="w2-overlay-select" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="state" style="text-align: center; font-weight: 800;">
+                ${this.renderStateOptions(st0.state, true)}
               </select>
             </div>
 
@@ -1989,8 +1992,8 @@ class TaxApp {
             ${st1 ? `
               <div class="w2-overlay-box row2-box-15-state box-highlight-state" id="w2-${w2.id}-state-${st1.id}-box15-state">
                 <div class="w2-overlay-header">${renderRatingPill('w2-box15-state', true)}</div>
-                <select class="w2-overlay-select" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="state">
-                  ${this.renderStateOptions(st1.state)}
+                <select class="w2-overlay-select" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="state" style="text-align: center; font-weight: 800;">
+                  ${this.renderStateOptions(st1.state, true)}
                 </select>
               </div>
 
