@@ -20,6 +20,13 @@ export const TAX_CONSTANTS = {
             married_separate: 125000,
             head_of_household: 200000
         },
+        niitRate: 0.038,
+        niitThreshold: {
+            single: 200000,
+            married_joint: 250000,
+            married_separate: 125000,
+            head_of_household: 200000
+        },
         childTaxCreditPerChild: 2000,
         childTaxCreditRefundableMax: 1700,
         childTaxCreditPhaseout: {
@@ -65,6 +72,28 @@ export const TAX_CONSTANTS = {
                 { rate: 0.35, min: 243700, max: 609350 },
                 { rate: 0.37, min: 609350, max: Infinity }
             ]
+        },
+        ltcgBrackets: {
+            single: [
+                { rate: 0.00, min: 0, max: 47025 },
+                { rate: 0.15, min: 47025, max: 518900 },
+                { rate: 0.20, min: 518900, max: Infinity }
+            ],
+            married_joint: [
+                { rate: 0.00, min: 0, max: 94050 },
+                { rate: 0.15, min: 94050, max: 583750 },
+                { rate: 0.20, min: 583750, max: Infinity }
+            ],
+            married_separate: [
+                { rate: 0.00, min: 0, max: 47025 },
+                { rate: 0.15, min: 47025, max: 291850 },
+                { rate: 0.20, min: 291850, max: Infinity }
+            ],
+            head_of_household: [
+                { rate: 0.00, min: 0, max: 63000 },
+                { rate: 0.15, min: 63000, max: 551350 },
+                { rate: 0.20, min: 551350, max: Infinity }
+            ]
         }
     },
     2025: {
@@ -79,6 +108,13 @@ export const TAX_CONSTANTS = {
         medicareRate: 0.0145,
         additionalMedicareRate: 0.009,
         additionalMedicareThreshold: {
+            single: 200000,
+            married_joint: 250000,
+            married_separate: 125000,
+            head_of_household: 200000
+        },
+        niitRate: 0.038,
+        niitThreshold: {
             single: 200000,
             married_joint: 250000,
             married_separate: 125000,
@@ -129,10 +165,116 @@ export const TAX_CONSTANTS = {
                 { rate: 0.35, min: 250500, max: 626350 },
                 { rate: 0.37, min: 626350, max: Infinity }
             ]
+        },
+        ltcgBrackets: {
+            single: [
+                { rate: 0.00, min: 0, max: 48350 },
+                { rate: 0.15, min: 48350, max: 533400 },
+                { rate: 0.20, min: 533400, max: Infinity }
+            ],
+            married_joint: [
+                { rate: 0.00, min: 0, max: 96700 },
+                { rate: 0.15, min: 96700, max: 600050 },
+                { rate: 0.20, min: 600050, max: Infinity }
+            ],
+            married_separate: [
+                { rate: 0.00, min: 0, max: 48350 },
+                { rate: 0.15, min: 48350, max: 300000 },
+                { rate: 0.20, min: 300000, max: Infinity }
+            ],
+            head_of_household: [
+                { rate: 0.00, min: 0, max: 64750 },
+                { rate: 0.15, min: 64750, max: 566700 },
+                { rate: 0.20, min: 566700, max: Infinity }
+            ]
         }
     }
 };
+export const NYC_LOCAL_BRACKETS = {
+    single: [
+        { rate: 0.03078, min: 0, max: 12000 },
+        { rate: 0.03762, min: 12000, max: 25000 },
+        { rate: 0.03819, min: 25000, max: 50000 },
+        { rate: 0.03876, min: 50000, max: Infinity }
+    ],
+    married_joint: [
+        { rate: 0.03078, min: 0, max: 21600 },
+        { rate: 0.03762, min: 21600, max: 45000 },
+        { rate: 0.03819, min: 45000, max: 90000 },
+        { rate: 0.03876, min: 90000, max: Infinity }
+    ],
+    married_separate: [
+        { rate: 0.03078, min: 0, max: 12000 },
+        { rate: 0.03762, min: 12000, max: 25000 },
+        { rate: 0.03819, min: 25000, max: 50000 },
+        { rate: 0.03876, min: 50000, max: Infinity }
+    ],
+    head_of_household: [
+        { rate: 0.03078, min: 0, max: 14400 },
+        { rate: 0.03762, min: 14400, max: 30000 },
+        { rate: 0.03819, min: 30000, max: 60000 },
+        { rate: 0.03876, min: 60000, max: Infinity }
+    ]
+};
+function makeBrackets(singleBrackets, jointMultiplier = 2) {
+    const jointBrackets = singleBrackets.map(b => ({
+        rate: b.rate,
+        min: Math.round(b.min * jointMultiplier),
+        max: b.max === Infinity ? Infinity : Math.round(b.max * jointMultiplier)
+    }));
+    const hohBrackets = singleBrackets.map(b => ({
+        rate: b.rate,
+        min: Math.round(b.min * 1.4),
+        max: b.max === Infinity ? Infinity : Math.round(b.max * 1.4)
+    }));
+    return {
+        single: singleBrackets,
+        married_joint: jointBrackets,
+        married_separate: singleBrackets,
+        head_of_household: hohBrackets
+    };
+}
 export const STATE_TAX_RULES = {
+    AL: {
+        code: 'AL', name: 'Alabama', hasIncomeTax: true,
+        formResident: 'Form 40', formNonResident: 'Form 40NR',
+        standardDeduction: { single: 3000, married_joint: 8500, married_separate: 4250, head_of_household: 5200 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.02, min: 0, max: 500 },
+            { rate: 0.04, min: 500, max: 3000 },
+            { rate: 0.05, min: 3000, max: Infinity }
+        ], 2),
+        notes: 'Alabama progressive rates (2%–5%). Allows a state deduction for federal income tax paid.'
+    },
+    AK: {
+        code: 'AK', name: 'Alaska', hasIncomeTax: false,
+        formResident: 'No State Return Required', formNonResident: 'No State Return Required',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
+        isFlat: true, flatRate: 0,
+        notes: 'Alaska has no state personal income tax.'
+    },
+    AZ: {
+        code: 'AZ', name: 'Arizona', hasIncomeTax: true,
+        formResident: 'Form 140', formNonResident: 'Form 140NR',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: true, flatRate: 0.025,
+        reciprocalWith: ['CA', 'IN', 'OR', 'VA'],
+        notes: 'Arizona imposes a flat 2.5% individual income tax rate.'
+    },
+    AR: {
+        code: 'AR', name: 'Arkansas', hasIncomeTax: true,
+        formResident: 'Form AR1000F', formNonResident: 'Form AR1000NR',
+        standardDeduction: { single: 2340, married_joint: 4680, married_separate: 2340, head_of_household: 2340 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.02, min: 0, max: 5299 },
+            { rate: 0.03, min: 5299, max: 10599 },
+            { rate: 0.034, min: 10599, max: 15099 },
+            { rate: 0.039, min: 15099, max: Infinity }
+        ], 1),
+        notes: 'Arkansas top marginal rate is 3.9% for 2024.'
+    },
     CA: {
         code: 'CA',
         name: 'California',
@@ -194,58 +336,299 @@ export const STATE_TAX_RULES = {
         },
         notes: 'California Schedule S provides credit for taxes paid to other states.'
     },
-    NY: {
-        code: 'NY',
-        name: 'New York',
-        hasIncomeTax: true,
-        formResident: 'Form IT-201',
-        formNonResident: 'Form IT-203',
-        standardDeduction: {
-            single: 8000,
-            married_joint: 16050,
-            married_separate: 8000,
-            head_of_household: 11200
-        },
+    CO: {
+        code: 'CO', name: 'Colorado', hasIncomeTax: true,
+        formResident: 'Form DR 0104', formNonResident: 'Form DR 0104PN',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: true, flatRate: 0.044,
+        notes: 'Colorado imposes a flat 4.4% income tax starting from federal taxable income.'
+    },
+    CT: {
+        code: 'CT', name: 'Connecticut', hasIncomeTax: true,
+        formResident: 'Form CT-1040', formNonResident: 'Form CT-1040NR/PY',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
         isFlat: false,
-        brackets: {
-            single: [
-                { rate: 0.04, min: 0, max: 8500 },
-                { rate: 0.045, min: 8500, max: 11700 },
-                { rate: 0.0525, min: 11700, max: 13900 },
-                { rate: 0.055, min: 13900, max: 80650 },
-                { rate: 0.06, min: 80650, max: 215400 },
-                { rate: 0.0685, min: 215400, max: 1077550 },
-                { rate: 0.0965, min: 1077550, max: Infinity }
-            ],
-            married_joint: [
-                { rate: 0.04, min: 0, max: 17150 },
-                { rate: 0.045, min: 17150, max: 23600 },
-                { rate: 0.0525, min: 23600, max: 27900 },
-                { rate: 0.055, min: 27900, max: 161550 },
-                { rate: 0.06, min: 161550, max: 323200 },
-                { rate: 0.0685, min: 323200, max: 2155350 },
-                { rate: 0.0965, min: 2155350, max: Infinity }
-            ],
-            married_separate: [
-                { rate: 0.04, min: 0, max: 8500 },
-                { rate: 0.045, min: 8500, max: 11700 },
-                { rate: 0.0525, min: 11700, max: 13900 },
-                { rate: 0.055, min: 13900, max: 80650 },
-                { rate: 0.06, min: 80650, max: 215400 },
-                { rate: 0.0685, min: 215400, max: 1077550 },
-                { rate: 0.0965, min: 1077550, max: Infinity }
-            ],
-            head_of_household: [
-                { rate: 0.04, min: 0, max: 12800 },
-                { rate: 0.045, min: 12800, max: 17650 },
-                { rate: 0.0525, min: 17650, max: 20900 },
-                { rate: 0.055, min: 20900, max: 107650 },
-                { rate: 0.06, min: 107650, max: 269300 },
-                { rate: 0.0685, min: 269300, max: 1616450 },
-                { rate: 0.0965, min: 1616450, max: Infinity }
-            ]
-        },
-        notes: 'New York Form IT-112-R grants resident credit for taxes paid to other states.'
+        brackets: makeBrackets([
+            { rate: 0.02, min: 0, max: 10000 },
+            { rate: 0.045, min: 10000, max: 50000 },
+            { rate: 0.055, min: 50000, max: 100000 },
+            { rate: 0.06, min: 100000, max: 200000 },
+            { rate: 0.065, min: 200000, max: 250000 },
+            { rate: 0.069, min: 250000, max: 500000 },
+            { rate: 0.0699, min: 500000, max: Infinity }
+        ], 2),
+        notes: 'Connecticut progressive brackets (2.0% to 6.99%).'
+    },
+    DE: {
+        code: 'DE', name: 'Delaware', hasIncomeTax: true,
+        formResident: 'Form PIT-RES', formNonResident: 'Form PIT-NON',
+        standardDeduction: { single: 3250, married_joint: 6500, married_separate: 3250, head_of_household: 3250 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.00, min: 0, max: 2000 },
+            { rate: 0.022, min: 2000, max: 5000 },
+            { rate: 0.039, min: 5000, max: 10000 },
+            { rate: 0.048, min: 10000, max: 20000 },
+            { rate: 0.052, min: 20000, max: 25000 },
+            { rate: 0.0555, min: 25000, max: 60000 },
+            { rate: 0.066, min: 60000, max: Infinity }
+        ], 1),
+        notes: 'Delaware progressive rates (2.2% to 6.6% over $60,000).'
+    },
+    DC: {
+        code: 'DC', name: 'District of Columbia', hasIncomeTax: true,
+        formResident: 'Form D-40', formNonResident: 'Form D-30 (Unincorporated Business Franchise Tax)',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.04, min: 0, max: 10000 },
+            { rate: 0.06, min: 10000, max: 40000 },
+            { rate: 0.065, min: 40000, max: 60000 },
+            { rate: 0.085, min: 60000, max: 250000 },
+            { rate: 0.0925, min: 250000, max: 500000 },
+            { rate: 0.0975, min: 500000, max: 1000000 },
+            { rate: 0.1075, min: 1000000, max: Infinity }
+        ], 1),
+        notes: 'D.C. taxes residents on Form D-40 (4%–10.75%). Nonresidents are exempt from D-40 wage tax, but nonresident D.C. rental properties (gross rents > $12,000) are taxed via Form D-30 Unincorporated Business Franchise Tax (8.25% after 30% salary allowance and $5,000 exemption; $250 minimum tax).'
+    },
+    FL: {
+        code: 'FL', name: 'Florida', hasIncomeTax: false,
+        formResident: 'No State Return Required', formNonResident: 'No State Return Required',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
+        isFlat: true, flatRate: 0,
+        notes: 'Florida has no state personal income tax.'
+    },
+    GA: {
+        code: 'GA', name: 'Georgia', hasIncomeTax: true,
+        formResident: 'Form 500', formNonResident: 'Form 500 (Schedule 3)',
+        standardDeduction: { single: 12000, married_joint: 24000, married_separate: 12000, head_of_household: 12000 },
+        isFlat: true, flatRate: 0.0539,
+        notes: 'Georgia transitioned to a flat 5.39% income tax rate in 2024.'
+    },
+    HI: {
+        code: 'HI', name: 'Hawaii', hasIncomeTax: true,
+        formResident: 'Form N-11', formNonResident: 'Form N-15',
+        standardDeduction: { single: 4400, married_joint: 8800, married_separate: 4400, head_of_household: 6424 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.014, min: 0, max: 9600 },
+            { rate: 0.032, min: 9600, max: 14400 },
+            { rate: 0.055, min: 14400, max: 19200 },
+            { rate: 0.064, min: 19200, max: 24000 },
+            { rate: 0.068, min: 24000, max: 36000 },
+            { rate: 0.072, min: 36000, max: 48000 },
+            { rate: 0.076, min: 48000, max: 125000 },
+            { rate: 0.079, min: 125000, max: 175000 },
+            { rate: 0.0825, min: 175000, max: 225000 },
+            { rate: 0.09, min: 225000, max: 275000 },
+            { rate: 0.10, min: 275000, max: 325000 },
+            { rate: 0.11, min: 325000, max: Infinity }
+        ], 2),
+        notes: 'Hawaii has 12 progressive brackets from 1.4% to 11.0%.'
+    },
+    ID: {
+        code: 'ID', name: 'Idaho', hasIncomeTax: true,
+        formResident: 'Form 40', formNonResident: 'Form 43',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: true, flatRate: 0.05695,
+        notes: 'Idaho imposes a flat 5.695% income tax rate.'
+    },
+    IL: {
+        code: 'IL',
+        name: 'Illinois',
+        hasIncomeTax: true,
+        formResident: 'Form IL-1040',
+        formNonResident: 'Form IL-1040 Schedule NR',
+        standardDeduction: { single: 2775, married_joint: 5550, married_separate: 2775, head_of_household: 2775 },
+        isFlat: true,
+        flatRate: 0.0495,
+        reciprocalWith: ['IA', 'KY', 'MI', 'WI'],
+        notes: 'Flat 4.95% individual income tax rate. Reciprocal agreements with IA, KY, MI, WI.'
+    },
+    IN: {
+        code: 'IN', name: 'Indiana', hasIncomeTax: true,
+        formResident: 'Form IT-40', formNonResident: 'Form IT-40PNR',
+        standardDeduction: { single: 1000, married_joint: 2000, married_separate: 1000, head_of_household: 1000 },
+        isFlat: true, flatRate: 0.0305,
+        reciprocalWith: ['KY', 'MI', 'OH', 'PA', 'WI'],
+        notes: 'Indiana imposes a flat 3.05% state income tax rate plus county income taxes.'
+    },
+    IA: {
+        code: 'IA', name: 'Iowa', hasIncomeTax: true,
+        formResident: 'Form IA 1040', formNonResident: 'Form IA 1040 (Schedule IA 126)',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.044, min: 0, max: 6210 },
+            { rate: 0.0482, min: 6210, max: 31050 },
+            { rate: 0.057, min: 31050, max: Infinity }
+        ], 2),
+        reciprocalWith: ['IL'],
+        notes: 'Iowa progressive brackets (4.4% to 5.7% in 2024; 3.8% flat starting 2025). Reciprocal with IL.'
+    },
+    KS: {
+        code: 'KS', name: 'Kansas', hasIncomeTax: true,
+        formResident: 'Form K-40', formNonResident: 'Form K-40 (Schedule S)',
+        standardDeduction: { single: 3605, married_joint: 8240, married_separate: 4120, head_of_household: 6180 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.052, min: 0, max: 23000 },
+            { rate: 0.0558, min: 23000, max: Infinity }
+        ], 2),
+        notes: 'Kansas uses two brackets (5.2% and 5.58%) for 2024.'
+    },
+    KY: {
+        code: 'KY', name: 'Kentucky', hasIncomeTax: true,
+        formResident: 'Form 740', formNonResident: 'Form 740-NP',
+        standardDeduction: { single: 3160, married_joint: 6320, married_separate: 3160, head_of_household: 3160 },
+        isFlat: true, flatRate: 0.04,
+        reciprocalWith: ['IL', 'IN', 'MI', 'OH', 'VA', 'WV', 'WI'],
+        notes: 'Kentucky imposes a flat 4.0% income tax rate.'
+    },
+    LA: {
+        code: 'LA', name: 'Louisiana', hasIncomeTax: true,
+        formResident: 'Form IT-540', formNonResident: 'Form IT-540B',
+        standardDeduction: { single: 4500, married_joint: 9000, married_separate: 4500, head_of_household: 9000 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.0185, min: 0, max: 12500 },
+            { rate: 0.035, min: 12500, max: 50000 },
+            { rate: 0.0425, min: 50000, max: Infinity }
+        ], 2),
+        notes: 'Louisiana 2024 brackets (1.85%, 3.5%, 4.25%; transitioning to 3.0% flat in 2025).'
+    },
+    ME: {
+        code: 'ME', name: 'Maine', hasIncomeTax: true,
+        formResident: 'Form 1040ME', formNonResident: 'Form 1040ME (Schedule NR)',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.058, min: 0, max: 26050 },
+            { rate: 0.0675, min: 26050, max: 61600 },
+            { rate: 0.0715, min: 61600, max: Infinity }
+        ], 2),
+        notes: 'Maine progressive rates (5.8%, 6.75%, 7.15%).'
+    },
+    MD: {
+        code: 'MD', name: 'Maryland', hasIncomeTax: true,
+        formResident: 'Form 502', formNonResident: 'Form 505',
+        standardDeduction: { single: 2550, married_joint: 5150, married_separate: 2550, head_of_household: 5150 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.02, min: 0, max: 1000 },
+            { rate: 0.03, min: 1000, max: 2000 },
+            { rate: 0.04, min: 2000, max: 3000 },
+            { rate: 0.0475, min: 3000, max: 100000 },
+            { rate: 0.05, min: 100000, max: 125000 },
+            { rate: 0.0525, min: 125000, max: 150000 },
+            { rate: 0.055, min: 150000, max: 250000 },
+            { rate: 0.0575, min: 250000, max: Infinity }
+        ], 1.2),
+        reciprocalWith: ['DC', 'PA', 'VA', 'WV'],
+        notes: 'Maryland state brackets (2%–5.75%) plus mandatory county local income tax (2.25%–3.20%).'
+    },
+    MA: {
+        code: 'MA',
+        name: 'Massachusetts',
+        hasIncomeTax: true,
+        formResident: 'Form 1',
+        formNonResident: 'Form 1-NR/PY',
+        standardDeduction: { single: 4400, married_joint: 8800, married_separate: 4400, head_of_household: 6800 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.05, min: 0, max: 1053750 },
+            { rate: 0.09, min: 1053750, max: Infinity }
+        ], 1),
+        notes: 'Flat 5.0% income tax rate plus 4% Fair Share surtax (9% total) on income over $1,053,750.'
+    },
+    MI: {
+        code: 'MI', name: 'Michigan', hasIncomeTax: true,
+        formResident: 'Form MI-1040', formNonResident: 'Form MI-1040 (Schedule NR)',
+        standardDeduction: { single: 5600, married_joint: 11200, married_separate: 5600, head_of_household: 5600 },
+        isFlat: true, flatRate: 0.0425,
+        reciprocalWith: ['IL', 'IN', 'KY', 'MN', 'OH', 'WI'],
+        notes: 'Michigan imposes a flat 4.25% income tax rate.'
+    },
+    MN: {
+        code: 'MN', name: 'Minnesota', hasIncomeTax: true,
+        formResident: 'Form M1', formNonResident: 'Form M1 (Schedule M1NR)',
+        standardDeduction: { single: 14575, married_joint: 29150, married_separate: 14575, head_of_household: 21850 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.0535, min: 0, max: 31690 },
+            { rate: 0.068, min: 31690, max: 104090 },
+            { rate: 0.0785, min: 104090, max: 193240 },
+            { rate: 0.0985, min: 193240, max: Infinity }
+        ], 1.46),
+        reciprocalWith: ['MI', 'ND'],
+        notes: 'Minnesota progressive brackets (5.35% to 9.85%).'
+    },
+    MS: {
+        code: 'MS', name: 'Mississippi', hasIncomeTax: true,
+        formResident: 'Form 80-105', formNonResident: 'Form 80-205',
+        standardDeduction: { single: 2300, married_joint: 4600, married_separate: 2300, head_of_household: 3400 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.00, min: 0, max: 10000 },
+            { rate: 0.047, min: 10000, max: Infinity }
+        ], 1),
+        notes: 'Mississippi exempts the first $10,000 of taxable income and taxes excess at 4.7% in 2024.'
+    },
+    MO: {
+        code: 'MO', name: 'Missouri', hasIncomeTax: true,
+        formResident: 'Form MO-1040', formNonResident: 'Form MO-1040 (Form MO-NRI)',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.00, min: 0, max: 1273 },
+            { rate: 0.02, min: 1273, max: 2546 },
+            { rate: 0.025, min: 2546, max: 3819 },
+            { rate: 0.03, min: 3819, max: 5092 },
+            { rate: 0.035, min: 5092, max: 6365 },
+            { rate: 0.04, min: 6365, max: 7638 },
+            { rate: 0.045, min: 7638, max: 8911 },
+            { rate: 0.048, min: 8911, max: Infinity }
+        ], 1),
+        notes: 'Missouri top marginal rate is 4.8% for 2024.'
+    },
+    MT: {
+        code: 'MT', name: 'Montana', hasIncomeTax: true,
+        formResident: 'Form 2', formNonResident: 'Form 2 (Nonresident Schedule)',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.047, min: 0, max: 20500 },
+            { rate: 0.059, min: 20500, max: Infinity }
+        ], 2),
+        reciprocalWith: ['ND'],
+        notes: 'Montana uses two brackets (4.7% and 5.9%) starting from federal taxable income in 2024.'
+    },
+    NE: {
+        code: 'NE', name: 'Nebraska', hasIncomeTax: true,
+        formResident: 'Form 1040N', formNonResident: 'Form 1040N (Schedule III)',
+        standardDeduction: { single: 8250, married_joint: 16500, married_separate: 8250, head_of_household: 12150 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.0246, min: 0, max: 3700 },
+            { rate: 0.0351, min: 3700, max: 22170 },
+            { rate: 0.0501, min: 22170, max: 35730 },
+            { rate: 0.0584, min: 35730, max: Infinity }
+        ], 2),
+        notes: 'Nebraska progressive brackets (2.46% to 5.84% in 2024).'
+    },
+    NV: {
+        code: 'NV', name: 'Nevada', hasIncomeTax: false,
+        formResident: 'No State Return Required', formNonResident: 'No State Return Required',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
+        isFlat: true, flatRate: 0,
+        notes: 'Nevada has no state personal income tax.'
+    },
+    NH: {
+        code: 'NH', name: 'New Hampshire', hasIncomeTax: false,
+        formResident: 'No State Wage Return Required', formNonResident: 'No State Return Required',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
+        isFlat: true, flatRate: 0,
+        notes: 'New Hampshire has no tax on W-2 wages (and repealed its Interest & Dividends tax after 2024).'
     },
     NJ: {
         code: 'NJ',
@@ -302,6 +685,142 @@ export const STATE_TAX_RULES = {
         reciprocalWith: ['PA'],
         notes: 'NJ and PA have a reciprocal agreement: W-2 wages are taxed only in your resident state. Schedule NJ-CO provides credit for other states (such as NY).'
     },
+    NM: {
+        code: 'NM', name: 'New Mexico', hasIncomeTax: true,
+        formResident: 'Form PIT-1', formNonResident: 'Form PIT-1 (Schedule PIT-B)',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.017, min: 0, max: 5500 },
+            { rate: 0.032, min: 5500, max: 11000 },
+            { rate: 0.047, min: 11000, max: 16000 },
+            { rate: 0.049, min: 16000, max: 210000 },
+            { rate: 0.059, min: 210000, max: Infinity }
+        ], 1.5),
+        notes: 'New Mexico progressive brackets (1.7% to 5.9%).'
+    },
+    NY: {
+        code: 'NY',
+        name: 'New York',
+        hasIncomeTax: true,
+        formResident: 'Form IT-201',
+        formNonResident: 'Form IT-203',
+        standardDeduction: {
+            single: 8000,
+            married_joint: 16050,
+            married_separate: 8000,
+            head_of_household: 11200
+        },
+        isFlat: false,
+        brackets: {
+            single: [
+                { rate: 0.04, min: 0, max: 8500 },
+                { rate: 0.045, min: 8500, max: 11700 },
+                { rate: 0.0525, min: 11700, max: 13900 },
+                { rate: 0.055, min: 13900, max: 80650 },
+                { rate: 0.06, min: 80650, max: 215400 },
+                { rate: 0.0685, min: 215400, max: 1077550 },
+                { rate: 0.0965, min: 1077550, max: 5000000 },
+                { rate: 0.103, min: 5000000, max: 25000000 },
+                { rate: 0.109, min: 25000000, max: Infinity }
+            ],
+            married_joint: [
+                { rate: 0.04, min: 0, max: 17150 },
+                { rate: 0.045, min: 17150, max: 23600 },
+                { rate: 0.0525, min: 23600, max: 27900 },
+                { rate: 0.055, min: 27900, max: 161550 },
+                { rate: 0.06, min: 161550, max: 323200 },
+                { rate: 0.0685, min: 323200, max: 2155350 },
+                { rate: 0.0965, min: 2155350, max: 5000000 },
+                { rate: 0.103, min: 5000000, max: 25000000 },
+                { rate: 0.109, min: 25000000, max: Infinity }
+            ],
+            married_separate: [
+                { rate: 0.04, min: 0, max: 8500 },
+                { rate: 0.045, min: 8500, max: 11700 },
+                { rate: 0.0525, min: 11700, max: 13900 },
+                { rate: 0.055, min: 13900, max: 80650 },
+                { rate: 0.06, min: 80650, max: 215400 },
+                { rate: 0.0685, min: 215400, max: 1077550 },
+                { rate: 0.0965, min: 1077550, max: 5000000 },
+                { rate: 0.103, min: 5000000, max: 25000000 },
+                { rate: 0.109, min: 25000000, max: Infinity }
+            ],
+            head_of_household: [
+                { rate: 0.04, min: 0, max: 12800 },
+                { rate: 0.045, min: 12800, max: 17650 },
+                { rate: 0.0525, min: 17650, max: 20900 },
+                { rate: 0.055, min: 20900, max: 107650 },
+                { rate: 0.06, min: 107650, max: 269300 },
+                { rate: 0.0685, min: 269300, max: 1616450 },
+                { rate: 0.0965, min: 1616450, max: 5000000 },
+                { rate: 0.103, min: 5000000, max: 25000000 },
+                { rate: 0.109, min: 25000000, max: Infinity }
+            ]
+        },
+        notes: 'New York Form IT-201 includes NY State tax (4%–10.9%), Form IT-196 NY Itemized Deductions, NYC Municipal Resident Tax (3.078%–3.876%), and Form IT-112-R Resident Credit.'
+    },
+    NC: {
+        code: 'NC', name: 'North Carolina', hasIncomeTax: true,
+        formResident: 'Form D-400', formNonResident: 'Form D-400 (Schedule PN)',
+        standardDeduction: { single: 12750, married_joint: 25500, married_separate: 12750, head_of_household: 19125 },
+        isFlat: true, flatRate: 0.045,
+        notes: 'North Carolina imposes a flat 4.5% personal income tax rate for 2024 (4.25% in 2025).'
+    },
+    ND: {
+        code: 'ND', name: 'North Dakota', hasIncomeTax: true,
+        formResident: 'Form ND-1', formNonResident: 'Form ND-1 (Schedule ND-1NR)',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.00, min: 0, max: 44725 },
+            { rate: 0.0195, min: 44725, max: 225975 },
+            { rate: 0.025, min: 225975, max: Infinity }
+        ], 1.67),
+        reciprocalWith: ['MN', 'MT'],
+        notes: 'North Dakota exempts the first $44,725 of single taxable income and caps rates at 2.5%.'
+    },
+    OH: {
+        code: 'OH', name: 'Ohio', hasIncomeTax: true,
+        formResident: 'Form IT 1040', formNonResident: 'Form IT 1040 (Schedule IT NRC)',
+        standardDeduction: { single: 2400, married_joint: 4800, married_separate: 2400, head_of_household: 2400 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.00, min: 0, max: 26050 },
+            { rate: 0.0275, min: 26050, max: 100000 },
+            { rate: 0.035, min: 100000, max: Infinity }
+        ], 1),
+        reciprocalWith: ['IN', 'KY', 'MI', 'PA', 'WV'],
+        notes: 'Ohio exempts the first $26,050 of income and has two brackets (2.75% and 3.5%).'
+    },
+    OK: {
+        code: 'OK', name: 'Oklahoma', hasIncomeTax: true,
+        formResident: 'Form 511', formNonResident: 'Form 511NR',
+        standardDeduction: { single: 6350, married_joint: 12700, married_separate: 6350, head_of_household: 9350 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.0025, min: 0, max: 1000 },
+            { rate: 0.0075, min: 1000, max: 2500 },
+            { rate: 0.0175, min: 2500, max: 3750 },
+            { rate: 0.0275, min: 3750, max: 4900 },
+            { rate: 0.0375, min: 4900, max: 7200 },
+            { rate: 0.0475, min: 7200, max: Infinity }
+        ], 2),
+        notes: 'Oklahoma progressive brackets (0.25% to 4.75%).'
+    },
+    OR: {
+        code: 'OR', name: 'Oregon', hasIncomeTax: true,
+        formResident: 'Form OR-40', formNonResident: 'Form OR-40-N',
+        standardDeduction: { single: 2745, married_joint: 5495, married_separate: 2745, head_of_household: 4420 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.0475, min: 0, max: 4300 },
+            { rate: 0.0675, min: 4300, max: 10750 },
+            { rate: 0.0875, min: 10750, max: 125000 },
+            { rate: 0.099, min: 125000, max: Infinity }
+        ], 2),
+        notes: 'Oregon progressive brackets (4.75% to 9.9%).'
+    },
     PA: {
         code: 'PA',
         name: 'Pennsylvania',
@@ -314,38 +833,128 @@ export const STATE_TAX_RULES = {
         reciprocalWith: ['NJ', 'MD', 'OH', 'VA', 'WV', 'IN'],
         notes: 'Pennsylvania imposes a flat 3.07% tax rate with no standard deduction. Reciprocal with NJ, MD, OH, VA, WV, IN.'
     },
-    IL: {
-        code: 'IL',
-        name: 'Illinois',
-        hasIncomeTax: true,
-        formResident: 'Form IL-1040',
-        formNonResident: 'Form IL-1040 Schedule NR',
-        standardDeduction: { single: 2775, married_joint: 5550, married_separate: 2775, head_of_household: 2775 },
-        isFlat: true,
-        flatRate: 0.0495,
-        reciprocalWith: ['IA', 'KY', 'MI', 'WI'],
-        notes: 'Flat 4.95% individual income tax rate. Reciprocal agreements with IA, KY, MI, WI.'
+    RI: {
+        code: 'RI', name: 'Rhode Island', hasIncomeTax: true,
+        formResident: 'Form RI-1040', formNonResident: 'Form RI-1040NR',
+        standardDeduction: { single: 10550, married_joint: 21150, married_separate: 10575, head_of_household: 15850 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.0375, min: 0, max: 77450 },
+            { rate: 0.0475, min: 77450, max: 176050 },
+            { rate: 0.0599, min: 176050, max: Infinity }
+        ], 1),
+        notes: 'Rhode Island progressive brackets (3.75%, 4.75%, 5.99%).'
     },
-    MA: {
-        code: 'MA',
-        name: 'Massachusetts',
-        hasIncomeTax: true,
-        formResident: 'Form 1',
-        formNonResident: 'Form 1-NR/PY',
-        standardDeduction: { single: 4400, married_joint: 8800, married_separate: 4400, head_of_household: 6800 },
-        isFlat: true,
-        flatRate: 0.05,
-        notes: 'Flat 5.0% income tax rate on earned wages.'
+    SC: {
+        code: 'SC', name: 'South Carolina', hasIncomeTax: true,
+        formResident: 'Form SC1040', formNonResident: 'Form SC1040 (Schedule NR)',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.00, min: 0, max: 3460 },
+            { rate: 0.03, min: 3460, max: 17330 },
+            { rate: 0.062, min: 17330, max: Infinity }
+        ], 1),
+        notes: 'South Carolina top marginal rate is 6.2% for 2024.'
     },
-    // NO INCOME TAX ON WAGES:
-    TX: { code: 'TX', name: 'Texas', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Texas has no state personal income tax.' },
-    FL: { code: 'FL', name: 'Florida', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Florida has no state personal income tax.' },
-    WA: { code: 'WA', name: 'Washington', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Washington has no state wage income tax.' },
-    NV: { code: 'NV', name: 'Nevada', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Nevada has no state personal income tax.' },
-    TN: { code: 'TN', name: 'Tennessee', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Tennessee has no state personal wage income tax.' },
-    WY: { code: 'WY', name: 'Wyoming', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Wyoming has no state personal income tax.' },
-    SD: { code: 'SD', name: 'South Dakota', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'South Dakota has no state personal income tax.' },
-    AK: { code: 'AK', name: 'Alaska', hasIncomeTax: false, formResident: 'No State Return Required', formNonResident: 'No State Return Required', standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 }, isFlat: true, flatRate: 0, notes: 'Alaska has no state personal income tax.' }
+    SD: {
+        code: 'SD', name: 'South Dakota', hasIncomeTax: false,
+        formResident: 'No State Return Required', formNonResident: 'No State Return Required',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
+        isFlat: true, flatRate: 0,
+        notes: 'South Dakota has no state personal income tax.'
+    },
+    TN: {
+        code: 'TN', name: 'Tennessee', hasIncomeTax: false,
+        formResident: 'No State Return Required', formNonResident: 'No State Return Required',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
+        isFlat: true, flatRate: 0,
+        notes: 'Tennessee has no state personal wage income tax.'
+    },
+    TX: {
+        code: 'TX', name: 'Texas', hasIncomeTax: false,
+        formResident: 'No State Return Required', formNonResident: 'No State Return Required',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
+        isFlat: true, flatRate: 0,
+        notes: 'Texas has no state personal income tax.'
+    },
+    UT: {
+        code: 'UT', name: 'Utah', hasIncomeTax: true,
+        formResident: 'Form TC-40', formNonResident: 'Form TC-40 (TC-40B)',
+        standardDeduction: { single: 14600, married_joint: 29200, married_separate: 14600, head_of_household: 21900 },
+        isFlat: true, flatRate: 0.0455,
+        notes: 'Utah imposes a flat 4.55% personal income tax rate.'
+    },
+    VT: {
+        code: 'VT', name: 'Vermont', hasIncomeTax: true,
+        formResident: 'Form IN-111', formNonResident: 'Form IN-111 (Schedule IN-113)',
+        standardDeduction: { single: 7000, married_joint: 14050, married_separate: 7000, head_of_household: 10550 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.0335, min: 0, max: 45400 },
+            { rate: 0.066, min: 45400, max: 110050 },
+            { rate: 0.076, min: 110050, max: 229550 },
+            { rate: 0.0875, min: 229550, max: Infinity }
+        ], 1.67),
+        notes: 'Vermont progressive brackets (3.35% to 8.75%).'
+    },
+    VA: {
+        code: 'VA', name: 'Virginia', hasIncomeTax: true,
+        formResident: 'Form 760', formNonResident: 'Form 763',
+        standardDeduction: { single: 8500, married_joint: 17000, married_separate: 8500, head_of_household: 8500 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.02, min: 0, max: 3000 },
+            { rate: 0.03, min: 3000, max: 5000 },
+            { rate: 0.05, min: 5000, max: 17000 },
+            { rate: 0.0575, min: 17000, max: Infinity }
+        ], 1),
+        reciprocalWith: ['DC', 'KY', 'MD', 'PA', 'WV'],
+        notes: 'Virginia progressive brackets up to 5.75% over $17,000. Reciprocal with DC, KY, MD, PA, WV.'
+    },
+    WA: {
+        code: 'WA', name: 'Washington', hasIncomeTax: false,
+        formResident: 'No State Wage Return Required', formNonResident: 'No State Return Required',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
+        isFlat: true, flatRate: 0,
+        notes: 'Washington has no state wage income tax (imposes a 7% excise tax on long-term capital gains over $270,000).'
+    },
+    WV: {
+        code: 'WV', name: 'West Virginia', hasIncomeTax: true,
+        formResident: 'Form IT-140', formNonResident: 'Form IT-140 (ScheduleNR)',
+        standardDeduction: { single: 2000, married_joint: 4000, married_separate: 2000, head_of_household: 2000 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.0236, min: 0, max: 10000 },
+            { rate: 0.0315, min: 10000, max: 25000 },
+            { rate: 0.0354, min: 25000, max: 40000 },
+            { rate: 0.0472, min: 40000, max: 60000 },
+            { rate: 0.0512, min: 60000, max: Infinity }
+        ], 1),
+        reciprocalWith: ['KY', 'MD', 'OH', 'PA', 'VA'],
+        notes: 'West Virginia progressive brackets (2.36% to 5.12%). Reciprocal with KY, MD, OH, PA, VA.'
+    },
+    WI: {
+        code: 'WI', name: 'Wisconsin', hasIncomeTax: true,
+        formResident: 'Form 1', formNonResident: 'Form 1NPR',
+        standardDeduction: { single: 13230, married_joint: 24490, married_separate: 11640, head_of_household: 17090 },
+        isFlat: false,
+        brackets: makeBrackets([
+            { rate: 0.035, min: 0, max: 14320 },
+            { rate: 0.044, min: 14320, max: 28640 },
+            { rate: 0.053, min: 28640, max: 315310 },
+            { rate: 0.0765, min: 315310, max: Infinity }
+        ], 1.33),
+        reciprocalWith: ['IL', 'IN', 'KY', 'MI'],
+        notes: 'Wisconsin progressive brackets (3.5% to 7.65%). Reciprocal with IL, IN, KY, MI.'
+    },
+    WY: {
+        code: 'WY', name: 'Wyoming', hasIncomeTax: false,
+        formResident: 'No State Return Required', formNonResident: 'No State Return Required',
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
+        isFlat: true, flatRate: 0,
+        notes: 'Wyoming has no state personal income tax.'
+    }
 };
 export function getStateTaxRule(code) {
     const upper = (code || '').toUpperCase().trim();
@@ -476,24 +1085,78 @@ export function calculateTaxes(state) {
     };
     // Schedule C Business Expenses
     const scheduleCExpenses = Math.max(0, Number(state.otherIncome?.scheduleCExpenses) || 0);
-    // Additional Incomes
+    // Additional Incomes (including Accrued Interest offset on 1099-INT and Qualified Dividends on 1099-DIV)
     const interestIncome = Number(state.otherIncome?.interest) || 0;
     const extraSources = state.otherIncome?.sources || [];
     let extraSourcesTotal = 0;
+    let qualifiedDividendsTotal = 0;
+    let net1099InterestTotal = 0;
+    let total1099Dividends = 0;
     extraSources.forEach(s => {
         let amt = Number(s.amount) || 0;
         if (s.type === '1099-NEC' && scheduleCExpenses > 0) {
             amt = Math.max(0, amt - scheduleCExpenses);
         }
+        else if (s.type === '1099-INT') {
+            const accrued = Math.max(0, Number(s.accruedInterestPaid) || 0);
+            amt = Math.max(0, amt - accrued);
+            net1099InterestTotal += amt;
+        }
+        else if (s.type === '1099-DIV') {
+            total1099Dividends += amt;
+            const qDiv = Math.min(amt, Math.max(0, Number(s.qualifiedDividends) || 0));
+            qualifiedDividendsTotal += qDiv;
+        }
         extraSourcesTotal += amt;
     });
-    const otherIncomeTotal = interestIncome + extraSourcesTotal + allowableCapitalNet;
+    // Schedule E Rental Real Estate (Schedule 1, Line 5 & Form 8582 Passive Activity Loss Rules)
+    const rentalGross = Math.max(0, Number(state.otherIncome?.scheduleERental?.grossRents) || 0);
+    const rentalExpenses = Math.max(0, Number(state.otherIncome?.scheduleERental?.expenses) || 0);
+    const rentalDepreciation = Math.max(0, Number(state.otherIncome?.scheduleERental?.depreciation) || 0);
+    const rentalPropertyState = (state.otherIncome?.scheduleERental?.propertyState || '').toUpperCase().trim();
+    const hasScheduleEInput = rentalGross > 0 || rentalExpenses > 0 || rentalDepreciation > 0;
+    const rentalNetBeforePal = rentalGross - rentalExpenses - rentalDepreciation;
+    // Compute MAGI before passive rental loss for Form 8582 $25,000 active participation allowance phaseout ($100k–$150k)
+    const studentLoanInterest = Math.min(2500, Number(state.adjustments?.studentLoan) || 0);
+    const iraDeduction = Number(state.adjustments?.ira) || 0;
+    const hsaDeduction = Number(state.adjustments?.hsa) || 0;
+    const totalAdjustments = studentLoanInterest + iraDeduction + hsaDeduction;
+    const magiBeforeRental = Math.max(0, totalW2Wages + interestIncome + extraSourcesTotal + allowableCapitalNet - totalAdjustments);
+    let allowableRentalNet = rentalNetBeforePal;
+    let disallowedPassiveLoss = 0;
+    if (rentalNetBeforePal < 0) {
+        const maxPalAllowance = filingStatus === 'married_separate' ? 12500 : 25000;
+        const palPhaseoutStart = filingStatus === 'married_separate' ? 50000 : 100000;
+        const palReduction = Math.max(0, (magiBeforeRental - palPhaseoutStart) * 0.5);
+        const allowedLossCap = Math.max(0, maxPalAllowance - palReduction);
+        allowableRentalNet = -Math.min(Math.abs(rentalNetBeforePal), allowedLossCap);
+        disallowedPassiveLoss = Math.abs(rentalNetBeforePal) - Math.abs(allowableRentalNet);
+    }
+    const scheduleECalc = {
+        result: allowableRentalNet,
+        grossRents: rentalGross,
+        expenses: rentalExpenses,
+        depreciation: rentalDepreciation,
+        netBeforePal: rentalNetBeforePal,
+        allowableNet: allowableRentalNet,
+        disallowedPassiveLoss,
+        propertyState: rentalPropertyState,
+        sourceFields: ['input-rental-gross', 'input-rental-expenses', 'input-rental-depreciation'],
+        generalFormula: 'Schedule E Net Rental Income = Gross Rents − Operating Expenses − MACRS Depreciation (Losses subject to Form 8582 PAL rules)',
+        pluggedFormula: hasScheduleEInput
+            ? (disallowedPassiveLoss > 0
+                ? `Net Rent = ${formatCurrency(rentalGross)} − ${formatCurrency(rentalExpenses)} − ${formatCurrency(rentalDepreciation)} = ${formatCurrency(rentalNetBeforePal)} ➔ Form 8582 Allowed: ${formatCurrency(allowableRentalNet)} (${formatCurrency(disallowedPassiveLoss)} suspended)`
+                : `Net Rent = ${formatCurrency(rentalGross)} − ${formatCurrency(rentalExpenses)} − ${formatCurrency(rentalDepreciation)} = ${formatCurrency(allowableRentalNet)}`)
+            : 'Schedule E Net Rental Income = $0'
+    };
+    const otherIncomeTotal = interestIncome + extraSourcesTotal + allowableCapitalNet + allowableRentalNet;
     // 2. Total Gross Income
     const grossIncome = Math.max(0, totalW2Wages + otherIncomeTotal);
     const grossIncomeSourceFields = [
         'calc-total-w2-wages',
         ...(interestIncome > 0 ? ['input-other-interest'] : []),
         ...(allowableCapitalNet !== 0 ? ['calc-capital-gains'] : []),
+        ...(allowableRentalNet !== 0 ? ['calc-schedule-e'] : []),
         ...extraSources.filter(s => (Number(s.amount) || 0) > 0).map(s => `input-income-source-${s.id}`)
     ];
     const pluggedFormulaParts = [formatCurrency(totalW2Wages)];
@@ -506,9 +1169,15 @@ export function calculateTaxes(state) {
             if (s.type === '1099-NEC' && scheduleCExpenses > 0) {
                 amt = Math.max(0, amt - scheduleCExpenses);
             }
+            else if (s.type === '1099-INT' && (Number(s.accruedInterestPaid) || 0) > 0) {
+                amt = Math.max(0, amt - (Number(s.accruedInterestPaid) || 0));
+            }
             pluggedFormulaParts.push(formatCurrency(amt));
         }
     });
+    if (allowableRentalNet !== 0) {
+        pluggedFormulaParts.push(formatCurrency(allowableRentalNet));
+    }
     if (allowableCapitalNet !== 0) {
         pluggedFormulaParts.push(formatCurrency(allowableCapitalNet));
     }
@@ -518,16 +1187,12 @@ export function calculateTaxes(state) {
     const grossIncomeCalc = {
         result: grossIncome,
         sourceFields: grossIncomeSourceFields,
-        generalFormula: extraSources.length > 0
-            ? 'Gross Income = Total W-2 Wages + Interest + Additional Incomes + Net Capital Gains'
+        generalFormula: (extraSources.length > 0 || allowableRentalNet !== 0)
+            ? 'Gross Income = Total W-2 Wages + Interest + Additional Incomes + Schedule E Rental + Net Capital Gains'
             : 'Gross Income = Total W-2 Wages + Other Incomes',
         pluggedFormula: `Gross Income = ${pluggedFormulaParts.join(' + ')} = ${formatCurrency(grossIncome)}`
     };
     // 3. Adjustments to Income (Above-the-line deductions)
-    const studentLoanInterest = Math.min(2500, Number(state.adjustments?.studentLoan) || 0);
-    const iraDeduction = Number(state.adjustments?.ira) || 0;
-    const hsaDeduction = Number(state.adjustments?.hsa) || 0;
-    const totalAdjustments = studentLoanInterest + iraDeduction + hsaDeduction;
     const adjustmentsCalc = {
         result: totalAdjustments,
         sourceFields: ['input-adj-student-loan', 'input-adj-ira', 'input-adj-hsa'],
@@ -548,7 +1213,7 @@ export function calculateTaxes(state) {
     const medicalThreshold = 0.075 * agi;
     const allowableMedical = Math.max(0, medicalRaw - medicalThreshold);
     const realEstateTax = Number(state.itemizedDeductions?.realEstateTax) || 0;
-    const totalSaltPaid = realEstateTax + totalStateTaxWithheld;
+    const totalSaltPaid = realEstateTax + totalStateTaxWithheld + totalLocalTaxWithheld;
     const saltCap = filingStatus === 'married_separate' ? 5000 : 10000;
     const allowableSalt = Math.min(saltCap, totalSaltPaid);
     const mortgageInterest = Number(state.itemizedDeductions?.mortgageInterest) || 0;
@@ -620,17 +1285,23 @@ export function calculateTaxes(state) {
         generalFormula: 'Taxable Income = max(0, AGI − Deductions)',
         pluggedFormula: `Taxable Income = max(0, ${formatCurrency(agi)} − ${formatCurrency(chosenDeduction)}) = ${formatCurrency(taxableIncome)}`
     };
-    // 7. Federal Income Tax (Marginal Tax Brackets calculation)
+    // 7. Federal Income Tax (Marginal Tax Brackets + Qualified Dividends and Capital Gain Tax Worksheet)
     const brackets = rules.brackets[filingStatus] || rules.brackets.single;
+    const ltcgBrackets = rules.ltcgBrackets[filingStatus] || rules.ltcgBrackets.single;
+    const netLtcgEligible = (allowableCapitalNet > 0 && ltGain > 0)
+        ? Math.min(allowableCapitalNet, ltGain)
+        : 0;
+    const preferentialIncome = Math.min(taxableIncome, qualifiedDividendsTotal + netLtcgEligible);
+    const ordinaryTaxableIncome = Math.max(0, taxableIncome - preferentialIncome);
     const bracketDetails = [];
-    let tentativeTax = 0;
+    let ordinaryTax = 0;
     const bracketFormulaParts = [];
     for (let i = 0; i < brackets.length; i++) {
         const b = brackets[i];
-        if (taxableIncome > b.min) {
-            const taxableInBracket = Math.min(taxableIncome, b.max) - b.min;
+        if (ordinaryTaxableIncome > b.min) {
+            const taxableInBracket = Math.min(ordinaryTaxableIncome, b.max) - b.min;
             const taxFromBracket = taxableInBracket * b.rate;
-            tentativeTax += taxFromBracket;
+            ordinaryTax += taxFromBracket;
             const maxLabel = b.max === Infinity ? '+' : ` to ${formatCurrency(b.max)}`;
             bracketDetails.push({
                 bracketIndex: i + 1,
@@ -655,15 +1326,40 @@ export function calculateTaxes(state) {
             });
         }
     }
+    // Stack preferential income (Qualified Dividends + Net LTCG) from ordinaryTaxableIncome to taxableIncome across 0% / 15% / 20% brackets
+    let preferentialTax = 0;
+    const prefFormulaParts = [];
+    if (preferentialIncome > 0) {
+        for (const lb of ltcgBrackets) {
+            const sliceBottom = Math.max(ordinaryTaxableIncome, lb.min);
+            const sliceTop = Math.min(taxableIncome, lb.max);
+            if (sliceTop > sliceBottom) {
+                const chunk = sliceTop - sliceBottom;
+                const chunkTax = chunk * lb.rate;
+                preferentialTax += chunkTax;
+                prefFormulaParts.push(`(${formatCurrency(chunk)} LTCG/QDiv × ${formatPercent(lb.rate)})`);
+            }
+        }
+    }
+    const tentativeTax = Math.round((ordinaryTax + preferentialTax) * 100) / 100;
     const taxBeforeCredits = tentativeTax;
     const taxBeforeCreditsCalc = {
         result: taxBeforeCredits,
         sourceFields: ['calc-taxable-income', 'select-filing-status'],
-        generalFormula: 'Tentative Tax = ∑(Taxable Income in Bracket i × Bracket Rate i)',
-        pluggedFormula: bracketFormulaParts.length > 0
-            ? `Tentative Tax = ${bracketFormulaParts.join(' + ')} = ${formatCurrencyExact(taxBeforeCredits)}`
-            : `Tentative Tax = $0 × 10% = $0`,
-        brackets: bracketDetails
+        generalFormula: preferentialIncome > 0
+            ? 'Tentative Tax = Ordinary Bracket Tax on (Taxable Income − Preferential Income) + Qualified Dividends & LTCG Tax (0% / 15% / 20%)'
+            : 'Tentative Tax = ∑(Taxable Income in Bracket i × Bracket Rate i)',
+        pluggedFormula: preferentialIncome > 0
+            ? `Ordinary Tax (${formatCurrencyExact(ordinaryTax)} on ${formatCurrency(ordinaryTaxableIncome)}) + Preferential LTCG/QDiv Tax (${prefFormulaParts.join(' + ')} = ${formatCurrencyExact(preferentialTax)}) = ${formatCurrencyExact(taxBeforeCredits)}`
+            : (bracketFormulaParts.length > 0
+                ? `Tentative Tax = ${bracketFormulaParts.join(' + ')} = ${formatCurrencyExact(taxBeforeCredits)}`
+                : `Tentative Tax = $0 × 10% = $0`),
+        brackets: bracketDetails,
+        qualifiedDividendsTotal,
+        preferentialIncome,
+        preferentialTax,
+        ordinaryTaxableIncome,
+        ordinaryTax
     };
     // 8. Tax Credits (Child Tax Credit)
     const numChildren = Math.max(0, parseInt(String(state.dependents?.childrenCount), 10) || 0);
@@ -687,28 +1383,86 @@ export function calculateTaxes(state) {
             ? `Credits = min(${formatCurrency(taxBeforeCredits)}, ${numChildren} × $2,000 ${childCreditPhaseoutAmount > 0 ? `− ${formatCurrency(childCreditPhaseoutAmount)}` : ''}) = ${formatCurrency(childCreditAllowed)}`
             : `Credits = 0 qualifying children = $0`
     };
-    // 9. Total Federal Tax Liability
-    const totalTaxLiability = Math.max(0, taxBeforeCredits - childCreditAllowed);
+    // 8b. FICA & Other Taxes (Form 8959 Additional Medicare Tax & Form 8960 Net Investment Income Tax)
+    const box3Values = w2List.map(w => Number(w.box3) || 0);
+    const box4Values = w2List.map(w => Number(w.box4) || 0);
+    const box5Values = w2List.map(w => Number(w.box5) || 0);
+    const box6Values = w2List.map(w => Number(w.box6) || 0);
+    const totalSSWages = box3Values.reduce((s, v) => s + v, 0);
+    const totalSSTax = box4Values.reduce((s, v) => s + v, 0);
+    const totalMedWages = box5Values.reduce((s, v) => s + v, 0);
+    const totalMedTax = box6Values.reduce((s, v) => s + v, 0);
+    const totalFicaWithheld = totalSSTax + totalMedTax;
+    // Excess Social Security Tax Credit (Schedule 3, Line 11): applies when 2+ employers withhold SS tax above the annual cap
+    const maxAnnualSSTax = Math.round(rules.ssWageLimit * rules.ssRate * 100) / 100;
+    const excessSSTaxCredit = w2List.length > 1 && totalSSTax > maxAnnualSSTax
+        ? Math.round((totalSSTax - maxAnnualSSTax) * 100) / 100
+        : 0;
+    // Form 8959: 0.9% Additional Medicare Tax on combined Medicare wages (Box 5) above threshold ($200k Single / $250k MFJ)
+    const addMedThreshold = rules.additionalMedicareThreshold[filingStatus] || 200000;
+    const excessMedWages = Math.max(0, totalMedWages - addMedThreshold);
+    const additionalMedicareTax = Math.round(excessMedWages * rules.additionalMedicareRate * 100) / 100;
+    // Form 8960: 3.8% Net Investment Income Tax (NIIT) on min(Net Investment Income, max(0, MAGI - threshold))
+    const niitThreshold = rules.niitThreshold[filingStatus] || 200000;
+    const netInvestmentIncome = Math.max(0, interestIncome +
+        net1099InterestTotal +
+        total1099Dividends +
+        Math.max(0, allowableCapitalNet) +
+        Math.max(0, allowableRentalNet));
+    const magiExcessOverNiit = Math.max(0, agi - niitThreshold);
+    const niitBase = Math.min(netInvestmentIncome, magiExcessOverNiit);
+    const niit = Math.round(niitBase * rules.niitRate * 100) / 100;
+    const totalOtherTaxes = Math.round((additionalMedicareTax + niit) * 100) / 100;
+    const otherTaxesCalc = {
+        result: totalOtherTaxes,
+        additionalMedicareTax,
+        niit,
+        netInvestmentIncome,
+        totalOtherTaxes,
+        sourceFields: ['calc-agi', ...w2List.map((w, idx) => `w2-${w.id || idx}-box5`)],
+        generalFormula: 'Schedule 2 Other Taxes = Form 8959 Additional Medicare Tax (0.9% over $200k) + Form 8960 NIIT (3.8% on min(NII, MAGI − $200k))',
+        pluggedFormula: totalOtherTaxes > 0
+            ? `Form 8959 (${formatCurrency(excessMedWages)} × 0.9% = ${formatCurrencyExact(additionalMedicareTax)}) + Form 8960 (min(NII ${formatCurrency(netInvestmentIncome)}, MAGI Excess ${formatCurrency(magiExcessOverNiit)}) × 3.8% = ${formatCurrencyExact(niit)}) = ${formatCurrencyExact(totalOtherTaxes)}`
+            : 'Schedule 2 Other Taxes (Form 8959 + Form 8960) = $0'
+    };
+    // 9. Total Federal Tax Liability (Form 1040 Line 24 = max(0, Tentative Tax − Credits) + Schedule 2 Other Taxes)
+    const totalTaxLiability = Math.round((Math.max(0, taxBeforeCredits - childCreditAllowed) + totalOtherTaxes) * 100) / 100;
     const totalTaxCalc = {
         result: totalTaxLiability,
-        sourceFields: ['calc-tax-before-credits', 'calc-total-credits'],
-        generalFormula: 'Total Tax Liability = max(0, Tentative Tax − Total Credits)',
-        pluggedFormula: `Total Tax Liability = max(0, ${formatCurrencyExact(taxBeforeCredits)} − ${formatCurrency(childCreditAllowed)}) = ${formatCurrencyExact(totalTaxLiability)}`
+        sourceFields: [
+            'calc-tax-before-credits',
+            'calc-total-credits',
+            ...(totalOtherTaxes > 0 ? ['calc-other-taxes'] : [])
+        ],
+        generalFormula: totalOtherTaxes > 0
+            ? 'Total Tax Liability = max(0, Tentative Tax − Total Credits) + Schedule 2 Other Taxes (Form 8959 & Form 8960)'
+            : 'Total Tax Liability = max(0, Tentative Tax − Total Credits)',
+        pluggedFormula: totalOtherTaxes > 0
+            ? `Total Tax Liability = max(0, ${formatCurrencyExact(taxBeforeCredits)} − ${formatCurrency(childCreditAllowed)}) + ${formatCurrencyExact(totalOtherTaxes)} = ${formatCurrencyExact(totalTaxLiability)}`
+            : `Total Tax Liability = max(0, ${formatCurrencyExact(taxBeforeCredits)} − ${formatCurrency(childCreditAllowed)}) = ${formatCurrencyExact(totalTaxLiability)}`
     };
-    // 10. Total Federal Income Tax Withheld (Box 2 from all W-2s)
+    // 10. Total Federal Income Tax Withheld & Payments (Box 2 from all W-2s + Schedule 3 Line 11 Excess SS Tax Credit)
     const box2Values = w2List.map(w => Number(w.box2) || 0);
-    const totalWithheld = box2Values.reduce((sum, val) => sum + val, 0);
-    const w2WithheldFieldIds = w2List.map((w, idx) => `w2-${w.id || idx}-box2`);
+    const w2Box2Total = box2Values.reduce((sum, val) => sum + val, 0);
+    const totalWithheld = Math.round((w2Box2Total + excessSSTaxCredit) * 100) / 100;
+    const w2WithheldFieldIds = [
+        ...w2List.map((w, idx) => `w2-${w.id || idx}-box2`),
+        ...(excessSSTaxCredit > 0 ? ['calc-fica-breakdown'] : [])
+    ];
     const withholdingCalc = {
         result: totalWithheld,
         sourceFields: w2WithheldFieldIds,
-        generalFormula: w2List.length === 1 ? 'Total Withholding = W-2 Box 2' : 'Total Withholding = ∑(W-2 Box 2)',
-        pluggedFormula: w2List.length === 1
-            ? `Total Withholding = ${formatCurrencyExact(box2Values[0])}`
-            : `Total Withholding = ${box2Values.map(v => formatCurrencyExact(v)).join(' + ')} = ${formatCurrencyExact(totalWithheld)}`
+        generalFormula: excessSSTaxCredit > 0
+            ? 'Total Federal Payments = ∑(W-2 Box 2) + Schedule 3 Line 11 Excess Social Security Tax Credit'
+            : (w2List.length === 1 ? 'Total Withholding = W-2 Box 2' : 'Total Withholding = ∑(W-2 Box 2)'),
+        pluggedFormula: excessSSTaxCredit > 0
+            ? `Total Payments = ${box2Values.map(v => formatCurrencyExact(v)).join(' + ')} + ${formatCurrencyExact(excessSSTaxCredit)} (Excess SS Credit) = ${formatCurrencyExact(totalWithheld)}`
+            : (w2List.length === 1
+                ? `Total Withholding = ${formatCurrencyExact(box2Values[0])}`
+                : `Total Withholding = ${box2Values.map(v => formatCurrencyExact(v)).join(' + ')} = ${formatCurrencyExact(totalWithheld)}`)
     };
     // 11. Final Refund or Amount You Owe
-    const netDifference = totalWithheld - totalTaxLiability;
+    const netDifference = Math.round((totalWithheld - totalTaxLiability) * 100) / 100;
     const isRefund = netDifference >= 0;
     const finalAmount = Math.abs(netDifference);
     const finalResultCalc = {
@@ -723,16 +1477,7 @@ export function calculateTaxes(state) {
             ? `Refund = ${formatCurrencyExact(totalWithheld)} − ${formatCurrencyExact(totalTaxLiability)} = ${formatCurrencyExact(finalAmount)}`
             : `Amount Owed = ${formatCurrencyExact(totalTaxLiability)} − ${formatCurrencyExact(totalWithheld)} = ${formatCurrencyExact(finalAmount)}`
     };
-    // 12. FICA Breakdown (Social Security & Medicare from W2 boxes 3, 4, 5, 6)
-    const box3Values = w2List.map(w => Number(w.box3) || 0);
-    const box4Values = w2List.map(w => Number(w.box4) || 0);
-    const box5Values = w2List.map(w => Number(w.box5) || 0);
-    const box6Values = w2List.map(w => Number(w.box6) || 0);
-    const totalSSWages = box3Values.reduce((s, v) => s + v, 0);
-    const totalSSTax = box4Values.reduce((s, v) => s + v, 0);
-    const totalMedWages = box5Values.reduce((s, v) => s + v, 0);
-    const totalMedTax = box6Values.reduce((s, v) => s + v, 0);
-    const totalFicaWithheld = totalSSTax + totalMedTax;
+    // 12. FICA Breakdown (Social Security & Medicare from W2 boxes 3, 4, 5, 6 + Excess SS Tax Credit)
     const ficaCalc = {
         result: totalFicaWithheld,
         ssWages: totalSSWages,
@@ -740,12 +1485,17 @@ export function calculateTaxes(state) {
         medWages: totalMedWages,
         medTax: totalMedTax,
         totalFica: totalFicaWithheld,
+        excessSSTaxCredit,
         sourceFields: [
             ...w2List.map((w, idx) => `w2-${w.id || idx}-box4`),
             ...w2List.map((w, idx) => `w2-${w.id || idx}-box6`)
         ],
-        generalFormula: 'Total FICA Taxes = Social Security Tax (Box 4) + Medicare Tax (Box 6)',
-        pluggedFormula: `Total FICA = ${formatCurrencyExact(totalSSTax)} + ${formatCurrencyExact(totalMedTax)} = ${formatCurrencyExact(totalFicaWithheld)}`
+        generalFormula: excessSSTaxCredit > 0
+            ? `Total FICA Withheld = Box 4 SS + Box 6 Medicare (Excess SS over ${formatCurrencyExact(maxAnnualSSTax)} cap = ${formatCurrencyExact(excessSSTaxCredit)} credited on Schedule 3 Line 11)`
+            : 'Total FICA Taxes = Social Security Tax (Box 4) + Medicare Tax (Box 6)',
+        pluggedFormula: excessSSTaxCredit > 0
+            ? `Total FICA = ${formatCurrencyExact(totalSSTax)} (SS) + ${formatCurrencyExact(totalMedTax)} (Medicare) = ${formatCurrencyExact(totalFicaWithheld)} ➔ Schedule 3 Excess SS Credit = ${formatCurrencyExact(excessSSTaxCredit)}`
+            : `Total FICA = ${formatCurrencyExact(totalSSTax)} + ${formatCurrencyExact(totalMedTax)} = ${formatCurrencyExact(totalFicaWithheld)}`
     };
     // Effective Tax Rate
     const effectiveRate = grossIncome > 0 ? (totalTaxLiability / grossIncome) : 0;
@@ -755,8 +1505,8 @@ export function calculateTaxes(state) {
         generalFormula: 'Effective Tax Rate = Total Tax Liability ÷ Gross Income',
         pluggedFormula: `Effective Rate = ${formatCurrencyExact(totalTaxLiability)} ÷ ${formatCurrency(grossIncome)} = ${formatPercent(effectiveRate)}`
     };
-    // 14. Multi-State Tax Return Engine & Unified Summary (Handles OSTC, Reciprocity, & Order Independence)
-    const { stateReturnsCalc, unifiedSummaryCalc } = calculateStateReturnsAndUnifiedSummary(state, w2List, totalW2Wages, grossIncome, filingStatus, totalTaxLiability, totalWithheld, netDifference, isRefund);
+    // 14. Multi-State Tax Return Engine & Unified Summary (Handles OSTC, Reciprocity, NYC Local Tax, DC Form D-30, & State Itemized Deductions)
+    const { stateReturnsCalc, unifiedSummaryCalc } = calculateStateReturnsAndUnifiedSummary(state, w2List, totalW2Wages, grossIncome, agi, filingStatus, totalTaxLiability, totalWithheld, netDifference, isRefund, scheduleECalc, itemizedCalc);
     return {
         year,
         filingStatus,
@@ -768,9 +1518,11 @@ export function calculateTaxes(state) {
         deductionCalc,
         itemizedCalc,
         capitalGainsCalc,
+        scheduleECalc,
         taxableIncomeCalc,
         taxBeforeCreditsCalc,
         creditsCalc,
+        otherTaxesCalc,
         totalTaxCalc,
         withholdingCalc,
         finalResultCalc,
@@ -783,9 +1535,10 @@ export function calculateTaxes(state) {
 }
 /**
  * Multi-Pass State Return & Unified Tax Ledger Engine
- * Handles order independence, reciprocity agreements (e.g. NJ & PA), and Other State Tax Credits (OSTC).
+ * Handles order independence, reciprocity agreements (e.g. NJ & PA), Other State Tax Credits (OSTC),
+ * NYC Local Municipal Income Tax (Form IT-201), NY Itemized Deductions (Form IT-196), and D.C. Form D-30 UBT.
  */
-export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFederalWages, grossIncome, filingStatus, totalFederalLiability, totalFederalWithholding, federalNetDifference, federalIsRefund) {
+export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFederalWages, grossIncome, agi, filingStatus, totalFederalLiability, totalFederalWithholding, federalNetDifference, federalIsRefund, scheduleECalc, itemizedCalc) {
     // 1. Determine resident state:
     let residentState = 'CA';
     if (state.residentState && state.residentState.trim().length > 0) {
@@ -794,7 +1547,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
     else if (w2List[0]?.states?.[0]?.state && w2List[0].states[0].state.trim().length > 0) {
         residentState = w2List[0].states[0].state.toUpperCase().trim();
     }
-    // 2. Discover all relevant states from W-2s and 1099s:
+    // 2. Discover all relevant states from W-2s, 1099s, and Schedule E Rental Property:
     const stateCodesSet = new Set();
     stateCodesSet.add(residentState);
     w2List.forEach(w => {
@@ -811,6 +1564,9 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 stateCodesSet.add(code);
         }
     });
+    if (scheduleECalc && scheduleECalc.propertyState && (scheduleECalc.grossRents > 0 || scheduleECalc.allowableNet !== 0)) {
+        stateCodesSet.add(scheduleECalc.propertyState);
+    }
     const stateCodes = Array.from(stateCodesSet);
     const residentRule = getStateTaxRule(residentState);
     const rawMap = new Map();
@@ -819,8 +1575,12 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             code: c,
             w2Wages: 0,
             w2Withheld: 0,
+            localWages: 0,
             localWithheld: 0,
+            hasNycLocality: false,
             other1099: 0,
+            rentalNet: 0,
+            rentalGross: 0,
             sourceFieldIds: []
         });
     });
@@ -828,12 +1588,20 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
         (w.states || []).forEach((s, sIdx) => {
             const code = (s.state || residentState).toUpperCase().trim();
             if (!rawMap.has(code)) {
-                rawMap.set(code, { code, w2Wages: 0, w2Withheld: 0, localWithheld: 0, other1099: 0, sourceFieldIds: [] });
+                rawMap.set(code, {
+                    code, w2Wages: 0, w2Withheld: 0, localWages: 0, localWithheld: 0,
+                    hasNycLocality: false, other1099: 0, rentalNet: 0, rentalGross: 0, sourceFieldIds: []
+                });
             }
             const item = rawMap.get(code);
             item.w2Wages += Number(s.stateWages) || 0;
             item.w2Withheld += Number(s.stateTaxWithheld) || 0;
+            item.localWages += Number(s.localWages) || 0;
             item.localWithheld += Number(s.localTaxWithheld) || 0;
+            const loc = (s.localityName || '').toUpperCase().trim();
+            if (loc.includes('NYC') || loc.includes('NEW YORK') || (code === 'NY' && (Number(s.localTaxWithheld) || 0) > 0)) {
+                item.hasNycLocality = true;
+            }
             item.sourceFieldIds.push(`w2-${w.id || wIdx}-state-${s.id || sIdx}-box16`);
             item.sourceFieldIds.push(`w2-${w.id || wIdx}-state-${s.id || sIdx}-box17`);
         });
@@ -841,24 +1609,83 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
     (state.otherIncome?.sources || []).forEach((src, srcIdx) => {
         const code = (src.state || residentState).toUpperCase().trim();
         if (!rawMap.has(code)) {
-            rawMap.set(code, { code, w2Wages: 0, w2Withheld: 0, localWithheld: 0, other1099: 0, sourceFieldIds: [] });
+            rawMap.set(code, {
+                code, w2Wages: 0, w2Withheld: 0, localWages: 0, localWithheld: 0,
+                hasNycLocality: false, other1099: 0, rentalNet: 0, rentalGross: 0, sourceFieldIds: []
+            });
         }
         const item = rawMap.get(code);
-        item.other1099 += Number(src.amount) || 0;
+        let amt = Number(src.amount) || 0;
+        if (src.type === '1099-INT' && (Number(src.accruedInterestPaid) || 0) > 0) {
+            amt = Math.max(0, amt - (Number(src.accruedInterestPaid) || 0));
+        }
+        item.other1099 += amt;
         item.sourceFieldIds.push(`input-source-${src.id || srcIdx}-amount`);
     });
+    if (scheduleECalc && scheduleECalc.propertyState) {
+        const pCode = scheduleECalc.propertyState;
+        if (!rawMap.has(pCode)) {
+            rawMap.set(pCode, {
+                code: pCode, w2Wages: 0, w2Withheld: 0, localWages: 0, localWithheld: 0,
+                hasNycLocality: false, other1099: 0, rentalNet: 0, rentalGross: 0, sourceFieldIds: []
+            });
+        }
+        const item = rawMap.get(pCode);
+        item.rentalNet += scheduleECalc.allowableNet;
+        item.rentalGross += scheduleECalc.grossRents;
+        item.sourceFieldIds.push('calc-schedule-e');
+    }
     // PASS 1: Calculate all Non-Resident States first!
     const nonResidentReturns = [];
     const nonResidentCodes = stateCodes.filter(c => c !== residentState);
     for (const code of nonResidentCodes) {
         const rule = getStateTaxRule(code);
         const raw = rawMap.get(code);
-        const stateWages = raw.w2Wages + raw.other1099;
+        const stateWages = raw.w2Wages + raw.other1099 + Math.max(0, raw.rentalNet);
         const withholding = raw.w2Withheld;
         const localTax = raw.localWithheld;
-        // Check Reciprocity
-        const isReciprocal = (rule.reciprocalWith && rule.reciprocalWith.includes(residentState)) ||
-            (residentRule.reciprocalWith && residentRule.reciprocalWith.includes(code));
+        // Special Case: Washington, D.C. Nonresident Rental Property (Form D-30 Unincorporated Business Franchise Tax)
+        if (code === 'DC' && raw.w2Wages === 0 && (raw.rentalGross > 0 || raw.other1099 > 0)) {
+            const dcGrossReceipts = raw.rentalGross > 0 ? raw.rentalGross : raw.other1099;
+            const dcNetRental = raw.rentalGross > 0 ? Math.max(0, raw.rentalNet) : raw.other1099;
+            const salaryAllowance = Math.round(dcNetRental * 0.30 * 100) / 100;
+            const specificExemption = 5000;
+            const dcTaxableUbt = Math.max(0, dcNetRental - salaryAllowance - specificExemption);
+            const rawUbtTax = Math.round(dcTaxableUbt * 0.0825 * 100) / 100;
+            const dcLiability = dcGrossReceipts > 12000 ? Math.max(250, rawUbtTax) : 0;
+            const netDiff = withholding - dcLiability;
+            const isRefund = netDiff >= 0;
+            const netOutcome = Math.abs(netDiff);
+            nonResidentReturns.push({
+                result: dcLiability,
+                state: 'DC',
+                stateName: rule.name,
+                residentStatus: 'non_resident',
+                formName: 'Form D-30 (Unincorporated Business Franchise Tax)',
+                hasIncomeTax: true,
+                stateWages: dcNetRental,
+                stateStandardDeduction: Math.round((salaryAllowance + specificExemption) * 100) / 100,
+                stateTaxableIncome: dcTaxableUbt,
+                stateTaxBeforeCredit: dcLiability,
+                creditForOtherStates: 0,
+                creditedStates: [],
+                reciprocityExemption: false,
+                stateTaxLiability: dcLiability,
+                localTaxLiability: 0,
+                stateWithholding: withholding,
+                localTaxWithheld: localTax,
+                netOutcome,
+                isRefund,
+                sourceFields: raw.sourceFieldIds,
+                generalFormula: 'DC Form D-30 UBT = max($250 Min, (Net Rental Income − 30% Salary Allowance − $5,000 Exemption) × 8.25%)',
+                pluggedFormula: `DC Taxable UBT = ${formatCurrency(dcNetRental)} − ${formatCurrency(salaryAllowance)} (30% Allowance) − $5,000 (Exemption) = ${formatCurrency(dcTaxableUbt)} × 8.25% = ${formatCurrencyExact(dcLiability)}`
+            });
+            continue;
+        }
+        // Check Reciprocity (applies to W-2 wage compensation)
+        const isReciprocal = ((rule.reciprocalWith && rule.reciprocalWith.includes(residentState)) ||
+            (residentRule.reciprocalWith && residentRule.reciprocalWith.includes(code))) &&
+            raw.rentalNet <= 0;
         if (isReciprocal) {
             const netOutcome = withholding; // 100% refund of any tax withheld in error
             nonResidentReturns.push({
@@ -877,6 +1704,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 reciprocityExemption: true,
                 reciprocityNote: `Reciprocal agreement active between ${residentRule.name} (${residentState}) and ${rule.name} (${code}). Your compensation is legally exempt from ${code} state tax and taxable only in your home state of ${residentState}.`,
                 stateTaxLiability: 0,
+                localTaxLiability: 0,
                 stateWithholding: withholding,
                 localTaxWithheld: localTax,
                 netOutcome,
@@ -903,6 +1731,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 creditedStates: [],
                 reciprocityExemption: false,
                 stateTaxLiability: 0,
+                localTaxLiability: 0,
                 stateWithholding: withholding,
                 localTaxWithheld: localTax,
                 netOutcome: withholding,
@@ -943,6 +1772,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             creditedStates: [],
             reciprocityExemption: false,
             stateTaxLiability,
+            localTaxLiability: 0,
             stateWithholding: withholding,
             localTaxWithheld: localTax,
             netOutcome,
@@ -952,9 +1782,9 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             pluggedFormula: `Taxable Income = ${formatCurrency(stateWages)} − ${formatCurrency(stdDed)} = ${formatCurrency(taxable)} ➔ State Tax Liability = ${formatCurrencyExact(stateTaxLiability)}`
         });
     }
-    // PASS 2: Calculate Resident State Return (with Other State Tax Credit - OSTC)
+    // PASS 2: Calculate Resident State Return (with Other State Tax Credit - OSTC, State Itemized Deductions, & NYC Local Tax)
     const resRaw = rawMap.get(residentState);
-    const residentTotalWages = Math.max(resRaw.w2Wages + resRaw.other1099, grossIncome, totalFederalWages);
+    const residentTotalWages = Math.max(resRaw.w2Wages + resRaw.other1099, agi > 0 ? agi : grossIncome, totalFederalWages);
     const resWithholding = resRaw.w2Withheld;
     const resLocalTax = resRaw.localWithheld;
     let residentReturn;
@@ -974,6 +1804,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             creditedStates: [],
             reciprocityExemption: false,
             stateTaxLiability: 0,
+            localTaxLiability: 0,
             stateWithholding: resWithholding,
             localTaxWithheld: resLocalTax,
             netOutcome: resWithholding,
@@ -984,7 +1815,15 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
         };
     }
     else {
-        const resStdDed = residentRule.standardDeduction[filingStatus] || 0;
+        const baseStdDed = residentRule.standardDeduction[filingStatus] || 0;
+        // Support State Itemized Deductions (e.g., NY Form IT-196: Medical + Property Tax (up to $10k) + Mortgage Interest + Charity)
+        let stateItemizedDed = 0;
+        if (itemizedCalc && (residentState === 'NY' || residentState === 'CA' || residentState === 'DC' || residentState === 'MD' || residentState === 'VA')) {
+            const propTax = Math.min(10000, Number(state.itemizedDeductions?.realEstateTax) || 0);
+            stateItemizedDed = itemizedCalc.allowableMedical + propTax + itemizedCalc.mortgage + itemizedCalc.charity;
+        }
+        const useStateItemized = state.deductionMethod !== 'standard' && stateItemizedDed > baseStdDed;
+        const resStdDed = useStateItemized ? stateItemizedDed : baseStdDed;
         const resTaxable = Math.max(0, residentTotalWages - resStdDed);
         let resTentativeTax = 0;
         if (residentRule.isFlat) {
@@ -995,6 +1834,12 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             resTentativeTax = computeStateTaxFromBrackets(resTaxable, bList);
         }
         resTentativeTax = Math.round(resTentativeTax * 100) / 100;
+        // NYC Municipal Resident Income Tax (Form IT-201 Lines 47–48) when NY resident has NYC local wages/withholding
+        let nycLocalTaxLiability = 0;
+        if (residentState === 'NY' && resRaw.hasNycLocality) {
+            const nycBList = NYC_LOCAL_BRACKETS[filingStatus] || NYC_LOCAL_BRACKETS.single;
+            nycLocalTaxLiability = Math.round(computeStateTaxFromBrackets(resTaxable, nycBList) * 100) / 100;
+        }
         // Compute OSTC: Credit for taxes paid to non-resident states
         const creditedStates = [];
         let totalOtherStateCredit = 0;
@@ -1014,16 +1859,31 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 }
             }
         }
-        const finalResLiability = Math.max(0, Math.round((resTentativeTax - totalOtherStateCredit) * 100) / 100);
-        const resNetDiff = resWithholding - finalResLiability;
+        const netStateOnlyLiability = Math.max(0, Math.round((resTentativeTax - totalOtherStateCredit) * 100) / 100);
+        const finalResLiability = Math.round((netStateOnlyLiability + nycLocalTaxLiability) * 100) / 100;
+        const totalResWithholding = nycLocalTaxLiability > 0 ? (resWithholding + resLocalTax) : resWithholding;
+        const resNetDiff = Math.round((totalResWithholding - finalResLiability) * 100) / 100;
         const resIsRefund = resNetDiff >= 0;
         const resNetOutcome = Math.abs(resNetDiff);
+        const formLabel = nycLocalTaxLiability > 0
+            ? `${residentRule.formResident} (NY State + NYC Local Tax)`
+            : residentRule.formResident;
+        let pluggedStr = '';
+        if (nycLocalTaxLiability > 0) {
+            pluggedStr = `Taxable: ${formatCurrency(residentTotalWages)} − ${formatCurrency(resStdDed)}${useStateItemized ? ' (Form IT-196 Itemized)' : ''} = ${formatCurrency(resTaxable)} ➔ NY State Tax: ${formatCurrencyExact(resTentativeTax)}${totalOtherStateCredit > 0 ? ` − ${creditedStates.map(c => c.fromState).join('/')} Credit: ${formatCurrencyExact(totalOtherStateCredit)}` : ''} + NYC Local Tax: ${formatCurrencyExact(nycLocalTaxLiability)} = ${formatCurrencyExact(finalResLiability)}`;
+        }
+        else if (creditedStates.length > 0) {
+            pluggedStr = `Taxable: ${formatCurrency(residentTotalWages)} − ${formatCurrency(resStdDed)} = ${formatCurrency(resTaxable)} ➔ Tentative Tax: ${formatCurrencyExact(resTentativeTax)} − ${creditedStates.map(c => c.fromState).join('/')} Credit: ${formatCurrencyExact(totalOtherStateCredit)} = ${formatCurrencyExact(finalResLiability)}`;
+        }
+        else {
+            pluggedStr = `Taxable: ${formatCurrency(residentTotalWages)} − ${formatCurrency(resStdDed)} = ${formatCurrency(resTaxable)} ➔ State Tax Liability = ${formatCurrencyExact(finalResLiability)}`;
+        }
         residentReturn = {
             result: finalResLiability,
             state: residentState,
-            stateName: residentRule.name,
+            stateName: nycLocalTaxLiability > 0 ? 'New York State & NYC' : residentRule.name,
             residentStatus: 'resident',
-            formName: residentRule.formResident,
+            formName: formLabel,
             hasIncomeTax: true,
             stateWages: residentTotalWages,
             stateStandardDeduction: resStdDed,
@@ -1033,7 +1893,8 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             creditedStates,
             reciprocityExemption: false,
             stateTaxLiability: finalResLiability,
-            stateWithholding: resWithholding,
+            localTaxLiability: nycLocalTaxLiability,
+            stateWithholding: totalResWithholding,
             localTaxWithheld: resLocalTax,
             netOutcome: resNetOutcome,
             isRefund: resIsRefund,
@@ -1041,10 +1902,10 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 ...resRaw.sourceFieldIds,
                 ...creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-liability`)
             ],
-            generalFormula: `${residentRule.formResident}: Net State Tax = max(0, (State Wages − Standard Deduction) × Rates − Other State Tax Credit)`,
-            pluggedFormula: creditedStates.length > 0
-                ? `Taxable: ${formatCurrency(residentTotalWages)} − ${formatCurrency(resStdDed)} = ${formatCurrency(resTaxable)} ➔ Tentative Tax: ${formatCurrencyExact(resTentativeTax)} − ${creditedStates.map(c => c.fromState).join('/')} Credit: ${formatCurrencyExact(totalOtherStateCredit)} = ${formatCurrencyExact(finalResLiability)}`
-                : `Taxable: ${formatCurrency(residentTotalWages)} − ${formatCurrency(resStdDed)} = ${formatCurrency(resTaxable)} ➔ State Tax Liability = ${formatCurrencyExact(finalResLiability)}`
+            generalFormula: nycLocalTaxLiability > 0
+                ? `${residentRule.formResident}: Total NY/NYC Tax = max(0, NY State Tax − OSTC Credit) + NYC Municipal Resident Tax`
+                : `${residentRule.formResident}: Net State Tax = max(0, (State Wages − Standard Deduction) × Rates − Other State Tax Credit)`,
+            pluggedFormula: pluggedStr
         };
     }
     // Combined list of all state returns: resident state first, then non-resident states
@@ -1090,7 +1951,8 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             badge
         });
     }
-    const grandTotalNet = federalNetDifference + totalStateNet;
+    totalStateNet = Math.round(totalStateNet * 100) / 100;
+    const grandTotalNet = Math.round((federalNetDifference + totalStateNet) * 100) / 100;
     const isGrandTotalRefund = grandTotalNet >= 0;
     const unifiedSummaryCalc = {
         result: Math.abs(grandTotalNet),

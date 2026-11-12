@@ -503,6 +503,11 @@ class TaxApp {
     setVal('input-capital-gains-st', this.state.otherIncome?.capitalGains?.shortTerm);
     setVal('input-capital-gains-lt', this.state.otherIncome?.capitalGains?.longTerm);
     setVal('input-1099-nec-expenses', this.state.otherIncome?.scheduleCExpenses);
+    setVal('input-rental-gross', this.state.otherIncome?.scheduleERental?.grossRents);
+    setVal('input-rental-expenses', this.state.otherIncome?.scheduleERental?.expenses);
+    setVal('input-rental-depreciation', this.state.otherIncome?.scheduleERental?.depreciation);
+    const rentalStEl = document.getElementById('input-rental-state') as HTMLInputElement | null;
+    if (rentalStEl) rentalStEl.value = this.state.otherIncome?.scheduleERental?.propertyState || '';
     setVal('input-itemized-medical', this.state.itemizedDeductions?.medicalExpenses);
     setVal('input-itemized-salt', this.state.itemizedDeductions?.realEstateTax);
     setVal('input-itemized-mortgage', this.state.itemizedDeductions?.mortgageInterest);
@@ -607,6 +612,12 @@ class TaxApp {
       }
       return this.state.otherIncome.capitalGains;
     };
+    const getScheduleERental = () => {
+      if (!this.state.otherIncome.scheduleERental) {
+        this.state.otherIncome.scheduleERental = { grossRents: 0, expenses: 0, depreciation: 0, propertyState: '' };
+      }
+      return this.state.otherIncome.scheduleERental;
+    };
     const getItemized = () => {
       if (!this.state.itemizedDeductions) {
         this.state.itemizedDeductions = { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 0 };
@@ -614,10 +625,20 @@ class TaxApp {
       return this.state.itemizedDeductions;
     };
 
-    // Capital gains & Schedule C expenses
+    // Capital gains, Schedule E rental & Schedule C expenses
     bindInput('input-capital-gains-st', val => getCapitalGains().shortTerm = val);
     bindInput('input-capital-gains-lt', val => getCapitalGains().longTerm = val);
     bindInput('input-1099-nec-expenses', val => this.state.otherIncome.scheduleCExpenses = val);
+    bindInput('input-rental-gross', val => getScheduleERental().grossRents = val);
+    bindInput('input-rental-expenses', val => getScheduleERental().expenses = val);
+    bindInput('input-rental-depreciation', val => getScheduleERental().depreciation = val);
+    const rentalStateInput = document.getElementById('input-rental-state') as HTMLInputElement | null;
+    if (rentalStateInput) {
+      rentalStateInput.addEventListener('input', (e: Event) => {
+        getScheduleERental().propertyState = (e.target as HTMLInputElement).value.toUpperCase().trim();
+        this.recalculateAndRender();
+      });
+    }
 
     // Schedule A Itemized deductions
     bindInput('input-itemized-medical', val => getItemized().medicalExpenses = val);
@@ -1393,6 +1414,24 @@ class TaxApp {
           <span class="currency-symbol">$</span>
           <input type="number" step="any" class="w2-input" id="input-income-source-${src.id}" value="${src.amount}" placeholder="0">
         </div>
+        ${src.type === '1099-DIV' ? `
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+          <label for="input-income-qdiv-${src.id}" style="font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap;">Box 1b Qualified Dividends ($):</label>
+          <div class="w2-input-wrapper" style="flex: 1;">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-income-qdiv-${src.id}" value="${src.qualifiedDividends || 0}" placeholder="0">
+          </div>
+        </div>
+        ` : ''}
+        ${src.type === '1099-INT' ? `
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+          <label for="input-income-accrued-${src.id}" style="font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap;">Accrued Interest Paid Offset ($):</label>
+          <div class="w2-input-wrapper" style="flex: 1;">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-income-accrued-${src.id}" value="${src.accruedInterestPaid || 0}" placeholder="0">
+          </div>
+        </div>
+        ` : ''}
         <div class="input-card-hint">
           Reported on Form 1040 and feeds into Gross Income and State Sourced Income.
         </div>
@@ -1405,6 +1444,7 @@ class TaxApp {
       if (typeSelect) {
         typeSelect.addEventListener('change', (e) => {
           src.type = (e.target as HTMLSelectElement).value as any;
+          this.renderIncomeSources();
           this.recalculateAndRender();
         });
       }
@@ -1437,6 +1477,22 @@ class TaxApp {
         amtInput.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
       }
 
+      const qdivInput = card.querySelector(`#input-income-qdiv-${src.id}`) as HTMLInputElement | null;
+      if (qdivInput) {
+        qdivInput.addEventListener('input', (e) => {
+          src.qualifiedDividends = Number((e.target as HTMLInputElement).value) || 0;
+          this.recalculateAndRender();
+        });
+      }
+
+      const accruedInput = card.querySelector(`#input-income-accrued-${src.id}`) as HTMLInputElement | null;
+      if (accruedInput) {
+        accruedInput.addEventListener('input', (e) => {
+          src.accruedInterestPaid = Number((e.target as HTMLInputElement).value) || 0;
+          this.recalculateAndRender();
+        });
+      }
+
       const delBtn = card.querySelector(`#btn-del-income-${src.id}`) as HTMLButtonElement | null;
       if (delBtn) {
         delBtn.addEventListener('click', () => {
@@ -1451,6 +1507,12 @@ class TaxApp {
     this.state.otherIncome.sources = [];
     this.state.otherIncome.capitalGains = { shortTerm: 0, longTerm: 0 };
     this.state.otherIncome.scheduleCExpenses = 0;
+    this.state.otherIncome.scheduleERental = {
+      grossRents: 0,
+      expenses: 0,
+      depreciation: 0,
+      propertyState: ''
+    };
     this.state.itemizedDeductions = {
       medicalExpenses: 0,
       realEstateTax: 0,
@@ -1513,6 +1575,7 @@ class TaxApp {
           type: '1099-INT',
           payer: 'Fidelity Bond Account (Accrued Interest)',
           amount: 1420,
+          accruedInterestPaid: 220,
           state: 'NY'
         },
         {
@@ -1520,6 +1583,7 @@ class TaxApp {
           type: '1099-DIV',
           payer: 'Vanguard Brokerage (Dividends Paid)',
           amount: 3600,
+          qualifiedDividends: 3000,
           state: 'NY'
         },
         {
@@ -1527,16 +1591,16 @@ class TaxApp {
           type: '1099-DIV',
           payer: 'Charles Schwab Portfolio (Dividends Paid)',
           amount: 2150,
+          qualifiedDividends: 1800,
           state: 'NY'
-        },
-        {
-          id: 4,
-          type: '1099-MISC',
-          payer: 'DC Condo Rental (Dupont Circle — Net Rent)',
-          amount: 14800,
-          state: 'DC'
         }
       ];
+      this.state.otherIncome.scheduleERental = {
+        grossRents: 28000,
+        expenses: 8200,
+        depreciation: 5000,
+        propertyState: 'DC'
+      };
       this.state.otherIncome.capitalGains = {
         shortTerm: -2400,
         longTerm: 14500
@@ -1754,6 +1818,11 @@ class TaxApp {
     setVal('input-capital-gains-st', this.state.otherIncome.capitalGains?.shortTerm || 0);
     setVal('input-capital-gains-lt', this.state.otherIncome.capitalGains?.longTerm || 0);
     setVal('input-1099-nec-expenses', this.state.otherIncome.scheduleCExpenses || 0);
+    setVal('input-rental-gross', this.state.otherIncome.scheduleERental?.grossRents || 0);
+    setVal('input-rental-expenses', this.state.otherIncome.scheduleERental?.expenses || 0);
+    setVal('input-rental-depreciation', this.state.otherIncome.scheduleERental?.depreciation || 0);
+    const rentalStateSelect = document.getElementById('input-rental-state') as HTMLSelectElement | null;
+    if (rentalStateSelect) rentalStateSelect.value = this.state.otherIncome.scheduleERental?.propertyState || '';
     setVal('input-itemized-medical', this.state.itemizedDeductions?.medicalExpenses || 0);
     setVal('input-itemized-salt', this.state.itemizedDeductions?.realEstateTax || 0);
     setVal('input-itemized-mortgage', this.state.itemizedDeductions?.mortgageInterest || 0);
@@ -2448,6 +2517,55 @@ class TaxApp {
       });
     }
 
+    // 3d. Schedule E Rental Real Estate -> Schedule E Card -> Gross Income & Property State
+    const rental = this.state.otherIncome.scheduleERental;
+    if (rental && (rental.grossRents > 0 || rental.expenses > 0 || rental.depreciation > 0)) {
+      if (rental.grossRents > 0) {
+        connections.push({
+          id: 'conn-rental-gross',
+          sourceId: 'input-rental-gross',
+          targetId: 'calc-schedule-e',
+          category: 'wages',
+          label: 'Gross Rents Received'
+        });
+      }
+      if (rental.expenses > 0) {
+        connections.push({
+          id: 'conn-rental-expenses',
+          sourceId: 'input-rental-expenses',
+          targetId: 'calc-schedule-e',
+          category: 'adjustments',
+          label: 'Rental Operating Expenses'
+        });
+      }
+      if (rental.depreciation > 0) {
+        connections.push({
+          id: 'conn-rental-depreciation',
+          sourceId: 'input-rental-depreciation',
+          targetId: 'calc-schedule-e',
+          category: 'adjustments',
+          label: 'MACRS Depreciation'
+        });
+      }
+      connections.push({
+        id: 'conn-schedule-e-gross',
+        sourceId: 'calc-schedule-e',
+        targetId: 'calc-gross-income',
+        category: 'wages',
+        label: 'Schedule E Net Rental Income to Gross Income'
+      });
+      if (rental.propertyState) {
+        const propStateKey = rental.propertyState.toLowerCase();
+        connections.push({
+          id: `conn-schedule-e-state-${propStateKey}`,
+          sourceId: 'calc-schedule-e',
+          targetId: `calc-state-${propStateKey}-card`,
+          category: 'state',
+          label: `Schedule E Net Rent (${rental.propertyState}) to ${rental.propertyState} Return`
+        });
+      }
+    }
+
     // 4. Adjustments -> Total Adjustments
     connections.push({
       id: 'conn-adj-student-loan',
@@ -2575,7 +2693,7 @@ class TaxApp {
       label: 'Taxable Income to Tax Brackets'
     });
 
-    // 9. Credits -> Total Tax Liability
+    // 9. Credits & Other Taxes -> Total Tax Liability
     connections.push({
       id: 'conn-tentative-totaltax',
       sourceId: 'calc-tax-before-credits',
@@ -2590,8 +2708,17 @@ class TaxApp {
       category: 'credits',
       label: 'Credits reduce Liability'
     });
+    if (taxData?.otherTaxesCalc && taxData.otherTaxesCalc.result > 0) {
+      connections.push({
+        id: 'conn-othertaxes-totaltax',
+        sourceId: 'calc-other-taxes',
+        targetId: 'calc-total-tax-liability',
+        category: 'tax',
+        label: 'NIIT & Additional Medicare Tax to Liability'
+      });
+    }
 
-    // 10. W2 Box 2 (Withholding) -> Total Withholding
+    // 10. W2 Box 2 (Withholding) & Excess SS Tax Credit -> Total Withholding
     this.state.w2s.forEach(w => {
       connections.push({
         id: `conn-w2-${w.id}-box2-withheld`,
@@ -2601,6 +2728,15 @@ class TaxApp {
         label: `W-2 #${w.id + 1} Box 2 Withheld`
       });
     });
+    if (taxData?.ficaCalc && taxData.ficaCalc.excessSSTaxCredit > 0) {
+      connections.push({
+        id: 'conn-excess-ss-withheld',
+        sourceId: 'calc-fica-breakdown',
+        targetId: 'calc-total-withholding',
+        category: 'withholding',
+        label: 'Excess Social Security Tax Credit (Schedule 3 Line 11)'
+      });
+    }
 
     // 11. Final comparison: Total Withholding & Total Tax -> Final Tax Summary
     connections.push({
@@ -2717,6 +2853,7 @@ class TaxApp {
     updateCard('calc-total-w2-wages', taxData.w2WagesCalc);
     updateCard('calc-gross-income', taxData.grossIncomeCalc);
     updateCard('calc-capital-gains', taxData.capitalGainsCalc);
+    updateCard('calc-schedule-e', taxData.scheduleECalc);
     updateCard('calc-total-adjustments', taxData.adjustmentsCalc);
     updateCard('calc-agi', taxData.agiCalc);
     updateCard('calc-itemized-deductions', taxData.itemizedCalc);
@@ -2726,6 +2863,7 @@ class TaxApp {
     this.renderTaxBrackets(taxData.taxBeforeCreditsCalc.brackets);
 
     updateCard('calc-total-credits', taxData.creditsCalc);
+    updateCard('calc-other-taxes', taxData.otherTaxesCalc);
     updateCard('calc-total-tax-liability', taxData.totalTaxCalc);
     updateCard('calc-total-withholding', taxData.withholdingCalc);
     updateCard('calc-fica-breakdown', taxData.ficaCalc);

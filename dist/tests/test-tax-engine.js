@@ -657,11 +657,16 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
         otherIncome: {
             interest: 1850,
             sources: [
-                { id: 1, type: '1099-INT', payer: 'Fidelity Bond Account (Accrued Interest)', amount: 1420, state: 'NY' },
-                { id: 2, type: '1099-DIV', payer: 'Vanguard Brokerage (Dividends Paid)', amount: 3600, state: 'NY' },
-                { id: 3, type: '1099-DIV', payer: 'Charles Schwab Portfolio (Dividends Paid)', amount: 2150, state: 'NY' },
-                { id: 4, type: '1099-MISC', payer: 'DC Condo Rental (Dupont Circle — Net Rent)', amount: 14800, state: 'DC' }
+                { id: 1, type: '1099-INT', payer: 'Fidelity Bond Account (Accrued Interest)', amount: 1420, accruedInterestPaid: 220, state: 'NY' },
+                { id: 2, type: '1099-DIV', payer: 'Vanguard Brokerage (Dividends Paid)', amount: 3600, qualifiedDividends: 3000, state: 'NY' },
+                { id: 3, type: '1099-DIV', payer: 'Charles Schwab Portfolio (Dividends Paid)', amount: 2150, qualifiedDividends: 1800, state: 'NY' }
             ],
+            scheduleERental: {
+                grossRents: 28000,
+                expenses: 8200,
+                depreciation: 5000,
+                propertyState: 'DC'
+            },
             capitalGains: {
                 shortTerm: -2400,
                 longTerm: 14500
@@ -679,12 +684,36 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
     };
     const res = calculateTaxes(state);
     assert.strictEqual(res.w2WagesCalc.result, 210000, 'Combined W-2 wages = 95,000 + 115,000 = 210,000');
+    assert.strictEqual(res.scheduleECalc.result, 14800, 'Schedule E Net Rental Income = 28,000 - 8,200 - 5,000 = 14,800');
     assert.strictEqual(res.capitalGainsCalc.result, 12100, 'Net capital gains = -2,400 + 14,500 = 12,100');
-    assert.strictEqual(res.grossIncomeCalc.result, 245920, 'Gross income = 210,000 + 1,850 + 1,420 + 3,600 + 2,150 + 14,800 + 12,100 = 245,920');
-    assert.strictEqual(res.agiCalc.result, 243920, 'AGI = 245,920 - 2,000 HSA = 243,920');
+    assert.strictEqual(res.grossIncomeCalc.result, 245700, 'Gross income = 210,000 + 1,850 + (1,420 - 220) + 3,600 + 2,150 + 14,800 + 12,100 = 245,700');
+    assert.strictEqual(res.agiCalc.result, 243700, 'AGI = 245,700 - 2,000 HSA = 243,700');
     assert.strictEqual(res.deductionCalc.result, 23700, 'Itemized deduction = $10,000 SALT + $11,200 Mortgage + $2,500 Charity = $23,700');
-    assert.strictEqual(res.taxableIncomeCalc.result, 220220, 'Taxable income = 243,920 - 23,700 = 220,220');
+    assert.strictEqual(res.taxableIncomeCalc.result, 220000, 'Taxable income = 243,700 - 23,700 = 220,000');
+    // Preferential LTCG + Qualified Dividends Worksheet
+    assert.strictEqual(res.taxBeforeCreditsCalc.qualifiedDividendsTotal, 4800, 'Total Qualified Dividends = 3,000 + 1,800 = 4,800');
+    assert.strictEqual(res.taxBeforeCreditsCalc.preferentialIncome, 16900, 'Preferential income = 4,800 QDiv + 12,100 Net LTCG = 16,900');
+    assert.strictEqual(res.taxBeforeCreditsCalc.preferentialTax, 2535, 'Preferential tax at 15% = 16,900 * 0.15 = 2,535');
+    assert.strictEqual(res.taxBeforeCreditsCalc.ordinaryTaxableIncome, 203100, 'Ordinary taxable income = 220,000 - 16,900 = 203,100');
+    assert.strictEqual(res.taxBeforeCreditsCalc.ordinaryTax, 42678.5, 'Ordinary tax = 42,678.50');
+    assert.strictEqual(res.taxBeforeCreditsCalc.result, 45213.5, 'Tentative tax = 42,678.50 + 2,535 = 45,213.50');
+    // Other Taxes (Form 8959 Additional Medicare + Form 8960 NIIT)
+    assert.strictEqual(res.otherTaxesCalc.additionalMedicareTax, 90, 'Additional Medicare Tax (0.9% over $200k) = $90');
+    assert.strictEqual(res.otherTaxesCalc.niit, 1356.6, 'NIIT (3.8% on $35,700 NII) = $1,356.60');
+    assert.strictEqual(res.otherTaxesCalc.result, 1446.6, 'Total Other Taxes = $90 + $1,356.60 = $1,446.60');
+    assert.strictEqual(res.totalTaxCalc.result, 46660.1, 'Total Federal Tax Liability = 45,213.50 + 1,446.60 = 46,660.10');
+    // Excess Social Security Tax Credit (Schedule 3 Line 11)
+    assert.strictEqual(res.ficaCalc.excessSSTaxCredit, 2566.8, 'Excess SS tax credit = 13,020 - 10,453.20 = 2,566.80');
+    assert.strictEqual(res.withholdingCalc.result, 37316.8, 'Total Federal Payments = 34,750 W-2 WH + 2,566.80 Excess SS Credit = 37,316.80');
+    // State Returns: DC Nonresident Form D-30 & NY Resident Form IT-201 + IT-196 + NYC Local Tax
     assert.strictEqual(res.stateReturnsCalc.length, 2, 'Generates NY Resident + DC Nonresident returns');
+    const dcReturn = res.stateReturnsCalc.find(s => s.state === 'DC');
+    const nyReturn = res.stateReturnsCalc.find(s => s.state === 'NY');
+    assert.strictEqual(dcReturn.stateTaxLiability, 442.2, 'DC Form D-30 Unincorporated Business Tax = $442.20');
+    assert.strictEqual(nyReturn.creditForOtherStates, 442.2, 'NY Form IT-112-R credits $442.20 paid to DC');
+    assert.strictEqual(nyReturn.localTaxLiability, 8603.92, 'NYC Resident Municipal Tax = $8,603.92');
+    assert.strictEqual(nyReturn.stateTaxLiability, 21188.77, 'Combined NY State + NYC Local Tax Liability = $21,188.77');
+    assert.strictEqual(nyReturn.stateWithholding, 19180, 'Combined NY Box 17 ($11,570) + NYC Box 19 ($7,610) Withholding = $19,180');
     console.log("✓ TS Test 13: NYC Job Switch + DC Condo Rental & Investments scenario verified correctly!");
 }
 console.log("\nAll 13 TypeScript test suites PASSED with 100% accuracy!\n");

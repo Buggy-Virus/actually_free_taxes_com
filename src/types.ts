@@ -37,12 +37,21 @@ export interface IncomeSource {
   type: '1099-NEC' | '1099-DIV' | '1099-INT' | '1099-MISC' | 'Other';
   payer: string;
   amount: number;
+  qualifiedDividends?: number; // 1099-DIV Box 1b
+  accruedInterestPaid?: number; // 1099-INT Schedule B adjustment for accrued interest paid on bond purchase
   state?: string;
 }
 
 export interface CapitalGainsInput {
   shortTerm: number;
   longTerm: number;
+}
+
+export interface ScheduleERentalInput {
+  grossRents: number;
+  expenses: number; // HOA, repairs, insurance, property tax, mortgage interest
+  depreciation: number; // Form 4562 MACRS 27.5-year residential rental depreciation
+  propertyState?: string; // 2-letter state or 'DC' where rental property is located
 }
 
 export interface ItemizedDeductionsInput {
@@ -57,6 +66,7 @@ export interface OtherIncome {
   sources?: IncomeSource[];
   capitalGains?: CapitalGainsInput;
   scheduleCExpenses?: number;
+  scheduleERental?: ScheduleERentalInput;
 }
 
 export interface Adjustments {
@@ -109,6 +119,11 @@ export interface CalculationResult {
 
 export interface TaxBeforeCreditsResult extends CalculationResult {
   brackets: BracketDetail[];
+  qualifiedDividendsTotal: number;
+  preferentialIncome: number;
+  preferentialTax: number;
+  ordinaryTaxableIncome: number;
+  ordinaryTax: number;
 }
 
 export interface FinalResultCalculation extends CalculationResult {
@@ -122,6 +137,24 @@ export interface FicaCalculation extends CalculationResult {
   medWages: number;
   medTax: number;
   totalFica: number;
+  excessSSTaxCredit: number; // Schedule 3, Line 11 credit when 2+ employers withhold over annual SS wage cap
+}
+
+export interface ScheduleECalculation extends CalculationResult {
+  grossRents: number;
+  expenses: number;
+  depreciation: number;
+  netBeforePal: number;
+  allowableNet: number;
+  disallowedPassiveLoss: number;
+  propertyState: string;
+}
+
+export interface OtherTaxesCalculation extends CalculationResult {
+  additionalMedicareTax: number; // Form 8959 (0.9% over $200k/$250k)
+  niit: number; // Form 8960 (3.8% Net Investment Income Tax)
+  netInvestmentIncome: number;
+  totalOtherTaxes: number;
 }
 
 export interface EffectiveRateCalculation {
@@ -168,6 +201,7 @@ export interface StateReturnCalculation extends CalculationResult {
   reciprocityExemption: boolean;
   reciprocityNote?: string;
   stateTaxLiability: number;
+  localTaxLiability: number;
   stateWithholding: number;
   localTaxWithheld: number;
   netOutcome: number; // withholding - liability (+ refund, - owed)
@@ -229,9 +263,11 @@ export interface TaxCalculationSummary {
   deductionCalc: CalculationResult;
   itemizedCalc: ItemizedDeductionCalculation;
   capitalGainsCalc: CapitalGainsCalculation;
+  scheduleECalc: ScheduleECalculation;
   taxableIncomeCalc: CalculationResult;
   taxBeforeCreditsCalc: TaxBeforeCreditsResult;
   creditsCalc: CalculationResult;
+  otherTaxesCalc: OtherTaxesCalculation;
   totalTaxCalc: CalculationResult;
   withholdingCalc: CalculationResult;
   finalResultCalc: FinalResultCalculation;

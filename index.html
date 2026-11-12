@@ -96,6 +96,9 @@
         <a href="#calc-capital-gains" class="toc-link" data-toc-target="calc-capital-gains">
           <span>Line 7: Capital Gains</span>
         </a>
+        <a href="#calc-schedule-e" class="toc-link" data-toc-target="calc-schedule-e">
+          <span>Sched 1 Line 5: Rental Income</span>
+        </a>
         <a href="#calc-gross-income" class="toc-link" data-toc-target="calc-gross-income">
           <span>Line 9: Gross Income</span>
         </a>
@@ -117,11 +120,14 @@
         <a href="#calc-total-credits" class="toc-link" data-toc-target="calc-total-credits">
           <span>Line 19: Tax Credits</span>
         </a>
+        <a href="#calc-other-taxes" class="toc-link" data-toc-target="calc-other-taxes">
+          <span>Line 23: NIIT &amp; Add'l Medicare</span>
+        </a>
         <a href="#calc-total-tax-liability" class="toc-link" data-toc-target="calc-total-tax-liability">
           <span>Line 24: Total Tax</span>
         </a>
         <a href="#calc-total-withholding" class="toc-link" data-toc-target="calc-total-withholding">
-          <span>Line 25d: Withholding</span>
+          <span>Line 25d/31: Payments</span>
         </a>
         <a href="#calc-fica-breakdown" class="toc-link" data-toc-target="calc-fica-breakdown">
           <span>FICA Payroll Taxes</span>
@@ -210,25 +216,57 @@
               </span>
             </div>
             <select id="select-resident-state" class="w2-input">
-              <option value="CA" selected>CA - California (FTB Form 540)</option>
-              <option value="NY">NY - New York (Form IT-201)</option>
-              <option value="NJ">NJ - New Jersey (Form NJ-1040)</option>
-              <option value="PA">PA - Pennsylvania (Form PA-40)</option>
-              <option value="IL">IL - Illinois (Form IL-1040)</option>
-              <option value="MA">MA - Massachusetts (Form 1)</option>
-              <option value="TX">TX - Texas (0% No State Wage Tax)</option>
-              <option value="FL">FL - Florida (0% No State Wage Tax)</option>
-              <option value="WA">WA - Washington (0% No State Wage Tax)</option>
-              <option value="NV">NV - Nevada (0% No State Wage Tax)</option>
-              <option value="TN">TN - Tennessee (0% No State Wage Tax)</option>
-              <option value="CO">CO - Colorado (Form DR 0104)</option>
-              <option value="NC">NC - North Carolina (Form D-400)</option>
-              <option value="GA">GA - Georgia (Form 500)</option>
-              <option value="VA">VA - Virginia (Form 760)</option>
-              <option value="OH">OH - Ohio (Form IT 1040)</option>
-              <option value="MI">MI - Michigan (Form MI-1040)</option>
+              <option value="AL">AL - Alabama (Form 40)</option>
+              <option value="AK">AK - Alaska (0% No State Income Tax)</option>
               <option value="AZ">AZ - Arizona (Form 140)</option>
-              <option value="OTHER">Other US State</option>
+              <option value="AR">AR - Arkansas (Form AR1000F)</option>
+              <option value="CA" selected>CA - California (FTB Form 540)</option>
+              <option value="CO">CO - Colorado (Form DR 0104)</option>
+              <option value="CT">CT - Connecticut (Form CT-1040)</option>
+              <option value="DE">DE - Delaware (Form PIT-RES)</option>
+              <option value="DC">DC - District of Columbia (Form D-40)</option>
+              <option value="FL">FL - Florida (0% No State Income Tax)</option>
+              <option value="GA">GA - Georgia (Form 500)</option>
+              <option value="HI">HI - Hawaii (Form N-11)</option>
+              <option value="ID">ID - Idaho (Form 40)</option>
+              <option value="IL">IL - Illinois (Form IL-1040)</option>
+              <option value="IN">IN - Indiana (Form IT-40)</option>
+              <option value="IA">IA - Iowa (Form IA 1040)</option>
+              <option value="KS">KS - Kansas (Form K-40)</option>
+              <option value="KY">KY - Kentucky (Form 740)</option>
+              <option value="LA">LA - Louisiana (Form IT-540)</option>
+              <option value="ME">ME - Maine (Form 1040ME)</option>
+              <option value="MD">MD - Maryland (Form 502)</option>
+              <option value="MA">MA - Massachusetts (Form 1)</option>
+              <option value="MI">MI - Michigan (Form MI-1040)</option>
+              <option value="MN">MN - Minnesota (Form M1)</option>
+              <option value="MS">MS - Mississippi (Form 80-105)</option>
+              <option value="MO">MO - Missouri (Form MO-1040)</option>
+              <option value="MT">MT - Montana (Form 2)</option>
+              <option value="NE">NE - Nebraska (Form 1040N)</option>
+              <option value="NV">NV - Nevada (0% No State Income Tax)</option>
+              <option value="NH">NH - New Hampshire (0% No Wage Tax)</option>
+              <option value="NJ">NJ - New Jersey (Form NJ-1040)</option>
+              <option value="NM">NM - New Mexico (Form PIT-1)</option>
+              <option value="NY">NY - New York (Form IT-201)</option>
+              <option value="NC">NC - North Carolina (Form D-400)</option>
+              <option value="ND">ND - North Dakota (Form ND-1)</option>
+              <option value="OH">OH - Ohio (Form IT 1040)</option>
+              <option value="OK">OK - Oklahoma (Form 511)</option>
+              <option value="OR">OR - Oregon (Form OR-40)</option>
+              <option value="PA">PA - Pennsylvania (Form PA-40)</option>
+              <option value="RI">RI - Rhode Island (Form RI-1040)</option>
+              <option value="SC">SC - South Carolina (Form SC1040)</option>
+              <option value="SD">SD - South Dakota (0% No State Income Tax)</option>
+              <option value="TN">TN - Tennessee (0% No State Income Tax)</option>
+              <option value="TX">TX - Texas (0% No State Income Tax)</option>
+              <option value="UT">UT - Utah (Form TC-40)</option>
+              <option value="VT">VT - Vermont (Form IN-111)</option>
+              <option value="VA">VA - Virginia (Form 760)</option>
+              <option value="WA">WA - Washington (0% No State Wage Tax)</option>
+              <option value="WV">WV - West Virginia (Form IT-140)</option>
+              <option value="WI">WI - Wisconsin (Form 1)</option>
+              <option value="WY">WY - Wyoming (0% No State Income Tax)</option>
             </select>
           </div>
         </div>
@@ -444,6 +482,53 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Schedule E Rental Real Estate (Condo / Property) -->
+        <div class="calc-card input-panel priority-saver" id="card-schedule-e-rental">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Schedule E Part I / Form 4562</div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="capital-gains" role="button" tabindex="0" title="Schedule E Rental Real Estate — Click for IRS Guidance">
+                <span class="rating-circles-cluster" aria-label="Attention 3/4, Risk 2/3, Savings 3/3">
+                  <span class="rating-circle circle-attention circle-att-3"></span>
+                  <span class="rating-circle circle-risk circle-risk-2"></span>
+                  <span class="rating-circle circle-savings circle-save-3 is-max">!</span>
+                </span>
+                <span class="pill-text">Rental Real Estate</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+          </div>
+          <div class="input-card-title">Rental Real Estate (Schedule E)</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <div>
+              <label for="input-rental-gross" class="input-sublabel">Gross Rents ($)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-rental-gross" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-rental-expenses" class="input-sublabel">Expenses / HOA / Tax ($)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-rental-expenses" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-rental-depreciation" class="input-sublabel">Depreciation (27.5-yr)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-rental-depreciation" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-rental-state" class="input-sublabel">Property State / DC</label>
+              <input type="text" maxlength="2" class="w2-input" id="input-rental-state" value="" placeholder="DC, NY, CA" style="text-align: left; padding-left: 0.5rem; text-transform: uppercase;">
+            </div>
+          </div>
+          <div class="input-card-hint">Gross rental income minus operating expenses &amp; MACRS depreciation (Schedule 1 Line 5).</div>
         </div>
 
         <!-- Schedule C Freelance Business Expenses -->
@@ -1072,6 +1157,28 @@
         </div>
       </div>
 
+      <!-- Step 2c: Schedule E Net Rental Real Estate Income -->
+      <div class="calc-card" id="calc-schedule-e">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator">Step 2c • Schedule E / Form 4562 / Form 8582</div>
+            <h3 class="calc-card-title">Net Rental Real Estate Income (Schedule E)</h3>
+          </div>
+          <span class="irs-line-tag">Schedule 1 Line 5</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Schedule E Net Rental Income = Gross Rents − Operating Expenses − MACRS Depreciation</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Schedule E Net Rental Income = $0</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Step 3: Total Adjustments -->
       <div class="calc-card" id="calc-total-adjustments">
         <div class="calc-card-header">
@@ -1219,6 +1326,28 @@
           <div class="formula-row">
             <span class="formula-badge plugged">With Your Numbers</span>
             <span class="formula-math plugged-highlight formula-plugged">Credits = $0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 8b: Other Federal Surtaxes (Form 8959 Additional Medicare Tax & Form 8960 NIIT) -->
+      <div class="calc-card" id="calc-other-taxes">
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator">Step 8b • Schedule 2 / Form 8959 / Form 8960</div>
+            <h3 class="calc-card-title">Additional Medicare Tax &amp; Net Investment Income Tax (NIIT)</h3>
+          </div>
+          <span class="irs-line-tag">Schedule 2 Line 21 / 1040 Line 23</span>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-row">
+            <span class="formula-badge general">General Formula</span>
+            <span class="formula-math formula-general">Other Taxes = Form 8959 (0.9% over $200k) + Form 8960 NIIT (3.8% on min(NII, MAGI − $200k))</span>
+          </div>
+          <div class="formula-row">
+            <span class="formula-badge plugged">With Your Numbers</span>
+            <span class="formula-math plugged-highlight formula-plugged">Schedule 2 Other Taxes = $0</span>
           </div>
         </div>
       </div>
