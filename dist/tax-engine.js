@@ -378,22 +378,17 @@ export function computeStateTaxFromBrackets(taxable, brackets) {
 export function formatCurrency(num) {
     if (num === null || num === undefined || isNaN(num))
         return "$0";
+    const roundedCents = Math.round(num * 100) / 100;
+    const hasCents = Math.abs(roundedCents - Math.round(roundedCents)) > 0.001;
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    }).format(num);
+        minimumFractionDigits: hasCents ? 2 : 0,
+        maximumFractionDigits: hasCents ? 2 : 0
+    }).format(roundedCents);
 }
 export function formatCurrencyExact(num) {
-    if (num === null || num === undefined || isNaN(num))
-        return "$0.00";
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(num);
+    return formatCurrency(num);
 }
 export function formatPercent(rate) {
     return `${(rate * 100).toFixed(1).replace(/\.0$/, '')}%`;
@@ -461,7 +456,7 @@ export function calculateTaxes(state) {
         generalFormula: 'Total State Withholding = ∑(W-2 Box 17)',
         pluggedFormula: stateWithheldValues.length > 0
             ? `Total State Tax = ${stateWithheldValues.map(v => `${v.state}: ${formatCurrencyExact(v.amount)}`).join(' + ')} = ${formatCurrencyExact(totalStateTaxWithheld)}`
-            : 'Total State Tax = $0.00'
+            : 'Total State Tax = $0'
     };
     // Capital Gains / Losses (Schedule D / Line 7)
     const stGain = Number(state.otherIncome?.capitalGains?.shortTerm) || 0;
@@ -583,7 +578,7 @@ export function calculateTaxes(state) {
     const isItemizedBetter = totalItemized > standardDeductionBase;
     const savingsOverAlternate = Math.abs(totalItemized - standardDeductionBase);
     const itemizedCalc = {
-        result: chosenDeduction,
+        result: totalItemized,
         sourceFields: [
             'input-itemized-medical',
             'input-itemized-salt',
@@ -592,8 +587,8 @@ export function calculateTaxes(state) {
             'calc-agi',
             'select-filing-status'
         ],
-        generalFormula: 'Itemized Deductions = Medical (>7.5% AGI) + SALT (cap $10k) + Mortgage Interest + Charity',
-        pluggedFormula: `Medical: ${formatCurrency(allowableMedical)} + SALT: ${formatCurrency(allowableSalt)} + Mortgage: ${formatCurrency(mortgageInterest)} + Charity: ${formatCurrency(charity)} = ${formatCurrency(totalItemized)} (vs. Standard ${formatCurrency(standardDeductionBase)})`,
+        generalFormula: 'Schedule A Itemized Total = Medical (>7.5% AGI) + SALT (capped at $10,000) + Mortgage Interest + Charity',
+        pluggedFormula: `Schedule A Total = ${formatCurrency(allowableMedical)} (Medical) + ${formatCurrency(allowableSalt)} (SALT) + ${formatCurrency(mortgageInterest)} (Mortgage) + ${formatCurrency(charity)} (Charity) = ${formatCurrency(totalItemized)}`,
         isItemizedBetter,
         totalItemized,
         totalItemizedDeductions: totalItemized,
@@ -614,12 +609,8 @@ export function calculateTaxes(state) {
         sourceFields: chosenMethod === 'itemized'
             ? ['calc-itemized-deductions', 'select-filing-status']
             : ['select-filing-status', 'select-tax-year'],
-        generalFormula: chosenMethod === 'itemized'
-            ? 'Deduction = Itemized Deductions (Schedule A - Larger than Standard)'
-            : `Standard Deduction (${filingStatusLabel(filingStatus)}, Year ${year})`,
-        pluggedFormula: chosenMethod === 'itemized'
-            ? `Itemized Deduction Selected = ${formatCurrency(chosenDeduction)} (Saves ${formatCurrency(savingsOverAlternate)} more than Standard!)`
-            : `Standard Deduction = ${formatCurrency(chosenDeduction)}`
+        generalFormula: `Form 1040 Line 12 Deduction = ${method === 'auto' ? 'max(Standard Deduction, Schedule A Itemized Total)' : (chosenMethod === 'itemized' ? 'Schedule A Itemized Total' : 'Standard Deduction')}`,
+        pluggedFormula: `Line 12 Deduction = max(Standard: ${formatCurrency(standardDeductionBase)}, Itemized: ${formatCurrency(totalItemized)}) = ${formatCurrency(chosenDeduction)} (${chosenMethod === 'itemized' ? 'Itemized Applied' : 'Standard Applied'})`
     };
     // 6. Taxable Income - Line 15 on Form 1040
     const taxableIncome = Math.max(0, agi - chosenDeduction);
@@ -671,7 +662,7 @@ export function calculateTaxes(state) {
         generalFormula: 'Tentative Tax = ∑(Taxable Income in Bracket i × Bracket Rate i)',
         pluggedFormula: bracketFormulaParts.length > 0
             ? `Tentative Tax = ${bracketFormulaParts.join(' + ')} = ${formatCurrencyExact(taxBeforeCredits)}`
-            : `Tentative Tax = $0 × 10% = $0.00`,
+            : `Tentative Tax = $0 × 10% = $0`,
         brackets: bracketDetails
     };
     // 8. Tax Credits (Child Tax Credit)
@@ -892,7 +883,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 isRefund: true,
                 sourceFields: raw.sourceFieldIds,
                 generalFormula: `Tax = $0 (Reciprocal Agreement: ${residentState} & ${code})`,
-                pluggedFormula: `Tax = $0.00 • 100% of ${formatCurrencyExact(withholding)} Withholding Refunded by ${code}`
+                pluggedFormula: `State Wages: ${formatCurrency(stateWages)} ➔ State Tax Liability = $0 (Exempt via ${residentState}/${code} Reciprocity)`
             });
             continue;
         }
@@ -918,7 +909,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 isRefund: true,
                 sourceFields: raw.sourceFieldIds,
                 generalFormula: `${rule.name} imposes 0% personal income tax on wage compensation`,
-                pluggedFormula: `State Tax = $0.00 (No ${rule.name} Return Required)`
+                pluggedFormula: `State Tax = $0 (No ${rule.name} State Return Required)`
             });
             continue;
         }
@@ -958,9 +949,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             isRefund,
             sourceFields: raw.sourceFieldIds,
             generalFormula: `${rule.formNonResident}: State Tax = max(0, State Sourced Wages − State Standard Deduction) × Rates`,
-            pluggedFormula: isRefund
-                ? `Refund = ${formatCurrencyExact(withholding)} (Withheld) − ${formatCurrencyExact(stateTaxLiability)} (Tax) = ${formatCurrencyExact(netOutcome)}`
-                : `Owed = ${formatCurrencyExact(stateTaxLiability)} (Tax) − ${formatCurrencyExact(withholding)} (Withheld) = ${formatCurrencyExact(netOutcome)}`
+            pluggedFormula: `Taxable Income = ${formatCurrency(stateWages)} − ${formatCurrency(stdDed)} = ${formatCurrency(taxable)} ➔ State Tax Liability = ${formatCurrencyExact(stateTaxLiability)}`
         });
     }
     // PASS 2: Calculate Resident State Return (with Other State Tax Credit - OSTC)
@@ -991,7 +980,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             isRefund: true,
             sourceFields: resRaw.sourceFieldIds,
             generalFormula: `${residentRule.name} imposes 0% personal income tax on wage compensation`,
-            pluggedFormula: `Tax = $0.00 (No ${residentRule.name} State Return Required)`
+            pluggedFormula: `Tax = $0 (No ${residentRule.name} State Return Required)`
         };
     }
     else {
@@ -1052,12 +1041,10 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 ...resRaw.sourceFieldIds,
                 ...creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-liability`)
             ],
-            generalFormula: `${residentRule.formResident}: Net State Tax = max(0, Tentative Tax − Other State Tax Credit [OSTC])`,
+            generalFormula: `${residentRule.formResident}: Net State Tax = max(0, (State Wages − Standard Deduction) × Rates − Other State Tax Credit)`,
             pluggedFormula: creditedStates.length > 0
-                ? `Net Tax = ${formatCurrencyExact(resTentativeTax)} (Tentative) − ${formatCurrencyExact(totalOtherStateCredit)} (${creditedStates.map(c => c.fromState).join('/')} Credit) = ${formatCurrencyExact(finalResLiability)} ➔ ${resIsRefund ? 'Refund' : 'Owed'}: ${formatCurrencyExact(resNetOutcome)}`
-                : (resIsRefund
-                    ? `Refund = ${formatCurrencyExact(resWithholding)} (Withheld) − ${formatCurrencyExact(finalResLiability)} (Tax) = ${formatCurrencyExact(resNetOutcome)}`
-                    : `Owed = ${formatCurrencyExact(finalResLiability)} (Tax) − ${formatCurrencyExact(resWithholding)} (Withheld) = ${formatCurrencyExact(resNetOutcome)}`)
+                ? `Taxable: ${formatCurrency(residentTotalWages)} − ${formatCurrency(resStdDed)} = ${formatCurrency(resTaxable)} ➔ Tentative Tax: ${formatCurrencyExact(resTentativeTax)} − ${creditedStates.map(c => c.fromState).join('/')} Credit: ${formatCurrencyExact(totalOtherStateCredit)} = ${formatCurrencyExact(finalResLiability)}`
+                : `Taxable: ${formatCurrency(residentTotalWages)} − ${formatCurrency(resStdDed)} = ${formatCurrency(resTaxable)} ➔ State Tax Liability = ${formatCurrencyExact(finalResLiability)}`
         };
     }
     // Combined list of all state returns: resident state first, then non-resident states

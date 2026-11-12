@@ -1,4 +1,4 @@
-import { calculateTaxes } from '../tax-engine.js';
+import { calculateTaxes, formatCurrency, formatCurrencyExact } from '../tax-engine.js';
 import { TaxAppState } from '../types.js';
 import { getFieldRating, renderRatingPill, renderRatingCardHtml, renderRatingCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from '../field-ratings.js';
 import assert from 'assert';
@@ -199,11 +199,15 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   assert.strictEqual(res.stateTaxCalc.totalStateWithheld, 4500, 'Sum of CA, NY, and NJ state tax');
   assert.strictEqual(res.stateTaxCalc.totalLocalWithheld, 800, 'Local tax from NYC');
   assert.strictEqual(res.stateTaxCalc.byState.length, 3, '3 distinct states (CA, NY, NJ)');
-  assert(res.stateTaxCalc.pluggedFormula.includes('CA: $2,800.00'), 'Formula includes CA');
-  assert(res.stateTaxCalc.pluggedFormula.includes('NY: $1,250.00'), 'Formula includes NY');
-  assert(res.stateTaxCalc.pluggedFormula.includes('NJ: $450.00'), 'Formula includes NJ');
+  assert(res.stateTaxCalc.pluggedFormula.includes('CA: $2,800'), 'Formula includes CA');
+  assert(res.stateTaxCalc.pluggedFormula.includes('NY: $1,250'), 'Formula includes NY');
+  assert(res.stateTaxCalc.pluggedFormula.includes('NJ: $450'), 'Formula includes NJ');
+  assert.strictEqual(formatCurrency(75000), '$75,000', 'Whole dollar formats without cents');
+  assert.strictEqual(formatCurrency(1087.50), '$1,087.50', 'Non-zero cents formats with 2 decimal places');
+  assert.strictEqual(formatCurrencyExact(4951.75), '$4,951.75', 'Non-zero cents in formatCurrencyExact formats with 2 decimal places');
+  assert.strictEqual(formatCurrencyExact(2800), '$2,800', 'Whole dollar in formatCurrencyExact formats without cents');
 
-  console.log("✓ TS Test 4: Multi-State W-2s (CA + NY + NJ) verified correctly!");
+  console.log("✓ TS Test 4: Multi-State W-2s (CA + NY + NJ) & Cents Formatting verified correctly!");
 }
 
 // Test Case 5: Additional Income Sources (1099-NEC Freelance + 1099-DIV Dividends + Interest)

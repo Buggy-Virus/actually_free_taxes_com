@@ -1147,9 +1147,8 @@ class TaxApp {
             'calc-total-credits',
             'calc-total-tax-liability',
             'calc-total-withholding',
-            'calc-final-verdict',
             'calc-fica-breakdown',
-            'calc-state-tax-summary'
+            'calc-unified-summary'
         ];
         cardMap.forEach(id => {
             const el = document.getElementById(id);
@@ -1286,14 +1285,13 @@ class TaxApp {
                 priorityClass = 'priority-verify';
             }
             const card = document.createElement('div');
-            card.className = `calc-card ${priorityClass}`;
+            card.className = `calc-card input-panel ${priorityClass}`;
             card.id = `income-source-card-${src.id}`;
-            card.style.padding = '1.25rem';
             card.style.position = 'relative';
             card.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.4rem;">
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <select class="w2-input" id="select-income-type-${src.id}" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 700; width: auto; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px;">
+            <select class="w2-input" id="select-income-type-${src.id}" style="padding: 0.25rem 0.5rem; width: auto;">
               <option value="1099-NEC" ${src.type === '1099-NEC' ? 'selected' : ''}>Form 1099-NEC (Freelance/Contract)</option>
               <option value="1099-DIV" ${src.type === '1099-DIV' ? 'selected' : ''}>Form 1099-DIV (Dividends)</option>
               <option value="1099-MISC" ${src.type === '1099-MISC' ? 'selected' : ''}>Form 1099-MISC (Prizes/Other)</option>
@@ -1303,14 +1301,14 @@ class TaxApp {
             ${renderExplainToggleBtn(`drawer-explain-income-${src.id}`)}
             ${renderRatingPill(ratingKey)}
           </div>
-          <button type="button" class="btn" id="btn-del-income-${src.id}" title="Remove this income source" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #ef4444; border-color: #fecaca; background: #fef2f2;">
+          <button type="button" class="btn btn-sm" id="btn-del-income-${src.id}" title="Remove this income source">
             ✕
           </button>
         </div>
 
         <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-          <input type="text" class="w2-input" id="input-income-payer-${src.id}" value="${src.payer}" placeholder="Payer / Client Name" style="font-size: 0.85rem; font-weight: 600; padding: 0.35rem 0.6rem; flex: 2;">
-          <select class="w2-input" id="select-income-state-${src.id}" style="font-size: 0.8rem; padding: 0.35rem 0.5rem; flex: 1;" title="State where this income was earned">
+          <input type="text" class="w2-input" id="input-income-payer-${src.id}" value="${src.payer}" placeholder="Payer / Client Name" style="flex: 2; text-align: left;">
+          <select class="w2-input" id="select-income-state-${src.id}" style="flex: 1;" title="State where this income was earned">
             <option value="">Default (Home State)</option>
             ${US_STATES.map(s => `<option value="${s.code}" ${src.state === s.code ? 'selected' : ''}>${s.code} - ${s.name}</option>`).join('')}
           </select>
@@ -1320,8 +1318,8 @@ class TaxApp {
           <span class="currency-symbol">$</span>
           <input type="number" step="any" class="w2-input" id="input-income-source-${src.id}" value="${src.amount}" placeholder="0">
         </div>
-        <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">
-          Reported on 1040 line &amp; feeds directly into Gross Income and State Sourced Income.
+        <div class="input-card-hint">
+          Reported on Form 1040 and feeds into Gross Income and State Sourced Income.
         </div>
         ${renderFieldExplanationDrawer(ratingKey, `drawer-explain-income-${src.id}`)}
       `;
@@ -2364,20 +2362,20 @@ class TaxApp {
                 label: `W-2 #${w.id + 1} Box 2 Withheld`
             });
         });
-        // 11. Final comparison: Total Withholding & Total Tax -> Final Verdict
+        // 11. Final comparison: Total Withholding & Total Tax -> Final Tax Summary
         connections.push({
-            id: 'conn-withheld-verdict',
+            id: 'conn-withheld-unified',
             sourceId: 'calc-total-withholding',
-            targetId: 'calc-final-verdict',
+            targetId: 'calc-unified-summary',
             category: 'withholding',
-            label: 'Payments to Verdict'
+            label: 'Federal Withholding to Final Summary'
         });
         connections.push({
-            id: 'conn-tax-verdict',
+            id: 'conn-tax-unified',
             sourceId: 'calc-total-tax-liability',
-            targetId: 'calc-final-verdict',
+            targetId: 'calc-unified-summary',
             category: 'tax',
-            label: 'Tax to Verdict'
+            label: 'Federal Tax Liability to Final Summary'
         });
         // 12. FICA Connections
         this.state.w2s.forEach(w => {
@@ -2426,18 +2424,11 @@ class TaxApp {
                     sourceId: `calc-state-${sourceStateKey}-card`,
                     targetId: `calc-state-${homeStateKey}-card`,
                     category: 'state_credit',
-                    label: `🛡️ ${c.fromState} Tax Credited to ${sr.state}`
+                    label: `${c.fromState} Tax Credited to ${sr.state}`
                 });
             });
         });
-        // 15. Federal Verdict & State Outcomes -> Grand Total Unified Summary
-        connections.push({
-            id: 'conn-fed-to-unified',
-            sourceId: 'calc-final-verdict',
-            targetId: 'calc-unified-summary',
-            category: 'withholding',
-            label: 'Federal Outcome to Grand Total'
-        });
+        // 15. State Return Cards -> Final Tax Summary
         (taxData?.stateReturnsCalc || []).forEach((sr) => {
             const stateKey = sr.state.toLowerCase();
             connections.push({
@@ -2445,63 +2436,41 @@ class TaxApp {
                 sourceId: `calc-state-${stateKey}-card`,
                 targetId: 'calc-unified-summary',
                 category: 'state',
-                label: `${sr.state} Return Outcome to Grand Total`
+                label: `${sr.state} Return to Final Summary`
             });
         });
         return connections;
     }
     recalculateAndRender() {
         const taxData = calculateTaxes(this.state);
-        const updateCard = (cardId, calcObj, formattedVal) => {
+        const updateCard = (cardId, calcObj) => {
             const card = document.getElementById(cardId);
             if (!card)
                 return;
             const genEl = card.querySelector('.formula-general');
             const plugEl = card.querySelector('.formula-plugged');
-            const valEl = card.querySelector('.calc-output-value');
             if (genEl && calcObj.generalFormula)
                 genEl.textContent = calcObj.generalFormula;
             if (plugEl && calcObj.pluggedFormula)
                 plugEl.textContent = calcObj.pluggedFormula;
-            if (valEl && formattedVal)
-                valEl.textContent = formattedVal;
         };
-        updateCard('calc-total-w2-wages', taxData.w2WagesCalc, formatCurrency(taxData.w2WagesCalc.result));
-        updateCard('calc-gross-income', taxData.grossIncomeCalc, formatCurrency(taxData.grossIncomeCalc.result));
-        updateCard('calc-capital-gains', taxData.capitalGainsCalc, formatCurrencyExact(taxData.capitalGainsCalc.result));
-        updateCard('calc-total-adjustments', taxData.adjustmentsCalc, formatCurrency(taxData.adjustmentsCalc.result));
-        updateCard('calc-agi', taxData.agiCalc, formatCurrency(taxData.agiCalc.result));
-        updateCard('calc-itemized-deductions', taxData.itemizedCalc, formatCurrency(taxData.itemizedCalc.result));
-        updateCard('calc-standard-deduction', taxData.deductionCalc, formatCurrency(taxData.deductionCalc.result));
-        updateCard('calc-taxable-income', taxData.taxableIncomeCalc, formatCurrency(taxData.taxableIncomeCalc.result));
-        updateCard('calc-tax-before-credits', taxData.taxBeforeCreditsCalc, formatCurrencyExact(taxData.taxBeforeCreditsCalc.result));
-        this.renderTaxBrackets(taxData.taxBeforeCreditsCalc.brackets, taxData.taxableIncomeCalc.result);
-        const optDedEl = document.getElementById('optimal-deduction-amount');
-        if (optDedEl)
-            optDedEl.textContent = formatCurrency(taxData.deductionCalc.result);
-        const compBadge = document.getElementById('deduction-comparison-badge');
-        if (compBadge) {
-            const isItemizedChosen = taxData.itemizedCalc.chosenMethod === 'itemized';
-            compBadge.className = `deduction-comparison-pill ${isItemizedChosen ? 'optimal-itemized' : 'optimal-standard'}`;
-            const diff = Math.abs(taxData.itemizedCalc.totalItemizedDeductions - taxData.itemizedCalc.standardDeduction);
-            if (isItemizedChosen) {
-                compBadge.textContent = `🌟 Optimal Choice: Itemized (+$${formatCurrency(diff)} Extra Deduction!)`;
-            }
-            else {
-                compBadge.textContent = `Optimal Choice: Standard Deduction ($${formatCurrency(taxData.itemizedCalc.standardDeduction)})`;
-            }
-        }
-        updateCard('calc-total-credits', taxData.creditsCalc, formatCurrency(taxData.creditsCalc.result));
-        updateCard('calc-total-tax-liability', taxData.totalTaxCalc, formatCurrencyExact(taxData.totalTaxCalc.result));
-        updateCard('calc-total-withholding', taxData.withholdingCalc, formatCurrencyExact(taxData.withholdingCalc.result));
-        this.renderVerdict(taxData);
-        this.renderUnifiedSummary(taxData);
-        updateCard('calc-fica-breakdown', taxData.ficaCalc, formatCurrencyExact(taxData.ficaCalc.totalFica));
-        // Render State Tax Summary Card & Dynamic State Returns
-        this.renderStateTaxSummary(taxData);
+        updateCard('calc-total-w2-wages', taxData.w2WagesCalc);
+        updateCard('calc-gross-income', taxData.grossIncomeCalc);
+        updateCard('calc-capital-gains', taxData.capitalGainsCalc);
+        updateCard('calc-total-adjustments', taxData.adjustmentsCalc);
+        updateCard('calc-agi', taxData.agiCalc);
+        updateCard('calc-itemized-deductions', taxData.itemizedCalc);
+        updateCard('calc-standard-deduction', taxData.deductionCalc);
+        updateCard('calc-taxable-income', taxData.taxableIncomeCalc);
+        updateCard('calc-tax-before-credits', taxData.taxBeforeCreditsCalc);
+        this.renderTaxBrackets(taxData.taxBeforeCreditsCalc.brackets);
+        updateCard('calc-total-credits', taxData.creditsCalc);
+        updateCard('calc-total-tax-liability', taxData.totalTaxCalc);
+        updateCard('calc-total-withholding', taxData.withholdingCalc);
+        updateCard('calc-fica-breakdown', taxData.ficaCalc);
+        // Render Dynamic State Return Cards & Final Tax Summary Table
         this.renderStateReturns(taxData);
-        this.render1040Mirror(taxData);
-        this.updateHeaderStats(taxData);
+        this.renderUnifiedSummary(taxData);
         const connections = this.buildConnections(taxData);
         if (this.arrowEngine) {
             this.arrowEngine.setConnections(connections);
@@ -2519,33 +2488,34 @@ class TaxApp {
         const stateReturns = taxData.stateReturnsCalc || [];
         stateReturns.forEach(sr => {
             const card = document.createElement('div');
-            card.className = 'state-return-card';
-            card.id = `calc-state-${sr.state.toLowerCase()}-card`;
+            card.className = 'calc-card state-return-card';
+            const cardId = `calc-state-${sr.state.toLowerCase()}-card`;
+            card.id = cardId;
             const isRes = sr.residentStatus === 'resident';
             const statusBadge = isRes
-                ? '<span class="state-status-badge badge-resident">🏠 Resident Return</span>'
-                : '<span class="state-status-badge badge-nonresident">💼 Nonresident Return</span>';
+                ? '<span class="state-status-badge badge-resident">Resident Return</span>'
+                : '<span class="state-status-badge badge-nonresident">Nonresident Return</span>';
             let extraBadge = '';
             if (sr.creditForOtherStates > 0) {
-                extraBadge = `<span class="state-status-badge badge-shield" id="calc-state-${sr.state.toLowerCase()}-ostc" title="Credit for Taxes Paid to Other States">🛡️ Double-Tax Shield: -${formatCurrency(sr.creditForOtherStates)}</span>`;
+                extraBadge = `<span class="state-status-badge badge-shield" id="calc-state-${sr.state.toLowerCase()}-ostc" title="Credit for Taxes Paid to Other States">OSTC Credit Applied</span>`;
             }
             else if (sr.reciprocityExemption) {
-                extraBadge = `<span class="state-status-badge badge-reciprocal">🤝 Reciprocal Agreement Active</span>`;
+                extraBadge = `<span class="state-status-badge badge-reciprocal">Reciprocal Exemption</span>`;
             }
             else if (!sr.hasIncomeTax) {
-                extraBadge = `<span class="state-status-badge badge-no-tax">🌴 0% Wage Tax State</span>`;
+                extraBadge = `<span class="state-status-badge badge-no-tax">0% Wage Tax State</span>`;
             }
             card.innerHTML = `
         <div class="calc-card-header">
           <div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
-              <span class="step-indicator" style="color: #6d28d9; margin-bottom: 0;">State Return • ${sr.state}</span>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
+              <span class="step-indicator">State Return • ${sr.state}</span>
               ${statusBadge}
               ${extraBadge}
             </div>
             <h3 class="calc-card-title">${sr.stateName}: ${sr.formName}</h3>
           </div>
-          <span class="irs-line-tag" style="background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe;">${sr.formName}</span>
+          <span class="irs-line-tag">${sr.formName}</span>
         </div>
 
         <div class="formula-box">
@@ -2553,41 +2523,20 @@ class TaxApp {
             <span class="formula-badge general">General Formula</span>
             <span class="formula-math formula-general">${sr.generalFormula}</span>
           </div>
-          <div class="formula-row">
-            <span class="formula-badge plugged" style="background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe;">With Your Numbers</span>
+          <div class="formula-row" id="calc-state-${sr.state.toLowerCase()}-liability">
+            <span class="formula-badge plugged">With Your Numbers</span>
             <span class="formula-math plugged-highlight formula-plugged">${sr.pluggedFormula}</span>
           </div>
         </div>
 
-        ${sr.creditedStates.length > 0 ? `
-          <div style="background: #fdf4ff; border: 1px solid #f0abfc; border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; font-size: 0.82rem; color: #701a75;">
-            <strong>🛡️ Other State Tax Credit (OSTC) Detail:</strong>
-            ${sr.creditedStates.map(c => `
-              <div>• Credited from <strong>${c.fromState}</strong>: Source tax paid was ${formatCurrencyExact(c.sourceTaxPaid)}, resident attributable tax is ${formatCurrencyExact(c.homeAttributableTax)} ➔ Credit allowed: <strong>${formatCurrencyExact(c.creditAllowed)}</strong></div>
-            `).join('')}
-          </div>
-        ` : ''}
-
         ${sr.reciprocityNote ? `
-          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; font-size: 0.82rem; color: #065f46;">
-            <strong>🤝 Reciprocity Note:</strong> ${sr.reciprocityNote}
+          <div class="state-note-box">
+            <strong>Reciprocity Note:</strong> ${sr.reciprocityNote}
           </div>
         ` : ''}
-
-        <div class="state-outcome-banner ${sr.isRefund ? 'is-refund' : 'is-owed'}" id="calc-state-${sr.state.toLowerCase()}-outcome">
-          <div>
-            <div style="font-size: 0.85rem; opacity: 0.9;">
-              ${sr.isRefund ? `Estimated ${sr.stateName} State Refund:` : `Estimated ${sr.stateName} State Tax Owed:`}
-            </div>
-            <div style="font-size: 0.75rem; opacity: 0.8;">
-              Box 17 Withholding (${formatCurrencyExact(sr.stateWithholding)}) vs. Tax Liability (${formatCurrencyExact(sr.stateTaxLiability)})
-            </div>
-          </div>
-          <div class="state-outcome-amount" id="calc-state-${sr.state.toLowerCase()}-liability">
-            ${sr.isRefund ? `+${formatCurrencyExact(sr.netOutcome)}` : `-${formatCurrencyExact(sr.netOutcome)}`}
-          </div>
-        </div>
       `;
+            card.addEventListener('mouseenter', () => this.arrowEngine?.setActiveTarget(cardId));
+            card.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
             container.appendChild(card);
         });
     }
@@ -2595,100 +2544,55 @@ class TaxApp {
         const card = document.getElementById('calc-unified-summary');
         if (!card)
             return;
-        const banner = document.getElementById('unified-hero-banner');
-        const amountEl = document.getElementById('unified-hero-amount');
-        const subtitleEl = document.getElementById('unified-hero-subtitle');
         const pluggedEl = document.getElementById('unified-formula-plugged');
         const tbody = document.getElementById('unified-ledger-tbody');
         const u = taxData.unifiedSummaryCalc;
         if (!u)
             return;
-        if (banner) {
-            banner.className = `unified-hero-banner ${u.isGrandTotalRefund ? 'is-refund' : 'is-owed'}`;
-        }
-        if (amountEl) {
-            amountEl.textContent = `${u.isGrandTotalRefund ? '+' : '-'}${formatCurrencyExact(u.result)}`;
-        }
-        if (subtitleEl) {
-            subtitleEl.textContent = u.isGrandTotalRefund
-                ? 'Total combined refund check amount coming back to you across the IRS and all states!'
-                : 'Total combined balance due across the IRS and state tax revenue departments.';
-        }
         if (pluggedEl) {
             pluggedEl.textContent = u.pluggedFormula;
         }
         if (tbody) {
             tbody.innerHTML = '';
+            let totalTaxLiability = 0;
+            let totalWithholding = 0;
             u.lines.forEach(line => {
+                totalTaxLiability += line.taxLiability;
+                totalWithholding += line.withholding;
                 const tr = document.createElement('tr');
                 const isRef = line.netOutcome >= 0;
                 const outcomeColor = isRef ? 'val-refund' : 'val-owed';
                 const outcomeFormatted = `${isRef ? '+' : '-'}${formatCurrencyExact(Math.abs(line.netOutcome))}`;
                 tr.innerHTML = `
           <td><strong>${line.jurisdiction}</strong></td>
-          <td><span class="irs-line-tag">${line.formName}</span></td>
-          <td>${formatCurrencyExact(line.taxLiability)}</td>
-          <td>${formatCurrencyExact(line.withholding)}</td>
-          <td class="${outcomeColor}">${outcomeFormatted} ${isRef ? 'Refund' : 'Owed'}</td>
-          <td>${line.badge ? `<span class="state-status-badge badge-shield">${line.badge}</span>` : '<span style="color: #94a3b8;">Standard Filing</span>'}</td>
+          <td>${line.formName}</td>
+          <td class="num-col">${formatCurrencyExact(line.taxLiability)}</td>
+          <td class="num-col">${formatCurrencyExact(line.withholding)}</td>
+          <td class="${outcomeColor}">${outcomeFormatted} (${isRef ? 'Refund' : 'Owed'})</td>
+          <td>${line.badge ? line.badge.replace(/\s*\([^)]*\)/g, '') : 'Standard Filing'}</td>
         `;
                 tbody.appendChild(tr);
             });
-            // Total row
+            // Combined Total row
             const totalTr = document.createElement('tr');
             totalTr.className = 'total-row';
             const grandRef = u.isGrandTotalRefund;
             totalTr.innerHTML = `
-        <td colspan="4" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em;">Grand Total Net Pocket Outcome:</td>
-        <td class="${grandRef ? 'val-refund' : 'val-owed'}">${grandRef ? '+' : '-'}${formatCurrencyExact(u.result)} ${grandRef ? 'NET REFUND' : 'NET OWED'}</td>
-        <td><strong>${grandRef ? '🎉 In Your Pocket' : '⚠️ Total Due'}</strong></td>
+        <td><strong>Total (Federal + All States)</strong></td>
+        <td>All Returns</td>
+        <td class="num-col"><strong>${formatCurrencyExact(totalTaxLiability)}</strong></td>
+        <td class="num-col"><strong>${formatCurrencyExact(totalWithholding)}</strong></td>
+        <td class="${grandRef ? 'val-refund' : 'val-owed'}"><strong>${grandRef ? '+' : '-'}${formatCurrencyExact(u.result)} (${grandRef ? 'Net Refund' : 'Net Owed'})</strong></td>
+        <td><strong>${grandRef ? 'Combined Refund' : 'Combined Balance Due'}</strong></td>
       `;
             tbody.appendChild(totalTr);
         }
     }
-    renderStateTaxSummary(taxData) {
-        const card = document.getElementById('calc-state-tax-summary');
-        if (!card)
-            return;
-        const genEl = card.querySelector('.formula-general');
-        const plugEl = card.querySelector('.formula-plugged');
-        const valEl = card.querySelector('.calc-output-value');
-        if (genEl)
-            genEl.textContent = taxData.stateTaxCalc.generalFormula;
-        if (plugEl)
-            plugEl.textContent = taxData.stateTaxCalc.pluggedFormula;
-        if (valEl)
-            valEl.textContent = formatCurrencyExact(taxData.stateTaxCalc.totalStateWithheld);
-        const tbody = document.getElementById('state-summary-tbody');
-        if (tbody) {
-            tbody.innerHTML = '';
-            if (taxData.stateTaxCalc.byState.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #94a3b8;">No state tax lines entered.</td></tr>`;
-            }
-            else {
-                taxData.stateTaxCalc.byState.forEach(st => {
-                    const stateObj = US_STATES.find(s => s.code === st.state);
-                    const stateName = stateObj ? `${stateObj.code} (${stateObj.name})` : st.state;
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-            <td><strong>${stateName}</strong></td>
-            <td>${formatCurrency(st.stateWages)}</td>
-            <td style="color: #7c3aed; font-weight: 700;">${formatCurrencyExact(st.stateTaxWithheld)}</td>
-            <td>${formatCurrencyExact(st.localTaxWithheld)}</td>
-          `;
-                    tbody.appendChild(tr);
-                });
-            }
-        }
-    }
-    renderTaxBrackets(brackets, taxableIncome) {
+    renderTaxBrackets(brackets) {
         const tbody = document.getElementById('tax-brackets-tbody');
-        const barContainer = document.getElementById('bracket-progress-bar');
         if (!tbody)
             return;
         tbody.innerHTML = '';
-        if (barContainer)
-            barContainer.innerHTML = '';
         brackets.forEach(b => {
             const isTaxed = b.taxableAmount > 0;
             const tr = document.createElement('tr');
@@ -2701,114 +2605,7 @@ class TaxApp {
         <td>${b.formula}</td>
       `;
             tbody.appendChild(tr);
-            if (barContainer && taxableIncome > 0 && isTaxed) {
-                const pct = Math.max(2, (b.taxableAmount / taxableIncome) * 100);
-                const seg = document.createElement('div');
-                seg.className = 'bracket-segment';
-                seg.style.width = `${pct}%`;
-                seg.title = `${b.ratePercent} bracket: ${formatCurrency(b.taxableAmount)}`;
-                seg.textContent = `${b.ratePercent}`;
-                barContainer.appendChild(seg);
-            }
         });
-    }
-    renderVerdict(taxData) {
-        const verdictCard = document.getElementById('calc-final-verdict');
-        if (!verdictCard)
-            return;
-        const isRefund = taxData.finalResultCalc.isRefund;
-        const amount = taxData.finalResultCalc.result;
-        verdictCard.classList.remove('is-refund', 'is-owed');
-        verdictCard.classList.add(isRefund ? 'is-refund' : 'is-owed');
-        const badgeEl = verdictCard.querySelector('.verdict-header');
-        const amountEl = verdictCard.querySelector('.verdict-amount');
-        const subEl = verdictCard.querySelector('.verdict-subtitle');
-        const genEl = verdictCard.querySelector('.formula-general');
-        const plugEl = verdictCard.querySelector('.formula-plugged');
-        if (badgeEl)
-            badgeEl.textContent = isRefund ? '🎉 Your Estimated Federal Tax Refund' : '⚠️ Federal Tax Balance You Owe';
-        if (amountEl)
-            amountEl.textContent = formatCurrencyExact(amount);
-        if (subEl) {
-            if (isRefund) {
-                subEl.textContent = `You overpaid throughout the year through paychecks ($${formatCurrencyExact(taxData.withholdingCalc.result)} withheld vs $${formatCurrencyExact(taxData.totalTaxCalc.result)} owed). The IRS will refund the difference!`;
-            }
-            else {
-                subEl.textContent = `Your total tax liability ($${formatCurrencyExact(taxData.totalTaxCalc.result)}) exceeds your paycheck withholding ($${formatCurrencyExact(taxData.withholdingCalc.result)}). You must pay the remaining balance to the IRS.`;
-            }
-        }
-        if (genEl)
-            genEl.textContent = taxData.finalResultCalc.generalFormula;
-        if (plugEl)
-            plugEl.textContent = taxData.finalResultCalc.pluggedFormula;
-        const withheldBar = document.getElementById('comp-bar-withheld');
-        const taxBar = document.getElementById('comp-bar-tax');
-        const maxVal = Math.max(taxData.withholdingCalc.result, taxData.totalTaxCalc.result, 1);
-        if (withheldBar) {
-            const wPct = Math.min(100, (taxData.withholdingCalc.result / maxVal) * 100);
-            withheldBar.style.width = `${wPct}%`;
-            const valLabel = document.getElementById('comp-val-withheld');
-            if (valLabel)
-                valLabel.textContent = formatCurrencyExact(taxData.withholdingCalc.result);
-        }
-        if (taxBar) {
-            const tPct = Math.min(100, (taxData.totalTaxCalc.result / maxVal) * 100);
-            taxBar.style.width = `${tPct}%`;
-            const valLabel = document.getElementById('comp-val-tax');
-            if (valLabel)
-                valLabel.textContent = formatCurrencyExact(taxData.totalTaxCalc.result);
-        }
-    }
-    updateHeaderStats(taxData) {
-        const setStat = (id, text) => {
-            const el = document.getElementById(id);
-            if (el)
-                el.textContent = text;
-        };
-        setStat('header-gross-income', formatCurrency(taxData.grossIncomeCalc.result));
-        setStat('header-taxable-income', formatCurrency(taxData.taxableIncomeCalc.result));
-        setStat('header-total-withholding', formatCurrency(taxData.withholdingCalc.result));
-        const verdictPill = document.getElementById('header-verdict-pill');
-        const verdictVal = document.getElementById('header-verdict-val');
-        const verdictLbl = document.getElementById('header-verdict-lbl');
-        if (verdictPill && verdictVal && verdictLbl) {
-            const isRefund = taxData.finalResultCalc.isRefund;
-            verdictPill.classList.remove('is-refund', 'is-owed');
-            verdictPill.classList.add(isRefund ? 'is-refund' : 'is-owed');
-            verdictLbl.textContent = isRefund ? 'EST. REFUND' : 'TAX OWED';
-            verdictVal.textContent = formatCurrencyExact(taxData.finalResultCalc.result);
-        }
-    }
-    render1040Mirror(taxData) {
-        const setLine = (id, val) => {
-            const el = document.getElementById(id);
-            if (el)
-                el.textContent = formatCurrencyExact(val);
-        };
-        setLine('line-1040-1z', taxData.w2WagesCalc.result);
-        setLine('line-1040-9', taxData.grossIncomeCalc.result);
-        setLine('line-1040-10', taxData.adjustmentsCalc.result);
-        setLine('line-1040-11', taxData.agiCalc.result);
-        setLine('line-1040-12', taxData.deductionCalc.result);
-        setLine('line-1040-15', taxData.taxableIncomeCalc.result);
-        setLine('line-1040-16', taxData.taxBeforeCreditsCalc.result);
-        setLine('line-1040-19', taxData.creditsCalc.result);
-        setLine('line-1040-24', taxData.totalTaxCalc.result);
-        setLine('line-1040-25d', taxData.withholdingCalc.result);
-        const refundRow = document.getElementById('row-1040-refund');
-        const owedRow = document.getElementById('row-1040-owed');
-        if (refundRow && owedRow) {
-            if (taxData.finalResultCalc.isRefund) {
-                refundRow.style.display = 'table-row';
-                owedRow.style.display = 'none';
-                setLine('line-1040-34', taxData.finalResultCalc.result);
-            }
-            else {
-                refundRow.style.display = 'none';
-                owedRow.style.display = 'table-row';
-                setLine('line-1040-37', taxData.finalResultCalc.result);
-            }
-        }
     }
     updateTableOfContents() {
         const listContainer = document.getElementById('toc-w2-list');

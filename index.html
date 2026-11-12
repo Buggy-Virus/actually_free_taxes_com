@@ -14,45 +14,21 @@
   <!-- Dynamic SVG Arrow Connection Overlay -->
   <svg id="arrow-canvas"></svg>
 
-  <!-- Sticky Top Header & Live Status Bar -->
+  <!-- Sticky Top Header -->
   <header class="sticky-header">
     <div class="header-container">
       <div class="logo-area">
-        <div class="logo-icon">§</div>
-        <div>
-          <span class="logo-title">ActuallyFreeTaxes<span style="color: #10b981;">.com</span></span>
-          <span class="logo-badge">Visual & Transparent</span>
-        </div>
-      </div>
-
-      <!-- Live Quick Stats -->
-      <div class="quick-stats-bar">
-        <div class="stat-pill">
-          <span class="label">Gross Income</span>
-          <span class="value" id="header-gross-income">$0</span>
-        </div>
-        <div class="stat-pill">
-          <span class="label">Taxable Income</span>
-          <span class="value" id="header-taxable-income">$0</span>
-        </div>
-        <div class="stat-pill">
-          <span class="label">Total Withheld</span>
-          <span class="value" id="header-total-withholding" style="color: #0284c7;">$0</span>
-        </div>
-        <div class="stat-pill verdict is-refund" id="header-verdict-pill">
-          <span class="label" id="header-verdict-lbl">EST. REFUND</span>
-          <span class="value" id="header-verdict-val">$0</span>
-        </div>
+        <span class="logo-title">ActuallyFreeTaxes.com</span>
       </div>
 
       <!-- Controls -->
       <div class="header-controls">
-        <label class="toggle-switch-label" title="Toggle visible dependency lines connecting all inputs to downstream calculations">
+        <label class="toggle-switch-label" title="Toggle visible dependency lines connecting inputs to downstream calculations">
           <input type="checkbox" id="toggle-all-arrows" checked>
           <span>Dependency Arrows</span>
         </label>
-        <button type="button" class="btn btn-sm" id="btn-header-tos" style="font-size: 0.76rem; padding: 0.4rem 0.75rem; background: #ffffff; border: 1px solid #cbd5e1; color: #334155; font-weight: 700; border-radius: 8px;" title="View Terms of Service and Disclaimers">
-          ⚖️ Terms &amp; Advisory
+        <button type="button" class="btn" id="btn-header-tos" title="View Terms of Service and Disclaimers">
+          Terms &amp; Advisory
         </button>
         <button type="button" class="btn btn-primary" id="btn-add-w2">
           + Add W-2
@@ -63,116 +39,108 @@
 
   <div class="app-layout">
 
-    <!-- Left Sticky Table of Contents (Dynamically Updated) -->
+    <!-- Left Sticky Table of Contents -->
     <aside class="toc-sidebar" id="toc-sidebar">
       <div class="toc-header">
-        <span class="toc-title">📑 Tax Navigator</span>
-        <span class="toc-badge" id="toc-section-counter">7 Parts</span>
+        <span class="toc-title">Contents</span>
       </div>
 
-      <!-- Group: W-2 Forms (Updated dynamically as W-2s are added/removed) -->
+      <!-- Group: W-2 Forms -->
       <div class="toc-group">
         <div class="toc-group-label">
-          <span>W-2 Statements</span>
+          <span>1. W-2 Statements</span>
           <span class="toc-badge" id="toc-w2-count">1 W-2</span>
         </div>
         <div id="toc-w2-list" class="toc-group"></div>
         <button type="button" class="toc-add-btn" id="btn-add-w2-toc">
-          <span>+</span> Add Another W-2
+          + Add W-2
         </button>
       </div>
 
-      <!-- Group: Incomes & Adjustments (Updated dynamically as income sources are added/removed) -->
+      <!-- Group: Incomes & Adjustments -->
       <div class="toc-group">
         <div class="toc-group-label">
-          <span>Income Sources</span>
+          <span>2. Other Income &amp; Adjustments</span>
           <span class="toc-badge" id="toc-income-count">1 Source</span>
         </div>
         <div id="toc-income-list" class="toc-group"></div>
         <button type="button" class="toc-add-btn" id="btn-add-income-toc">
-          <span>+</span> Add Income Source
+          + Add Income Source
         </button>
-        <a href="#section-other-inputs" class="toc-link" data-toc-target="section-other-inputs" style="margin-top: 0.25rem;">
-          <span>Part 2: Adjustments &amp; Incomes</span>
+        <a href="#section-other-inputs" class="toc-link" data-toc-target="section-other-inputs">
+          <span>Adjustments &amp; Credits</span>
         </a>
       </div>
 
       <!-- Group: Itemized Deductions (Schedule A) -->
       <div class="toc-group">
         <div class="toc-group-label">
-          <span>Itemized Deductions</span>
-          <span class="toc-badge">Part 3</span>
+          <span>3. Deductions (Schedule A)</span>
         </div>
         <a href="#section-itemized-inputs" class="toc-link" data-toc-target="section-itemized-inputs">
           <span>Schedule A Inputs</span>
         </a>
         <a href="#calc-itemized-deductions" class="toc-link" data-toc-target="calc-itemized-deductions">
-          <span>Standard vs. Itemized</span>
+          <span>Schedule A Total</span>
         </a>
       </div>
 
       <!-- Group: Calculation Engine -->
       <div class="toc-group">
         <div class="toc-group-label">
-          <span>Part 4: Calculations</span>
+          <span>4. Federal Calculations</span>
         </div>
         <a href="#calc-total-w2-wages" class="toc-link" data-toc-target="calc-total-w2-wages">
-          <span>Step 1: Total Wages</span>
-        </a>
-        <a href="#calc-gross-income" class="toc-link" data-toc-target="calc-gross-income">
-          <span>Step 2: Gross Income</span>
+          <span>Line 1a: Total Wages</span>
         </a>
         <a href="#calc-capital-gains" class="toc-link" data-toc-target="calc-capital-gains">
-          <span>Step 2b: Capital Gains</span>
+          <span>Line 7: Capital Gains</span>
+        </a>
+        <a href="#calc-gross-income" class="toc-link" data-toc-target="calc-gross-income">
+          <span>Line 9: Gross Income</span>
         </a>
         <a href="#calc-total-adjustments" class="toc-link" data-toc-target="calc-total-adjustments">
-          <span>Step 3: Adjustments</span>
+          <span>Line 10: Adjustments</span>
         </a>
         <a href="#calc-agi" class="toc-link" data-toc-target="calc-agi">
-          <span>Step 4: AGI (Line 11)</span>
+          <span>Line 11: AGI</span>
         </a>
         <a href="#calc-standard-deduction" class="toc-link" data-toc-target="calc-standard-deduction">
-          <span>Step 5: Deduction</span>
+          <span>Line 12: Deduction</span>
         </a>
         <a href="#calc-taxable-income" class="toc-link" data-toc-target="calc-taxable-income">
-          <span>Step 6: Taxable Income</span>
+          <span>Line 15: Taxable Income</span>
         </a>
         <a href="#calc-tax-before-credits" class="toc-link" data-toc-target="calc-tax-before-credits">
-          <span>Step 7: Tax Brackets</span>
+          <span>Line 16: Tax Brackets</span>
         </a>
         <a href="#calc-total-credits" class="toc-link" data-toc-target="calc-total-credits">
-          <span>Step 8: Tax Credits</span>
+          <span>Line 19: Tax Credits</span>
         </a>
         <a href="#calc-total-tax-liability" class="toc-link" data-toc-target="calc-total-tax-liability">
-          <span>Step 9: Total Tax</span>
+          <span>Line 24: Total Tax</span>
         </a>
         <a href="#calc-total-withholding" class="toc-link" data-toc-target="calc-total-withholding">
-          <span>Step 10: Withholding</span>
+          <span>Line 25d: Withholding</span>
         </a>
         <a href="#calc-fica-breakdown" class="toc-link" data-toc-target="calc-fica-breakdown">
-          <span>Step 12: FICA Breakdown</span>
+          <span>FICA Payroll Taxes</span>
         </a>
       </div>
 
-      <!-- Group: Verdict & State & 1040 -->
+      <!-- Group: State & Final Summary -->
       <div class="toc-group">
         <div class="toc-group-label">
-          <span>Results & Summary</span>
+          <span>5. State &amp; Final Summary</span>
         </div>
-        <a href="#calc-final-verdict" class="toc-link" data-toc-target="calc-final-verdict" style="color: #059669; font-weight: 700;">
-          <span>🎉 Federal Verdict</span>
+        <a href="#section-state-returns" class="toc-link" data-toc-target="section-state-returns">
+          <span>5. State Tax Returns</span>
         </a>
-        <a href="#calc-unified-summary" class="toc-link" data-toc-target="calc-unified-summary" style="color: #4338ca; font-weight: 700;">
-          <span>★ Grand Total Ledger</span>
+        <a href="#calc-unified-summary" class="toc-link" data-toc-target="calc-unified-summary">
+          <span>6. Final Tax Summary</span>
         </a>
-        <a href="#calc-state-tax-summary" class="toc-link" data-toc-target="calc-state-tax-summary">
-          <span>Part 6: Multi-State Returns</span>
-        </a>
-        <a href="#section-1040-mirror" class="toc-link" data-toc-target="section-1040-mirror">
-          <span>Part 7: 1040 Mirror</span>
-        </a>
-        <a href="#section-filing-options" class="toc-link" data-toc-target="section-filing-options" style="color: #2563eb; font-weight: 750;">
-          <span>🚀 Part 8: Ready to File</span>
+        <a href="#section-filing-options" class="toc-link" data-toc-target="section-filing-options">
+          <span>7. Filing &amp; Print Options</span>
         </a>
       </div>
     </aside>
@@ -180,211 +148,177 @@
     <!-- Main Scrollable Content -->
     <main class="main-content">
 
-    <!-- Hero Introduction -->
-    <section class="hero-banner">
-      <h1>Transparent Single-Page Taxes</h1>
-      <p>
-        No hidden black-box math. As you type into your W-2, colored arrows show exactly where each dollar flows,
-        and every calculation card reveals the exact formula with your plugged-in numbers.
-      </p>
-
-      <div class="hero-controls">
-        <div class="select-control">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
-            <label for="select-tax-year" style="margin-bottom: 0;">Tax Year</label>
-            <span class="field-rating-pill badge-priority-must" data-rating-field="global-tax-year" role="button" tabindex="0" title="Tax Year — Click for IRS Risk & Guidance Breakdown">
-              <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 3/3, Savings 0/3">
-                <span class="rating-circle circle-attention circle-att-4 is-max" title="Safe to Ignore / Attention: Critical (4/4) [MAX !]">!</span>
-                <span class="rating-circle circle-risk circle-risk-3 is-max" title="IRS Audit Risk: High (3/3) [MAX !]">!</span>
-                <span class="rating-circle circle-savings circle-save-0" title="Money Savings: Sets Inflation Brackets"></span>
-              </span>
-              <span class="pill-text">Required</span>
-              <span class="pill-info-icon">ⓘ</span>
-            </span>
-          </div>
-          <select id="select-tax-year">
-            <option value="2024" selected>2024 (Filed in 2025)</option>
-            <option value="2025">2025 (Projected)</option>
-          </select>
-        </div>
-
-        <div class="select-control">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
-            <label for="select-filing-status" style="margin-bottom: 0;">Filing Status</label>
-            <span class="field-rating-pill badge-priority-must" data-rating-field="global-filing-status" role="button" tabindex="0" title="Filing Status — Click for IRS Risk & Guidance Breakdown">
-              <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 3/3, Savings 3/3">
-                <span class="rating-circle circle-attention circle-att-4 is-max" title="Safe to Ignore / Attention: Foundational (4/4) [MAX !]">!</span>
-                <span class="rating-circle circle-risk circle-risk-3 is-max" title="IRS Audit Risk: High Audit Scrutiny (3/3) [MAX !]">!</span>
-                <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: Gigantic Dollar Impact ($$$$$) [MAX !]">!</span>
-              </span>
-              <span class="pill-text">100% Accurate</span>
-              <span class="pill-info-icon">ⓘ</span>
-            </span>
-          </div>
-          <select id="select-filing-status">
-            <option value="single" selected>Single</option>
-            <option value="married_joint">Married Filing Jointly</option>
-            <option value="married_separate">Married Filing Separately</option>
-            <option value="head_of_household">Head of Household</option>
-          </select>
-        </div>
-
-        <div class="select-control">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
-            <label for="select-resident-state" style="margin-bottom: 0;">Primary Resident State</label>
-            <span class="field-rating-pill badge-priority-must" data-rating-field="global-resident-state" role="button" tabindex="0" title="Primary Resident State — Click for IRS & State Guidance">
-              <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 3/3, Savings 3/3">
-                <span class="rating-circle circle-attention circle-att-4 is-max" title="Safe to Ignore / Attention: Critical for State (4/4) [MAX !]">!</span>
-                <span class="rating-circle circle-risk circle-risk-3 is-max" title="IRS / State Audit Risk: High Audit Scrutiny (3/3) [MAX !]">!</span>
-                <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: Determines State Rates ($$$$) [MAX !]">!</span>
-              </span>
-              <span class="pill-text">Home State</span>
-              <span class="pill-info-icon">ⓘ</span>
-            </span>
-          </div>
-          <select id="select-resident-state">
-            <option value="CA" selected>CA - California (FTB Form 540)</option>
-            <option value="NY">NY - New York (Form IT-201)</option>
-            <option value="NJ">NJ - New Jersey (Form NJ-1040)</option>
-            <option value="PA">PA - Pennsylvania (Form PA-40)</option>
-            <option value="IL">IL - Illinois (Form IL-1040)</option>
-            <option value="MA">MA - Massachusetts (Form 1)</option>
-            <option value="TX">TX - Texas (0% No State Wage Tax)</option>
-            <option value="FL">FL - Florida (0% No State Wage Tax)</option>
-            <option value="WA">WA - Washington (0% No State Wage Tax)</option>
-            <option value="NV">NV - Nevada (0% No State Wage Tax)</option>
-            <option value="TN">TN - Tennessee (0% No State Wage Tax)</option>
-            <option value="CO">CO - Colorado (Form DR 0104)</option>
-            <option value="NC">NC - North Carolina (Form D-400)</option>
-            <option value="GA">GA - Georgia (Form 500)</option>
-            <option value="VA">VA - Virginia (Form 760)</option>
-            <option value="OH">OH - Ohio (Form IT 1040)</option>
-            <option value="MI">MI - Michigan (Form MI-1040)</option>
-            <option value="AZ">AZ - Arizona (Form 140)</option>
-            <option value="OTHER">Other US State</option>
-          </select>
-        </div>
+    <!-- Return Settings & Filing Status (User Input Panel) -->
+    <section id="section-return-settings">
+      <div class="section-header-bar">
+        <h2>Return Settings &amp; Filing Status</h2>
       </div>
 
-      <div class="presets-container">
-        <span>Try a sample scenario:</span>
-        <button type="button" class="preset-chip" data-preset="single-75k">Single ($75k)</button>
-        <button type="button" class="preset-chip" data-preset="multi-state-dual">Multi-State Workers (CA + NY)</button>
-        <button type="button" class="preset-chip" data-preset="married-dual-140k">Dual-Income Married ($140k + 1 Kid)</button>
-        <button type="button" class="preset-chip" data-preset="student-grad">College Grad with Student Loans</button>
-        <button type="button" class="preset-chip" data-preset="blank">Blank Slate</button>
-      </div>
-
-      <!-- Client-Side Local Storage & Privacy Bar -->
-      <div class="storage-bar" id="storage-bar">
-        <div class="storage-status-group">
-          <span class="storage-pulse-dot" id="storage-dot"></span>
-          <span class="storage-status-text" id="storage-status-text">Draft auto-saved locally in browser</span>
-          <span class="storage-privacy-badge" title="Data is stored strictly in your browser's localStorage. Zero data is sent to our servers.">🔒 Zero Server Storage</span>
-        </div>
-        <div class="storage-actions-group">
-          <button type="button" class="storage-btn" id="btn-export-draft" title="Download a JSON backup of your current inputs">
-            📥 Export Backup (.json)
-          </button>
-          <button type="button" class="storage-btn" id="btn-import-draft-trigger" title="Restore inputs from a previously saved JSON file">
-            📤 Import Backup
-          </button>
-          <input type="file" id="input-import-draft" accept=".json,.aft" style="display: none;">
-          <button type="button" class="storage-btn text-danger" id="btn-clear-draft" title="Clear all local inputs and reset to default">
-            🗑️ Clear Saved Data
-          </button>
-          <button type="button" class="storage-btn" id="btn-open-tos" title="Review legal terms of service and disclaimers">
-            ⚖️ Terms &amp; Advisory
-          </button>
-        </div>
-      </div>
-
-      <!-- Ratings & Importance Filter Toolbar with Circle Legend -->
-      <div class="ratings-filter-toolbar" id="ratings-filter-toolbar" style="margin-top: 1.25rem;">
-        <div class="toolbar-rating-legend">
-          <span class="filter-title">Field Rating Circles:</span>
-          <div class="legend-circle-group" title="Safe to Ignore / Attention: White = Safe to Ignore ➔ Yellow = Needs Attention (! = Max Rating)">
-            <span class="rating-circle circle-attention circle-att-4 is-max">!</span>
-            <span class="legend-circle-label">Attention (White ➔ Yellow)</span>
+      <div class="calc-card input-panel" id="card-return-settings">
+        <div class="hero-controls">
+          <div class="select-control">
+            <div class="field-top-row">
+              <label for="select-tax-year">Tax Year</label>
+              <span class="field-rating-pill badge-priority-must" data-rating-field="global-tax-year" role="button" tabindex="0" title="Tax Year — Click for IRS Risk & Guidance Breakdown">
+                <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 3/3, Savings 0/3">
+                  <span class="rating-circle circle-attention circle-att-4 is-max" title="Safe to Ignore / Attention: Critical (4/4) [MAX !]">!</span>
+                  <span class="rating-circle circle-risk circle-risk-3 is-max" title="IRS Audit Risk: High (3/3) [MAX !]">!</span>
+                  <span class="rating-circle circle-savings circle-save-0" title="Money Savings: Sets Inflation Brackets"></span>
+                </span>
+                <span class="pill-text">Required</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+            <select id="select-tax-year" class="w2-input">
+              <option value="2024" selected>2024 (Filed in 2025)</option>
+              <option value="2025">2025 (Projected)</option>
+            </select>
           </div>
-          <div class="legend-circle-group" title="IRS Audit Risk: White = Low Risk ➔ Red = High IRS Risk (! = Max Rating)">
-            <span class="rating-circle circle-risk circle-risk-3 is-max">!</span>
-            <span class="legend-circle-label">IRS Risk (White ➔ Red)</span>
+
+          <div class="select-control">
+            <div class="field-top-row">
+              <label for="select-filing-status">Filing Status</label>
+              <span class="field-rating-pill badge-priority-must" data-rating-field="global-filing-status" role="button" tabindex="0" title="Filing Status — Click for IRS Risk & Guidance Breakdown">
+                <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 3/3, Savings 3/3">
+                  <span class="rating-circle circle-attention circle-att-4 is-max" title="Safe to Ignore / Attention: Foundational (4/4) [MAX !]">!</span>
+                  <span class="rating-circle circle-risk circle-risk-3 is-max" title="IRS Audit Risk: High Audit Scrutiny (3/3) [MAX !]">!</span>
+                  <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: Gigantic Dollar Impact ($$$$$) [MAX !]">!</span>
+                </span>
+                <span class="pill-text">Required</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+            <select id="select-filing-status" class="w2-input">
+              <option value="single" selected>Single</option>
+              <option value="married_joint">Married Filing Jointly</option>
+              <option value="married_separate">Married Filing Separately</option>
+              <option value="head_of_household">Head of Household</option>
+            </select>
           </div>
-          <div class="legend-circle-group" title="Money Savings: White = $0 ➔ Green = High Cash Savings (! = Max Rating)">
-            <span class="rating-circle circle-savings circle-save-3 is-max">!</span>
-            <span class="legend-circle-label">Savings (White ➔ Green)</span>
+
+          <div class="select-control">
+            <div class="field-top-row">
+              <label for="select-resident-state">Primary Resident State</label>
+              <span class="field-rating-pill badge-priority-must" data-rating-field="global-resident-state" role="button" tabindex="0" title="Primary Resident State — Click for IRS & State Guidance">
+                <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 3/3, Savings 3/3">
+                  <span class="rating-circle circle-attention circle-att-4 is-max" title="Safe to Ignore / Attention: Critical for State (4/4) [MAX !]">!</span>
+                  <span class="rating-circle circle-risk circle-risk-3 is-max" title="IRS / State Audit Risk: High Audit Scrutiny (3/3) [MAX !]">!</span>
+                  <span class="rating-circle circle-savings circle-save-3 is-max" title="Money Savings: Determines State Rates ($$$$) [MAX !]">!</span>
+                </span>
+                <span class="pill-text">Home State</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+            </div>
+            <select id="select-resident-state" class="w2-input">
+              <option value="CA" selected>CA - California (FTB Form 540)</option>
+              <option value="NY">NY - New York (Form IT-201)</option>
+              <option value="NJ">NJ - New Jersey (Form NJ-1040)</option>
+              <option value="PA">PA - Pennsylvania (Form PA-40)</option>
+              <option value="IL">IL - Illinois (Form IL-1040)</option>
+              <option value="MA">MA - Massachusetts (Form 1)</option>
+              <option value="TX">TX - Texas (0% No State Wage Tax)</option>
+              <option value="FL">FL - Florida (0% No State Wage Tax)</option>
+              <option value="WA">WA - Washington (0% No State Wage Tax)</option>
+              <option value="NV">NV - Nevada (0% No State Wage Tax)</option>
+              <option value="TN">TN - Tennessee (0% No State Wage Tax)</option>
+              <option value="CO">CO - Colorado (Form DR 0104)</option>
+              <option value="NC">NC - North Carolina (Form D-400)</option>
+              <option value="GA">GA - Georgia (Form 500)</option>
+              <option value="VA">VA - Virginia (Form 760)</option>
+              <option value="OH">OH - Ohio (Form IT 1040)</option>
+              <option value="MI">MI - Michigan (Form MI-1040)</option>
+              <option value="AZ">AZ - Arizona (Form 140)</option>
+              <option value="OTHER">Other US State</option>
+            </select>
           </div>
-          <span class="legend-max-note" title="An exclamation mark inside any circle indicates that dimension is maxed out">
-            <em>(! = Maxed Out)</em>
-          </span>
         </div>
 
-        <div class="toolbar-filter-buttons">
-          <button type="button" class="filter-chip active" data-filter="all">All Fields</button>
-          <button type="button" class="filter-chip" data-filter="must-only" title="Highlight fields that MUST be 100% correct">Must Be 100% Correct</button>
-          <button type="button" class="filter-chip" data-filter="savers-only" title="Highlight high savings deductions and refund drivers">Money Savers</button>
-          <button type="button" class="filter-chip" data-filter="hide-niche" title="Dim obscure or niche fields you can likely ignore">Dim Optional</button>
-          <button type="button" class="btn btn-sm" id="btn-toggle-all-explain" style="font-size: 0.72rem; padding: 0.25rem 0.65rem; background: #f0fdf4; color: #15803d; border-color: #bbf7d0; font-weight: 700;">
-            💡 Expand All Explanations
-          </button>
-          <button type="button" class="btn btn-sm" id="btn-open-ratings-legend" style="font-size: 0.72rem; padding: 0.25rem 0.6rem;">
-            ℹ️ Guide to Ratings
-          </button>
+        <div class="presets-container">
+          <span>Sample scenarios:</span>
+          <button type="button" class="preset-chip" data-preset="single-75k">Single ($75k)</button>
+          <button type="button" class="preset-chip" data-preset="multi-state-dual">Multi-State Workers (CA + NY)</button>
+          <button type="button" class="preset-chip" data-preset="married-dual-140k">Dual-Income Married ($140k + 1 Kid)</button>
+          <button type="button" class="preset-chip" data-preset="student-grad">College Grad with Student Loans</button>
+          <button type="button" class="preset-chip" data-preset="blank">Blank Slate</button>
+        </div>
+
+        <!-- Client-Side Local Storage & Privacy Bar -->
+        <div class="storage-bar" id="storage-bar">
+          <div class="storage-status-group">
+            <span class="storage-pulse-dot" id="storage-dot"></span>
+            <span class="storage-status-text" id="storage-status-text">Draft auto-saved locally in browser</span>
+          </div>
+          <div class="storage-actions-group">
+            <button type="button" class="storage-btn" id="btn-export-draft">Export Backup (.json)</button>
+            <button type="button" class="storage-btn" id="btn-import-draft-trigger">Import Backup</button>
+            <input type="file" id="input-import-draft" accept=".json,.aft" style="display: none;">
+            <button type="button" class="storage-btn text-danger" id="btn-clear-draft">Clear Data</button>
+            <button type="button" class="storage-btn" id="btn-open-tos">Terms &amp; Advisory</button>
+          </div>
+        </div>
+
+        <!-- Ratings & Importance Filter Toolbar -->
+        <div class="ratings-filter-toolbar" id="ratings-filter-toolbar">
+          <div class="toolbar-rating-legend">
+            <span class="filter-title">Field Ratings:</span>
+            <div class="legend-circle-group" title="Attention: White = Safe to Ignore, Yellow = Needs Attention (! = Max)">
+              <span class="rating-circle circle-attention circle-att-4 is-max">!</span>
+              <span class="legend-circle-label">Attention</span>
+            </div>
+            <div class="legend-circle-group" title="IRS Audit Risk: White = Low Risk, Red = High IRS Risk (! = Max)">
+              <span class="rating-circle circle-risk circle-risk-3 is-max">!</span>
+              <span class="legend-circle-label">IRS Risk</span>
+            </div>
+            <div class="legend-circle-group" title="Money Savings: White = $0, Green = High Cash Savings (! = Max)">
+              <span class="rating-circle circle-savings circle-save-3 is-max">!</span>
+              <span class="legend-circle-label">Savings</span>
+            </div>
+          </div>
+
+          <div class="toolbar-filter-buttons">
+            <button type="button" class="filter-chip active" data-filter="all">All Fields</button>
+            <button type="button" class="filter-chip" data-filter="must-only">Required Only</button>
+            <button type="button" class="filter-chip" data-filter="savers-only">Money Savers</button>
+            <button type="button" class="filter-chip" data-filter="hide-niche">Dim Optional</button>
+            <button type="button" class="btn" id="btn-toggle-all-explain">Expand Explanations</button>
+            <button type="button" class="btn" id="btn-open-ratings-legend">Rating Guide</button>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Dotted Divider: Part 1 -->
-    <div class="section-divider-dotted">
-      <span class="divider-badge">PART 1 • W-2 WAGE &amp; TAX STATEMENTS</span>
-    </div>
-
-    <!-- SECTION 1: W-2 FORMS (THE TOP INPUTS) -->
+    <!-- SECTION 1: W-2 FORMS -->
     <section id="section-w2-inputs">
-      <div class="w2-section-header">
-        <div class="w2-section-title">
-          <h2>1. Your W-2 Wage & Tax Statement(s)</h2>
-          <button type="button" class="btn btn-primary" id="btn-add-w2-section" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
-            + Add Additional W-2
-          </button>
-        </div>
-        <div style="font-size: 0.85rem; color: #64748b;">
-          Enter the numbers from your physical or PDF Form W-2. Supports multiple jobs & states.
-        </div>
+      <div class="section-header-bar">
+        <h2>1. W-2 Wage &amp; Tax Statements</h2>
+        <button type="button" class="btn btn-primary" id="btn-add-w2-section">
+          + Add Additional W-2
+        </button>
       </div>
 
       <!-- Container where W-2s are injected -->
       <div id="w2-list-container"></div>
 
-      <!-- Large action banner to add additional W-2 -->
       <button type="button" class="btn-add-w2-banner" id="btn-add-w2-bottom">
-        <span style="font-size: 1.3rem;">➕</span> Add Additional W-2 (Different State / Job / Spouse)
+        + Add Additional W-2 (Different State / Job / Spouse)
       </button>
     </section>
 
-    <!-- Dotted Divider: Part 2 -->
-    <div class="section-divider-dotted">
-      <span class="divider-badge">PART 2 • ADJUSTMENTS &amp; OTHER INCOME SOURCES</span>
-    </div>
-
-    <!-- SECTION 2: OTHER INCOME & ADJUSTMENTS (OPTIONAL ABOVE-THE-LINE) -->
+    <!-- SECTION 2: OTHER INCOME & ADJUSTMENTS -->
     <section id="section-other-inputs">
-      <div class="w2-section-header">
-        <div class="w2-section-title">
-          <h2>2. Adjustments & Other Common Incomes</h2>
-        </div>
-        <button type="button" class="btn" id="btn-add-income-source" style="gap: 0.4rem;">
-          <span style="font-weight: 800; color: #0284c7;">+</span> Add Income Source (1099-NEC, 1099-DIV, etc.)
+      <div class="section-header-bar">
+        <h2>2. Other Income, Adjustments &amp; Credits</h2>
+        <button type="button" class="btn" id="btn-add-income-source">
+          + Add Income Source (1099-NEC, 1099-DIV, etc.)
         </button>
       </div>
 
       <!-- Container for Dynamic Extra Income Sources (1099-NEC, 1099-DIV, etc.) -->
-      <div id="dynamic-income-sources-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem;"></div>
+      <div id="dynamic-income-sources-container" class="input-cards-grid"></div>
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+      <div class="input-cards-grid">
         <!-- Taxable Interest -->
-        <div class="calc-card priority-must" id="card-other-interest" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-must" id="card-other-interest">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Form 1099-INT</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -404,12 +338,12 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Taxable Interest</div>
+          <div class="input-card-title">Taxable Interest</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
             <input type="number" step="any" class="w2-input" id="input-other-interest" value="0" placeholder="0">
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Bank savings interest reported on 1099-INT.</div>
+          <div class="input-card-hint">Bank savings interest reported on 1099-INT.</div>
           <div class="field-explain-drawer" id="drawer-explain-other-interest" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -442,7 +376,7 @@
         </div>
 
         <!-- Capital Gains & Losses (Schedule D / Form 8949) -->
-        <div class="calc-card priority-must" id="card-capital-gains-input" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-must" id="card-capital-gains-input">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule D / Form 8949</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -462,24 +396,24 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Net Capital Gains &amp; Losses</div>
+          <div class="input-card-title">Net Capital Gains &amp; Losses</div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
             <div>
-              <label for="input-capital-gains-st" style="font-size: 0.7rem; font-weight: 600; color: #475569;">Short-Term (≤1 yr)</label>
+              <label for="input-capital-gains-st" class="input-sublabel">Short-Term (≤1 yr)</label>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
                 <input type="number" step="any" class="w2-input" id="input-capital-gains-st" value="0" placeholder="0">
               </div>
             </div>
             <div>
-              <label for="input-capital-gains-lt" style="font-size: 0.7rem; font-weight: 600; color: #475569;">Long-Term (>1 yr)</label>
+              <label for="input-capital-gains-lt" class="input-sublabel">Long-Term (>1 yr)</label>
               <div class="w2-input-wrapper">
                 <span class="currency-symbol">$</span>
                 <input type="number" step="any" class="w2-input" id="input-capital-gains-lt" value="0" placeholder="0">
               </div>
             </div>
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Stocks, crypto, or property sales from 1099-B. Losses offset income up to -$3,000 cap.</div>
+          <div class="input-card-hint">Stocks, crypto, or property sales from 1099-B. Losses offset income up to -$3,000 cap.</div>
           <div class="field-explain-drawer" id="drawer-explain-capital-gains" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -512,7 +446,7 @@
         </div>
 
         <!-- Schedule C Freelance Business Expenses -->
-        <div class="calc-card priority-saver" id="card-1099-nec-expenses" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-saver" id="card-1099-nec-expenses">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule C Part II</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -532,12 +466,12 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Freelance Business Expenses</div>
+          <div class="input-card-title">Freelance Business Expenses</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
             <input type="number" step="any" class="w2-input" id="input-1099-nec-expenses" value="0" placeholder="0">
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Ordinary & necessary business expenses reducing your 1099-NEC earnings.</div>
+          <div class="input-card-hint">Ordinary & necessary business expenses reducing your 1099-NEC earnings.</div>
           <div class="field-explain-drawer" id="drawer-explain-1099-nec-expenses" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -570,7 +504,7 @@
         </div>
 
         <!-- Student Loan Interest -->
-        <div class="calc-card priority-saver" id="card-student-loan" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-saver" id="card-student-loan">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule 1 Line 21</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -590,12 +524,12 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Student Loan Interest</div>
+          <div class="input-card-title">Student Loan Interest</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
             <input type="number" step="any" class="w2-input" id="input-adj-student-loan" value="0" placeholder="0">
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Deductible interest paid on student loans (up to $2,500).</div>
+          <div class="input-card-hint">Deductible interest paid on student loans (up to $2,500).</div>
           <div class="field-explain-drawer" id="drawer-explain-student-loan" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -628,7 +562,7 @@
         </div>
 
         <!-- Traditional IRA Deduction -->
-        <div class="calc-card priority-saver" id="card-adj-ira" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-saver" id="card-adj-ira">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule 1 Line 20</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -648,12 +582,12 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Traditional IRA Deduction</div>
+          <div class="input-card-title">Traditional IRA Deduction</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
             <input type="number" step="any" class="w2-input" id="input-adj-ira" value="0" placeholder="0">
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Pre-tax contributions made to traditional IRAs.</div>
+          <div class="input-card-hint">Pre-tax contributions made to traditional IRAs.</div>
           <div class="field-explain-drawer" id="drawer-explain-adj-ira" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -686,7 +620,7 @@
         </div>
 
         <!-- Health Savings Account (HSA Form 8889) -->
-        <div class="calc-card priority-saver" id="card-adj-hsa" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-saver" id="card-adj-hsa">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Form 8889 / Sched 1 Line 13</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -706,12 +640,12 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">HSA Deduction (After-Tax Contributions)</div>
+          <div class="input-card-title">HSA Deduction (After-Tax Contributions)</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
             <input type="number" step="any" class="w2-input" id="input-adj-hsa" value="0" placeholder="0">
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Personal after-tax contributions made to a qualified HSA ($4,150 single / $8,300 family).</div>
+          <div class="input-card-hint">Personal after-tax contributions made to a qualified HSA ($4,150 single / $8,300 family).</div>
           <div class="field-explain-drawer" id="drawer-explain-adj-hsa" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -744,7 +678,7 @@
         </div>
 
         <!-- Qualifying Children -->
-        <div class="calc-card priority-saver" id="card-children-count" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-saver" id="card-children-count">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Tax Credits</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -764,11 +698,11 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Qualifying Children under 17</div>
+          <div class="input-card-title">Qualifying Children under 17</div>
           <div class="w2-input-wrapper">
             <input type="number" min="0" max="10" step="1" class="w2-input" id="input-children-count" value="0" style="padding-left: 0.75rem; text-align: left;">
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">$2,000 Child Tax Credit per eligible child.</div>
+          <div class="input-card-hint">$2,000 Child Tax Credit per eligible child.</div>
           <div class="field-explain-drawer" id="drawer-explain-children-count" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -802,25 +736,15 @@
       </div>
     </section>
 
-    <!-- Dotted Divider: Part 3 -->
-    <div class="section-divider-dotted">
-      <span class="divider-badge">PART 3 • SCHEDULE A ITEMIZED DEDUCTIONS VS. STANDARD DEDUCTION</span>
-    </div>
-
     <!-- SECTION 3: SCHEDULE A ITEMIZED DEDUCTIONS -->
     <section id="section-itemized-inputs">
-      <div class="w2-section-header">
-        <div class="w2-section-title">
-          <h2>3. Schedule A Itemized Deductions vs. Standard Deduction</h2>
-        </div>
-        <div style="font-size: 0.85rem; color: #64748b;">
-          The IRS allows you to claim whichever reduces your taxes more: your fixed Standard Deduction or the itemized sum of your eligible personal expenses.
-        </div>
+      <div class="section-header-bar">
+        <h2>3. Schedule A Itemized Deductions</h2>
       </div>
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+      <div class="input-cards-grid" style="margin-bottom: 1rem;">
         <!-- Medical & Dental Expenses -->
-        <div class="calc-card priority-saver" id="card-itemized-medical" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-saver" id="card-itemized-medical">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule A Line 1</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -840,12 +764,12 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Medical &amp; Dental Expenses</div>
+          <div class="input-card-title">Medical &amp; Dental Expenses</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
             <input type="number" step="any" class="w2-input" id="input-itemized-medical" value="0" placeholder="0">
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Out-of-pocket medical costs exceeding 7.5% of your AGI are deductible.</div>
+          <div class="input-card-hint">Out-of-pocket medical costs exceeding 7.5% of your AGI are deductible.</div>
           <div class="field-explain-drawer" id="drawer-explain-itemized-medical" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -878,7 +802,7 @@
         </div>
 
         <!-- State & Local Real Estate / Property Taxes (SALT) -->
-        <div class="calc-card priority-saver" id="card-itemized-salt" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-saver" id="card-itemized-salt">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule A Line 5b</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -898,12 +822,12 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Real Estate / Property Taxes</div>
+          <div class="input-card-title">Real Estate / Property Taxes</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
             <input type="number" step="any" class="w2-input" id="input-itemized-salt" value="0" placeholder="0">
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">County/city property taxes on home/land. Combined with state tax withheld (max $10k cap).</div>
+          <div class="input-card-hint">County/city property taxes on home/land. Combined with state tax withheld (max $10k cap).</div>
           <div class="field-explain-drawer" id="drawer-explain-itemized-salt" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -936,7 +860,7 @@
         </div>
 
         <!-- Home Mortgage Interest -->
-        <div class="calc-card priority-saver" id="card-itemized-mortgage" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-saver" id="card-itemized-mortgage">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule A Line 8a</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -956,12 +880,12 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Home Mortgage Interest</div>
+          <div class="input-card-title">Home Mortgage Interest</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
             <input type="number" step="any" class="w2-input" id="input-itemized-mortgage" value="0" placeholder="0">
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Interest paid on home loans up to $750,000 principal reported on Form 1098.</div>
+          <div class="input-card-hint">Interest paid on home loans up to $750,000 principal reported on Form 1098.</div>
           <div class="field-explain-drawer" id="drawer-explain-itemized-mortgage" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -994,7 +918,7 @@
         </div>
 
         <!-- Gifts to Charity -->
-        <div class="calc-card priority-saver" id="card-itemized-charity" style="padding: 1.25rem;">
+        <div class="calc-card input-panel priority-saver" id="card-itemized-charity">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule A Line 11</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -1014,12 +938,12 @@
               </span>
             </div>
           </div>
-          <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem;">Gifts to Charity (Cash &amp; Goods)</div>
+          <div class="input-card-title">Gifts to Charity (Cash &amp; Goods)</div>
           <div class="w2-input-wrapper">
             <span class="currency-symbol">$</span>
             <input type="number" step="any" class="w2-input" id="input-itemized-charity" value="0" placeholder="0">
           </div>
-          <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.4rem;">Donations to 501(c)(3) churches, non-profits, and educational institutions.</div>
+          <div class="input-card-hint">Donations to 501(c)(3) churches, non-profits, and educational institutions.</div>
           <div class="field-explain-drawer" id="drawer-explain-itemized-charity" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -1052,23 +976,14 @@
         </div>
       </div>
 
-      <!-- Smart Comparison & Deduction Choice Card -->
-      <div class="calc-card" id="calc-itemized-deductions" style="padding: 1.5rem; border: 2px solid #a7f3d0; background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);">
+      <!-- Schedule A Total Itemized Deductions Calculation -->
+      <div class="calc-card" id="calc-itemized-deductions">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator" style="background: #dcfce7; color: #15803d; border-color: #bbf7d0;">Schedule A Optimization</div>
-            <h3 class="calc-card-title">Standard vs. Itemized Comparison Engine</h3>
+            <div class="step-indicator">Schedule A Line 17</div>
+            <h3 class="calc-card-title">Total Itemized Deductions</h3>
           </div>
-          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-            <div class="deduction-comparison-pill optimal-standard" id="deduction-comparison-badge">
-              Optimal Choice: Standard Deduction ($14,600)
-            </div>
-            <select id="select-deduction-method" class="w2-input" style="width: auto; padding: 0.35rem 0.6rem; font-size: 0.8rem; font-weight: 700;">
-              <option value="auto">Auto (Choose Highest Deduction)</option>
-              <option value="standard">Force Standard Deduction</option>
-              <option value="itemized">Force Itemized Deductions</option>
-            </select>
-          </div>
+          <span class="irs-line-tag">Schedule A Line 17</span>
         </div>
 
         <div class="formula-box">
@@ -1078,38 +993,23 @@
           </div>
           <div class="formula-row">
             <span class="formula-badge plugged">With Your Numbers</span>
-            <span class="formula-math plugged-highlight formula-plugged">Itemized Total = $0 vs Standard = $14,600 (Using Standard)</span>
+            <span class="formula-math plugged-highlight formula-plugged">Itemized Total = $0</span>
           </div>
-        </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Optimal Deduction Applied to Your Return:</span>
-          <span class="calc-output-value highlight-green" id="optimal-deduction-amount">$14,600</span>
         </div>
       </div>
     </section>
 
-    <!-- SECTION 4: DOWNSTREAM STEP-BY-STEP CALCULATIONS & EQUATIONS -->
-    <section class="step-container">
-      <!-- Dotted Divider: Part 4 -->
-      <div class="section-divider-dotted">
-        <span class="divider-badge">PART 4 • STEP-BY-STEP CALCULATION ENGINE</span>
-      </div>
-
-      <div class="w2-section-header">
-        <div class="w2-section-title">
-          <h2>4. Step-by-Step Calculation Engine</h2>
-        </div>
-        <div style="font-size: 0.85rem; color: #64748b;">
-          Every step reveals both the mathematical law and your exact plugged-in numbers.
-        </div>
+    <!-- SECTION 4: FEDERAL TAX CALCULATIONS -->
+    <section class="step-container" id="section-federal-calculations">
+      <div class="section-header-bar">
+        <h2>4. Federal Tax Calculations (Form 1040)</h2>
       </div>
 
       <!-- Step 1: Total W-2 Wages -->
       <div class="calc-card" id="calc-total-w2-wages">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">1</span> Income Aggregation</div>
+            <div class="step-indicator">Step 1 • Income Aggregation</div>
             <h3 class="calc-card-title">Total W-2 Wages</h3>
           </div>
           <span class="irs-line-tag">Form 1040 Line 1a</span>
@@ -1125,18 +1025,13 @@
             <span class="formula-math plugged-highlight formula-plugged">Total Wages = $0</span>
           </div>
         </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Total Taxable Wages & Tips:</span>
-          <span class="calc-output-value highlight-green">$0</span>
-        </div>
       </div>
 
       <!-- Step 2: Total Gross Income -->
       <div class="calc-card" id="calc-gross-income">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">2</span> Total Incomes</div>
+            <div class="step-indicator">Step 2 • Total Incomes</div>
             <h3 class="calc-card-title">Total Gross Income</h3>
           </div>
           <span class="irs-line-tag">Form 1040 Line 9</span>
@@ -1152,18 +1047,13 @@
             <span class="formula-math plugged-highlight formula-plugged">Gross Income = $0</span>
           </div>
         </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Gross Income:</span>
-          <span class="calc-output-value highlight-green">$0</span>
-        </div>
       </div>
 
       <!-- Step 2b: Net Capital Gains & Losses -->
       <div class="calc-card" id="calc-capital-gains">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">2b</span> Schedule D / Form 8949</div>
+            <div class="step-indicator">Step 2b • Schedule D / Form 8949</div>
             <h3 class="calc-card-title">Net Capital Gain or Loss</h3>
           </div>
           <span class="irs-line-tag">Form 1040 Line 7</span>
@@ -1179,18 +1069,13 @@
             <span class="formula-math plugged-highlight formula-plugged">Net Capital Gains = $0</span>
           </div>
         </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Allowable Capital Income / (Loss Deduction):</span>
-          <span class="calc-output-value">$0</span>
-        </div>
       </div>
 
       <!-- Step 3: Total Adjustments -->
       <div class="calc-card" id="calc-total-adjustments">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">3</span> Above-the-Line Deductions</div>
+            <div class="step-indicator">Step 3 • Above-the-Line Deductions</div>
             <h3 class="calc-card-title">Total Adjustments to Income</h3>
           </div>
           <span class="irs-line-tag">Schedule 1 Line 26 / 1040 Line 10</span>
@@ -1206,18 +1091,13 @@
             <span class="formula-math plugged-highlight formula-plugged">Adjustments = $0</span>
           </div>
         </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Total Adjustments to Income:</span>
-          <span class="calc-output-value">$0</span>
-        </div>
       </div>
 
       <!-- Step 4: Adjusted Gross Income (AGI) -->
       <div class="calc-card" id="calc-agi">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">4</span> Core Tax Metric</div>
+            <div class="step-indicator">Step 4 • Core Tax Metric</div>
             <h3 class="calc-card-title">Adjusted Gross Income (AGI)</h3>
           </div>
           <span class="irs-line-tag">Form 1040 Line 11</span>
@@ -1233,37 +1113,34 @@
             <span class="formula-math plugged-highlight formula-plugged">AGI = $0</span>
           </div>
         </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Your Adjusted Gross Income:</span>
-          <span class="calc-output-value highlight-green">$0</span>
-        </div>
       </div>
 
-      <!-- Step 5: Standard Deduction -->
+      <!-- Step 5: Standard or Itemized Deduction -->
       <div class="calc-card" id="calc-standard-deduction">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">5</span> Statutory Protection</div>
-            <h3 class="calc-card-title">Standard Deduction</h3>
+            <div class="step-indicator">Step 5 • Deduction Selection</div>
+            <h3 class="calc-card-title">Form 1040 Line 12 Deduction</h3>
           </div>
-          <span class="irs-line-tag">Form 1040 Line 12</span>
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <select id="select-deduction-method" class="w2-input" style="width: auto; padding: 0.25rem 0.5rem;">
+              <option value="auto">Auto (Highest Deduction)</option>
+              <option value="standard">Force Standard Deduction</option>
+              <option value="itemized">Force Itemized Deductions</option>
+            </select>
+            <span class="irs-line-tag">Form 1040 Line 12</span>
+          </div>
         </div>
 
         <div class="formula-box">
           <div class="formula-row">
             <span class="formula-badge general">General Formula</span>
-            <span class="formula-math formula-general">Standard Deduction based on filing status and tax year</span>
+            <span class="formula-math formula-general">Deduction = max(Standard Deduction, Schedule A Itemized Deductions)</span>
           </div>
           <div class="formula-row">
             <span class="formula-badge plugged">With Your Numbers</span>
-            <span class="formula-math plugged-highlight formula-plugged">Standard Deduction = $14,600</span>
+            <span class="formula-math plugged-highlight formula-plugged">max(Standard $14,600, Itemized $0) = $14,600 (Standard Deduction)</span>
           </div>
-        </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Standard Deduction Amount:</span>
-          <span class="calc-output-value">$14,600</span>
         </div>
       </div>
 
@@ -1271,7 +1148,7 @@
       <div class="calc-card" id="calc-taxable-income">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">6</span> Tax Base</div>
+            <div class="step-indicator">Step 6 • Tax Base</div>
             <h3 class="calc-card-title">Taxable Income</h3>
           </div>
           <span class="irs-line-tag">Form 1040 Line 15</span>
@@ -1280,28 +1157,20 @@
         <div class="formula-box">
           <div class="formula-row">
             <span class="formula-badge general">General Formula</span>
-            <span class="formula-math formula-general">Taxable Income = max(0, AGI − Standard Deduction)</span>
+            <span class="formula-math formula-general">Taxable Income = max(0, AGI − Deduction)</span>
           </div>
           <div class="formula-row">
             <span class="formula-badge plugged">With Your Numbers</span>
             <span class="formula-math plugged-highlight formula-plugged">Taxable Income = $0</span>
           </div>
         </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Net Taxable Income (Subject to Brackets):</span>
-          <span class="calc-output-value highlight-green">$0</span>
-        </div>
       </div>
-
-      <!-- Dotted Line: Entering Tax Brackets -->
-      <div class="step-divider-dotted"></div>
 
       <!-- Step 7: Marginal Tax Brackets Engine -->
       <div class="calc-card" id="calc-tax-before-credits">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">7</span> Progressive Bracket Ladder</div>
+            <div class="step-indicator">Step 7 • Progressive Tax Brackets</div>
             <h3 class="calc-card-title">Tentative Federal Income Tax</h3>
           </div>
           <span class="irs-line-tag">Form 1040 Line 16</span>
@@ -1314,17 +1183,8 @@
           </div>
           <div class="formula-row">
             <span class="formula-badge plugged">With Your Numbers</span>
-            <span class="formula-math plugged-highlight formula-plugged">Tentative Tax = $0.00</span>
+            <span class="formula-math plugged-highlight formula-plugged">Tentative Tax = $0</span>
           </div>
-        </div>
-
-        <!-- Visual Bracket Ladder -->
-        <div style="margin-top: 1rem;">
-          <div style="display: flex; justify-content: space-between; align-items: baseline;">
-            <span style="font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase;">Bracket Utilization</span>
-            <span style="font-size: 0.75rem; color: #64748b;">Progressive Marginal Rates</span>
-          </div>
-          <div class="bracket-visual-bar" id="bracket-progress-bar"></div>
         </div>
 
         <table class="brackets-table">
@@ -1338,18 +1198,13 @@
           </thead>
           <tbody id="tax-brackets-tbody"></tbody>
         </table>
-
-        <div class="calc-output-row" style="margin-top: 1.25rem;">
-          <span class="calc-output-label">Total Tentative Tax (Before Credits):</span>
-          <span class="calc-output-value" style="color: #f97316;">$0.00</span>
-        </div>
       </div>
 
       <!-- Step 8: Tax Credits -->
       <div class="calc-card" id="calc-total-credits">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">8</span> Direct Reductions</div>
+            <div class="step-indicator">Step 8 • Direct Reductions</div>
             <h3 class="calc-card-title">Tax Credits (Child Tax Credit)</h3>
           </div>
           <span class="irs-line-tag">Form 1040 Line 19</span>
@@ -1365,18 +1220,13 @@
             <span class="formula-math plugged-highlight formula-plugged">Credits = $0</span>
           </div>
         </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Total Credits Applied:</span>
-          <span class="calc-output-value" style="color: #14b8a6;">$0</span>
-        </div>
       </div>
 
       <!-- Step 9: Total Federal Tax Liability -->
       <div class="calc-card" id="calc-total-tax-liability">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">9</span> Obligation</div>
+            <div class="step-indicator">Step 9 • Total Tax</div>
             <h3 class="calc-card-title">Total Federal Tax Liability</h3>
           </div>
           <span class="irs-line-tag">Form 1040 Line 24</span>
@@ -1389,13 +1239,8 @@
           </div>
           <div class="formula-row">
             <span class="formula-badge plugged">With Your Numbers</span>
-            <span class="formula-math plugged-highlight formula-plugged">Total Tax Liability = $0.00</span>
+            <span class="formula-math plugged-highlight formula-plugged">Total Tax Liability = $0</span>
           </div>
-        </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Your Final Tax Bill to the US Government:</span>
-          <span class="calc-output-value" style="color: #f97316;">$0.00</span>
         </div>
       </div>
 
@@ -1403,7 +1248,7 @@
       <div class="calc-card" id="calc-total-withholding">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">10</span> Pre-payments</div>
+            <div class="step-indicator">Step 10 • Pre-payments</div>
             <h3 class="calc-card-title">Total Federal Income Tax Withheld</h3>
           </div>
           <span class="irs-line-tag">Form 1040 Line 25d</span>
@@ -1416,123 +1261,19 @@
           </div>
           <div class="formula-row">
             <span class="formula-badge plugged">With Your Numbers</span>
-            <span class="formula-math plugged-highlight formula-plugged">Total Withholding = $0.00</span>
-          </div>
-        </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Federal Taxes Already Paid via Paychecks:</span>
-          <span class="calc-output-value highlight-blue">$0.00</span>
-        </div>
-      </div>
-
-      <!-- Dotted Divider: Part 5 -->
-      <div class="section-divider-dotted">
-        <span class="divider-badge">PART 5 • THE BOTTOM LINE: YOUR TAX VERDICT</span>
-      </div>
-
-      <!-- Step 11: The Ultimate Verdict (Refund or Amount Owed) -->
-      <div class="verdict-card is-refund" id="calc-final-verdict">
-        <div class="verdict-header">🎉 Your Estimated Federal Tax Refund</div>
-        <div class="verdict-amount">$0.00</div>
-        <div class="verdict-subtitle">
-          The mathematical difference between what was taken out of your paychecks and your legal tax obligation.
-        </div>
-
-        <div class="formula-box" style="text-align: left; max-width: 800px; margin: 0 auto 1.5rem;">
-          <div class="formula-row">
-            <span class="formula-badge general">General Formula</span>
-            <span class="formula-math formula-general">Refund = Total Payments (Withholding) − Total Tax Liability</span>
-          </div>
-          <div class="formula-row">
-            <span class="formula-badge plugged">With Your Numbers</span>
-            <span class="formula-math plugged-highlight formula-plugged">Refund = $0.00</span>
-          </div>
-        </div>
-
-        <!-- Withheld vs Tax Liability Interactive Bar -->
-        <div class="comparison-container">
-          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 0.5rem; color: #0f172a;">
-            Payments vs. Tax Liability Scale:
-          </div>
-          <div class="comp-bar-wrapper">
-            <div class="comp-bar-labels">
-              <span>Federal Withholding (You Paid): <strong id="comp-val-withheld" style="color: #0284c7;">$0.00</strong></span>
-              <span>Total Tax Liability (You Owe): <strong id="comp-val-tax" style="color: #f97316;">$0.00</strong></span>
-            </div>
-            <div class="comp-bar-track">
-              <div class="comp-bar-fill-withholding" id="comp-bar-withheld" style="width: 50%;"></div>
-              <div class="comp-bar-fill-tax" id="comp-bar-tax" style="width: 50%;"></div>
-            </div>
-          </div>
-          <div style="font-size: 0.75rem; color: #64748b;">
-            When Blue (Withholding) exceeds Orange (Tax Liability), the green difference is returned directly to your bank account.
+            <span class="formula-math plugged-highlight formula-plugged">Total Withholding = $0</span>
           </div>
         </div>
       </div>
 
-      <!-- Step 11b: Grand Total Unified Tax Verdict (Federal + All States) -->
-      <div class="unified-summary-card" id="calc-unified-summary">
-        <div class="calc-card-header" style="margin-bottom: 0.75rem;">
-          <div>
-            <div class="step-indicator" style="color: #4338ca;"><span class="step-number" style="background: #4338ca;">★</span> Grand Total Bottom Line</div>
-            <h3 class="calc-card-title">Combined Federal &amp; Multi-State Tax Ledger</h3>
-          </div>
-          <span class="field-rating-pill badge-priority-saver" data-rating-field="calc-unified-summary" role="button" tabindex="0" title="Grand Total Verdict — Click for Breakdown">
-            <span class="rating-circles-cluster" aria-label="Attention 4/4, Risk 1/3, Savings 3/3">
-              <span class="rating-circle circle-attention circle-att-4 is-max" title="Attention: The Bottom Line [MAX !]">!</span>
-              <span class="rating-circle circle-risk circle-risk-1" title="IRS Risk: Low (1/3)"></span>
-              <span class="rating-circle circle-savings circle-save-3 is-max" title="Savings: Total Net Cash in Pocket [MAX !]">!</span>
-            </span>
-            <span class="pill-text">Grand Total</span>
-            <span class="pill-info-icon">ⓘ</span>
-          </span>
-        </div>
-
-        <div class="unified-hero-banner is-refund" id="unified-hero-banner">
-          <div class="unified-hero-title">🎉 Total Combined Net Money In Your Pocket</div>
-          <div class="unified-hero-amount" id="unified-hero-amount">$0.00</div>
-          <div class="unified-hero-subtitle" id="unified-hero-subtitle">Net sum of your federal refund and all state returns.</div>
-        </div>
-
-        <div class="formula-box" style="margin-bottom: 1.25rem;">
-          <div class="formula-row">
-            <span class="formula-badge general">General Formula</span>
-            <span class="formula-math formula-general">Grand Total Net = Federal Net (Withholding − Tax) + ∑ State Nets (Withholding − Tax)</span>
-          </div>
-          <div class="formula-row">
-            <span class="formula-badge plugged">With Your Numbers</span>
-            <span class="formula-math plugged-highlight formula-plugged" id="unified-formula-plugged">Grand Total = $0.00</span>
-          </div>
-        </div>
-
-        <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b; margin-bottom: 0.5rem;">
-          Multi-Jurisdiction Breakdown Ledger:
-        </div>
-
-        <table class="unified-ledger-table">
-          <thead>
-            <tr>
-              <th>Jurisdiction</th>
-              <th>Return Form</th>
-              <th>Tax Obligation</th>
-              <th>Taxes Paid (Withheld)</th>
-              <th>Net Outcome</th>
-              <th>Status / Notes</th>
-            </tr>
-          </thead>
-          <tbody id="unified-ledger-tbody"></tbody>
-        </table>
-      </div>
-
-      <!-- Step 12: FICA & Payroll Tax Transparency -->
+      <!-- Step 11: FICA & Payroll Tax Transparency -->
       <div class="calc-card" id="calc-fica-breakdown">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">12</span> Payroll Taxes</div>
-            <h3 class="calc-card-title">FICA: Social Security & Medicare Withheld</h3>
+            <div class="step-indicator">Step 11 • Payroll Taxes</div>
+            <h3 class="calc-card-title">FICA: Social Security &amp; Medicare Withheld</h3>
           </div>
-          <span class="irs-line-tag">W-2 Boxes 4 & 6</span>
+          <span class="irs-line-tag">W-2 Boxes 4 &amp; 6</span>
         </div>
 
         <div class="formula-box">
@@ -1542,185 +1283,73 @@
           </div>
           <div class="formula-row">
             <span class="formula-badge plugged">With Your Numbers</span>
-            <span class="formula-math plugged-highlight formula-plugged">Total FICA = $0.00</span>
+            <span class="formula-math plugged-highlight formula-plugged">Total FICA = $0</span>
           </div>
-        </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Total Employee FICA Taxes Paid:</span>
-          <span class="calc-output-value" style="color: #d97706;">$0.00</span>
-        </div>
-        <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.5rem;">
-          Note: Your employer also matched this exact amount on your behalf dollar-for-dollar into Social Security and Medicare trust funds.
         </div>
       </div>
+    </section>
 
-      <!-- Dotted Divider: Part 6 -->
-      <div class="section-divider-dotted">
-        <span class="divider-badge">PART 6 • MULTI-STATE TAX RETURNS &amp; ALLOCATIONS</span>
+    <!-- SECTION 5: STATE TAX CALCULATIONS -->
+    <section id="section-state-returns">
+      <div class="section-header-bar">
+        <h2>5. State Tax Calculations</h2>
       </div>
-
-      <!-- Step 13: State & Local Taxes Summary -->
-      <div class="calc-card" id="calc-state-tax-summary">
-        <div class="calc-card-header">
-          <div>
-            <div class="step-indicator"><span class="step-number">13</span> State & Local Allocation</div>
-            <h3 class="calc-card-title">State Income Taxes Withheld</h3>
-          </div>
-          <span class="irs-line-tag" style="background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe;">W-2 Boxes 15–20</span>
-        </div>
-
-        <div class="formula-box">
-          <div class="formula-row">
-            <span class="formula-badge general">General Formula</span>
-            <span class="formula-math formula-general">Total State Withholding = ∑(W-2 Box 17)</span>
-          </div>
-          <div class="formula-row">
-            <span class="formula-badge plugged" style="background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe;">With Your Numbers</span>
-            <span class="formula-math plugged-highlight formula-plugged">Total State Tax = $0.00</span>
-          </div>
-        </div>
-
-        <div class="calc-output-row">
-          <span class="calc-output-label">Total State Income Tax Withheld:</span>
-          <span class="calc-output-value" style="color: #7c3aed;">$0.00</span>
-        </div>
-
-        <!-- Per-State Breakdown Table -->
-        <div style="margin-top: 1.25rem;">
-          <div style="font-weight: 700; font-size: 0.85rem; color: #334155; margin-bottom: 0.35rem;">
-            Breakdown by State:
-          </div>
-          <table class="state-summary-table">
-            <thead>
-              <tr>
-                <th>State</th>
-                <th>State Wages (Box 16)</th>
-                <th>State Tax Withheld (Box 17)</th>
-                <th>Local Tax (Box 19)</th>
-              </tr>
-            </thead>
-            <tbody id="state-summary-tbody"></tbody>
-          </table>
-        </div>
-
-        <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.75rem;">
-          💡 <strong>SALT Deduction Note:</strong> State and local income taxes paid can be deducted on federal Schedule A (itemized deductions) up to a federal cap of $10,000 ($5,000 if married filing separately).
-        </div>
-      </div>
-
-      <!-- Step 13b: Dynamic Multi-State Individual Return Cards (with OSTC & Reciprocity) -->
-      <div id="container-state-returns" style="margin-top: 1.5rem;">
+      <div id="container-state-returns">
         <!-- Populated dynamically by app.ts for each resident and nonresident state -->
       </div>
+    </section>
 
-      <!-- Dotted Divider: Part 7 -->
-      <div class="section-divider-dotted">
-        <span class="divider-badge">PART 7 • OFFICIAL IRS FORM 1040 MIRROR</span>
+    <!-- SECTION 6: FINAL TAX SUMMARY -->
+    <section id="section-final-summary">
+      <div class="section-header-bar">
+        <h2>6. Final Tax Summary (Federal &amp; State)</h2>
       </div>
 
-      <!-- Step 14: Official Form 1040 Line-by-Line Mirror -->
-      <div class="calc-card" id="section-1040-mirror">
+      <div class="calc-card unified-summary-card" id="calc-unified-summary">
         <div class="calc-card-header">
           <div>
-            <div class="step-indicator"><span class="step-number">14</span> IRS Form 1040 Mapping</div>
-            <h3 class="calc-card-title">Line-by-Line 1040 Mirror</h3>
+            <div class="step-indicator">Summary Ledger</div>
+            <h3 class="calc-card-title">Federal &amp; State Tax Return Summary</h3>
           </div>
-          <span class="irs-line-tag">Official Summary</span>
+          <span class="irs-line-tag">All Jurisdictions</span>
         </div>
 
-        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 1rem;">
-          How every number on this page maps to the official federal Form 1040 lines:
-        </p>
-
-        <table class="form-1040-table">
-          <tbody>
+        <table class="unified-ledger-table">
+          <thead>
             <tr>
-              <td class="line-num">Line 1z</td>
-              <td class="line-desc">Total amount from Form(s) W-2, box 1</td>
-              <td class="line-val" id="line-1040-1z">$0.00</td>
+              <th>Jurisdiction</th>
+              <th>Return Form</th>
+              <th>Tax Liability</th>
+              <th>Tax Withheld</th>
+              <th>Net Refund or Owed</th>
+              <th>Notes</th>
             </tr>
-            <tr>
-              <td class="line-num">Line 9</td>
-              <td class="line-desc">Total income (Sum of line 1z and other incomes)</td>
-              <td class="line-val" id="line-1040-9">$0.00</td>
-            </tr>
-            <tr>
-              <td class="line-num">Line 10</td>
-              <td class="line-desc">Adjustments to income from Schedule 1, line 26</td>
-              <td class="line-val" id="line-1040-10">$0.00</td>
-            </tr>
-            <tr>
-              <td class="line-num">Line 11</td>
-              <td class="line-desc"><strong>Adjusted Gross Income (AGI)</strong> (Subtract line 10 from line 9)</td>
-              <td class="line-val" id="line-1040-11" style="color: #10b981;">$0.00</td>
-            </tr>
-            <tr>
-              <td class="line-num">Line 12</td>
-              <td class="line-desc">Standard deduction or itemized deductions</td>
-              <td class="line-val" id="line-1040-12">$0.00</td>
-            </tr>
-            <tr>
-              <td class="line-num">Line 15</td>
-              <td class="line-desc"><strong>Taxable income</strong> (Subtract line 12 from line 11)</td>
-              <td class="line-val" id="line-1040-15" style="color: #10b981;">$0.00</td>
-            </tr>
-            <tr>
-              <td class="line-num">Line 16</td>
-              <td class="line-desc">Tax (Calculated using the Tax Rate Schedules)</td>
-              <td class="line-val" id="line-1040-16">$0.00</td>
-            </tr>
-            <tr>
-              <td class="line-num">Line 19</td>
-              <td class="line-desc">Child tax credit or credit for other dependents</td>
-              <td class="line-val" id="line-1040-19">$0.00</td>
-            </tr>
-            <tr>
-              <td class="line-num">Line 24</td>
-              <td class="line-desc"><strong>Total tax</strong> (Subtract line 19 from line 16)</td>
-              <td class="line-val" id="line-1040-24" style="color: #f97316;">$0.00</td>
-            </tr>
-            <tr>
-              <td class="line-num">Line 25d</td>
-              <td class="line-desc">Federal income tax withheld from Form(s) W-2</td>
-              <td class="line-val" id="line-1040-25d" style="color: #0284c7;">$0.00</td>
-            </tr>
-            <tr id="row-1040-refund">
-              <td class="line-num" style="color: #16a34a;">Line 34</td>
-              <td class="line-desc"><strong>AMOUNT OVERPAID (YOUR REFUND)</strong></td>
-              <td class="line-val" id="line-1040-34" style="color: #16a34a; font-size: 1.1rem;">$0.00</td>
-            </tr>
-            <tr id="row-1040-owed" style="display: none;">
-              <td class="line-num" style="color: #dc2626;">Line 37</td>
-              <td class="line-desc"><strong>AMOUNT YOU OWE TO THE IRS</strong></td>
-              <td class="line-val" id="line-1040-37" style="color: #dc2626; font-size: 1.1rem;">$0.00</td>
-            </tr>
-          </tbody>
+          </thead>
+          <tbody id="unified-ledger-tbody"></tbody>
         </table>
       </div>
+    </section>
 
-      <!-- Dotted Divider: Part 8 -->
-      <div class="section-divider-dotted">
-        <span class="divider-badge">PART 8 • OFFICIAL FILING &amp; DOWNLOAD GUIDE</span>
+    <!-- SECTION 7: FILING & PRINT OPTIONS -->
+    <section id="section-filing-options-wrapper">
+      <div class="section-header-bar">
+        <h2>7. Filing &amp; Print Options</h2>
       </div>
 
-      <!-- Filing Walkthrough CTA Card -->
       <div class="calc-card filing-cta-card" id="section-filing-options">
         <div class="filing-cta-content">
-          <div class="filing-cta-badge">CALCULATION VERIFIED • READY FOR SUBMISSION</div>
-          <h2 class="filing-cta-title">Ready to File Your Return?</h2>
           <p class="filing-cta-desc">
-            We never trap you behind surprise paywalls. Walk through your 4 transparent options—from 100% free paper filing with auto-generated IRS envelope slips, to direct government e-filing and rapid 1-click convenience submission.
+            Review your filing options, print your Form 1040 summary and IRS mailing slip, or export your return data as JSON.
           </p>
           <div class="filing-cta-actions">
-            <button type="button" class="btn btn-primary btn-lg" id="btn-open-filing-modal">
-              🚀 Walk Me Through Filing &amp; Downloading
+            <button type="button" class="btn btn-primary" id="btn-open-filing-modal">
+              Filing &amp; Download Guide
             </button>
-            <button type="button" class="btn btn-outline" id="btn-quick-print-1040" style="background: #ffffff;">
-              🖨️ Print Form 1040 &amp; Address Slip
+            <button type="button" class="btn btn-outline" id="btn-quick-print-1040">
+              Print Form 1040 &amp; Address Slip
             </button>
-            <button type="button" class="btn btn-outline" id="btn-quick-export-json" style="background: #ffffff;">
-              💾 Download Data Packet (.json)
+            <button type="button" class="btn btn-outline" id="btn-quick-export-json">
+              Download Data Packet (.json)
             </button>
           </div>
         </div>
@@ -1728,15 +1357,14 @@
     </section>
 
     <!-- Footer -->
-    <footer style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 2.5rem 1rem; border-top: 1px solid #e2e8f0; margin-top: 2rem;">
-      <p><strong>Actually Free Taxes</strong> — Open, Visual, Single-Page Tax Computation Engine.</p>
-      <p style="margin-top: 0.35rem;">Equations conform strictly to IRS Tax Year <span class="current-tax-year-text">2024</span> &amp; 2025 guidelines. For educational and filing preparation transparency.</p>
-      <div style="margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 1.25rem; flex-wrap: wrap;">
-        <button type="button" class="footer-link-btn" id="btn-footer-tos">⚖️ Terms of Service &amp; Legal Disclaimers</button>
-        <span style="color: #cbd5e1;">•</span>
-        <button type="button" class="footer-link-btn" id="btn-footer-clear">🗑️ Clear Saved Local Draft</button>
-        <span style="color: #cbd5e1;">•</span>
-        <span style="color: #10b981; font-weight: 600;">🔒 100% Client-Side • Zero Remote Server Storage</span>
+    <footer class="app-footer">
+      <p><strong>Actually Free Taxes</strong> — Single-Page Tax Computation Engine (Tax Years <span class="current-tax-year-text">2024</span> &amp; 2025).</p>
+      <div class="footer-links">
+        <button type="button" class="footer-link-btn" id="btn-footer-tos">Terms of Service &amp; Disclaimers</button>
+        <span>•</span>
+        <button type="button" class="footer-link-btn" id="btn-footer-clear">Clear Saved Local Draft</button>
+        <span>•</span>
+        <span>100% Client-Side (Zero Server Storage)</span>
       </div>
     </footer>
 
