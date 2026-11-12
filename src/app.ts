@@ -2622,7 +2622,7 @@ class TaxApp {
 
     stateReturns.forEach(sr => {
       const card = document.createElement('div');
-      card.className = 'calc-card state-return-card';
+      card.className = 'calc-card state-return-card output-panel';
       const cardId = `calc-state-${sr.state.toLowerCase()}-card`;
       card.id = cardId;
 

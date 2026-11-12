@@ -3,9 +3,12 @@
   --bg-primary: #f1f5f9;
   --bg-surface: #ffffff;
   --bg-card-calc: #f8fafc;
+  --bg-calc-panel: #f8fafc;
   --bg-card-input: #ffffff;
   --border-color: #cbd5e1;
+  --border-calc-panel: #cbd5e1;
   --border-input-panel: #2563eb;
+  --border-output-panel: #dc2626;
   --border-focus: #1d4ed8;
   --text-primary: #0f172a;
   --text-secondary: #334155;
@@ -420,6 +423,15 @@ body {
 .calc-card.input-panel {
   background: var(--bg-card-input);
   border: 2px solid var(--border-input-panel);
+  box-shadow: none;
+}
+
+/* Key output panels: distinct 2px red border matching input panel weight */
+.calc-card.output-panel,
+.state-return-card.output-panel,
+.unified-summary-card.output-panel {
+  background: #ffffff;
+  border: 2px solid var(--border-output-panel);
   box-shadow: none;
 }
 
