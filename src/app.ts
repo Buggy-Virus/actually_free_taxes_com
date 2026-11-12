@@ -1447,8 +1447,111 @@ class TaxApp {
   }
 
   private loadPreset(presetName: string): void {
-    if (presetName === 'single-75k') {
+    // Reset optional state fields before applying preset
+    this.state.otherIncome.sources = [];
+    this.state.otherIncome.capitalGains = { shortTerm: 0, longTerm: 0 };
+    this.state.otherIncome.scheduleCExpenses = 0;
+    this.state.itemizedDeductions = {
+      medicalExpenses: 0,
+      realEstateTax: 0,
+      mortgageInterest: 0,
+      charity: 0
+    };
+    this.state.deductionMethod = 'auto';
+
+    if (presetName === 'nyc-dc-investor') {
       this.state.filingStatus = 'single';
+      this.state.residentState = 'NY';
+      this.state.w2s = [
+        {
+          id: 0,
+          employer: 'Midtown FinTech Corp (NYC - Job 1)',
+          ein: '13-4012980',
+          box1: 95000,
+          box2: 15200,
+          box3: 95000,
+          box4: 5890,
+          box5: 95000,
+          box6: 1377.50,
+          states: [{
+            id: 0,
+            state: 'NY',
+            stateId: 'NY-4012980',
+            stateWages: 95000,
+            stateTaxWithheld: 5130,
+            localWages: 95000,
+            localTaxWithheld: 3420,
+            localityName: 'NYC'
+          }]
+        },
+        {
+          id: 1,
+          employer: 'Hudson River AI Labs (NYC - Job 2)',
+          ein: '13-8841205',
+          box1: 115000,
+          box2: 19550,
+          box3: 115000,
+          box4: 7130,
+          box5: 115000,
+          box6: 1667.50,
+          states: [{
+            id: 1,
+            state: 'NY',
+            stateId: 'NY-8841205',
+            stateWages: 115000,
+            stateTaxWithheld: 6440,
+            localWages: 115000,
+            localTaxWithheld: 4190,
+            localityName: 'NYC'
+          }]
+        }
+      ];
+      this.state.otherIncome.interest = 1850;
+      this.state.otherIncome.sources = [
+        {
+          id: 1,
+          type: '1099-INT',
+          payer: 'Fidelity Bond Account (Accrued Interest)',
+          amount: 1420,
+          state: 'NY'
+        },
+        {
+          id: 2,
+          type: '1099-DIV',
+          payer: 'Vanguard Brokerage (Dividends Paid)',
+          amount: 3600,
+          state: 'NY'
+        },
+        {
+          id: 3,
+          type: '1099-DIV',
+          payer: 'Charles Schwab Portfolio (Dividends Paid)',
+          amount: 2150,
+          state: 'NY'
+        },
+        {
+          id: 4,
+          type: '1099-MISC',
+          payer: 'DC Condo Rental (Dupont Circle — Net Rent)',
+          amount: 14800,
+          state: 'DC'
+        }
+      ];
+      this.state.otherIncome.capitalGains = {
+        shortTerm: -2400,
+        longTerm: 14500
+      };
+      this.state.adjustments = { studentLoan: 0, ira: 0, hsa: 2000 };
+      this.state.dependents.childrenCount = 0;
+      this.state.itemizedDeductions = {
+        medicalExpenses: 0,
+        realEstateTax: 4800,
+        mortgageInterest: 11200,
+        charity: 2500
+      };
+    } else if (presetName === 'single-75k') {
+      this.state.filingStatus = 'single';
+      this.state.residentState = 'CA';
       this.state.w2s = [{
         id: 0,
         employer: 'Northwind Tech Inc.',
@@ -1476,6 +1579,7 @@ class TaxApp {
     } else if (presetName === 'multi-state-dual') {
       // Scenario with 2 jobs in 2 different states (e.g. California & New York)
       this.state.filingStatus = 'single';
+      this.state.residentState = 'CA';
       this.state.w2s = [
         {
           id: 0,
@@ -1525,6 +1629,7 @@ class TaxApp {
       this.state.dependents.childrenCount = 0;
     } else if (presetName === 'married-dual-140k') {
       this.state.filingStatus = 'married_joint';
+      this.state.residentState = 'IL';
       this.state.w2s = [
         {
           id: 0,
@@ -1574,6 +1679,7 @@ class TaxApp {
       this.state.dependents.childrenCount = 1;
     } else if (presetName === 'student-grad') {
       this.state.filingStatus = 'single';
+      this.state.residentState = 'TX';
       this.state.w2s = [{
         id: 0,
         employer: 'Creative Design Studio',
@@ -1600,6 +1706,7 @@ class TaxApp {
       this.state.dependents.childrenCount = 0;
     } else if (presetName === 'blank') {
       this.state.filingStatus = 'single';
+      this.state.residentState = 'CA';
       this.state.w2s = [{
         id: 0,
         employer: 'Employer Name',
@@ -1629,6 +1736,12 @@ class TaxApp {
     const statusSelect = document.getElementById('select-filing-status') as HTMLSelectElement | null;
     if (statusSelect) statusSelect.value = this.state.filingStatus;
 
+    const resStateSelect = document.getElementById('select-resident-state') as HTMLSelectElement | null;
+    if (resStateSelect && this.state.residentState) resStateSelect.value = this.state.residentState;
+
+    const dedMethodSelect = document.getElementById('select-deduction-method') as HTMLSelectElement | null;
+    if (dedMethodSelect) dedMethodSelect.value = this.state.deductionMethod || 'auto';
+
     const setVal = (id: string, val: number) => {
       const el = document.getElementById(id) as HTMLInputElement | null;
       if (el) el.value = String(val);
@@ -1638,8 +1751,14 @@ class TaxApp {
     setVal('input-adj-hsa', this.state.adjustments.hsa);
     setVal('input-other-interest', this.state.otherIncome.interest);
     setVal('input-children-count', this.state.dependents.childrenCount);
+    setVal('input-capital-gains-st', this.state.otherIncome.capitalGains?.shortTerm || 0);
+    setVal('input-capital-gains-lt', this.state.otherIncome.capitalGains?.longTerm || 0);
+    setVal('input-1099-nec-expenses', this.state.otherIncome.scheduleCExpenses || 0);
+    setVal('input-itemized-medical', this.state.itemizedDeductions?.medicalExpenses || 0);
+    setVal('input-itemized-salt', this.state.itemizedDeductions?.realEstateTax || 0);
+    setVal('input-itemized-mortgage', this.state.itemizedDeductions?.mortgageInterest || 0);
+    setVal('input-itemized-charity', this.state.itemizedDeductions?.charity || 0);
 
-    this.state.otherIncome.sources = [];
     this.renderW2Forms();
     this.renderIncomeSources();
     this.recalculateAndRender();
@@ -2536,6 +2655,19 @@ class TaxApp {
           label: `${st.state} State Tax Withheld (Box 17)`
         });
       });
+    });
+
+    (this.state.otherIncome.sources || []).forEach(src => {
+      if (src.amount > 0 && src.state) {
+        const stateKey = src.state.toLowerCase();
+        connections.push({
+          id: `conn-income-source-${src.id}-state-${stateKey}`,
+          sourceId: `input-income-source-${src.id}`,
+          targetId: `calc-state-${stateKey}-card`,
+          category: 'state',
+          label: `${src.type} (${src.state}) to ${src.state} State Return`
+        });
+      }
     });
 
     // 14. Cross-State Double Taxation Shield (OSTC) Connections

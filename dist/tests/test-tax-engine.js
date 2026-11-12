@@ -604,4 +604,87 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
     assert.strictEqual(ledger.result, Math.abs(expectedTotal), 'Result matches absolute grand total');
     console.log("✓ TS Test 12: Unified Multi-Jurisdiction Grand Total Ledger verified correctly!");
 }
-console.log("\nAll 12 TypeScript test suites PASSED with 100% accuracy!\n");
+// Test Case 13: NYC Job Switch (2 NYC W-2s) + DC Condo Rental + Multiple Investment Accounts & Capital Gains
+{
+    const state = {
+        year: 2024,
+        filingStatus: 'single',
+        residentState: 'NY',
+        w2s: [
+            {
+                id: 0,
+                employer: 'Midtown FinTech Corp (NYC - Job 1)',
+                ein: '13-4012980',
+                box1: 95000,
+                box2: 15200,
+                box3: 95000,
+                box4: 5890,
+                box5: 95000,
+                box6: 1377.50,
+                states: [{
+                        id: 0,
+                        state: 'NY',
+                        stateId: 'NY-4012980',
+                        stateWages: 95000,
+                        stateTaxWithheld: 5130,
+                        localWages: 95000,
+                        localTaxWithheld: 3420,
+                        localityName: 'NYC'
+                    }]
+            },
+            {
+                id: 1,
+                employer: 'Hudson River AI Labs (NYC - Job 2)',
+                ein: '13-8841205',
+                box1: 115000,
+                box2: 19550,
+                box3: 115000,
+                box4: 7130,
+                box5: 115000,
+                box6: 1667.50,
+                states: [{
+                        id: 1,
+                        state: 'NY',
+                        stateId: 'NY-8841205',
+                        stateWages: 115000,
+                        stateTaxWithheld: 6440,
+                        localWages: 115000,
+                        localTaxWithheld: 4190,
+                        localityName: 'NYC'
+                    }]
+            }
+        ],
+        otherIncome: {
+            interest: 1850,
+            sources: [
+                { id: 1, type: '1099-INT', payer: 'Fidelity Bond Account (Accrued Interest)', amount: 1420, state: 'NY' },
+                { id: 2, type: '1099-DIV', payer: 'Vanguard Brokerage (Dividends Paid)', amount: 3600, state: 'NY' },
+                { id: 3, type: '1099-DIV', payer: 'Charles Schwab Portfolio (Dividends Paid)', amount: 2150, state: 'NY' },
+                { id: 4, type: '1099-MISC', payer: 'DC Condo Rental (Dupont Circle — Net Rent)', amount: 14800, state: 'DC' }
+            ],
+            capitalGains: {
+                shortTerm: -2400,
+                longTerm: 14500
+            }
+        },
+        adjustments: { studentLoan: 0, ira: 0, hsa: 2000 },
+        dependents: { childrenCount: 0 },
+        itemizedDeductions: {
+            medicalExpenses: 0,
+            realEstateTax: 4800,
+            mortgageInterest: 11200,
+            charity: 2500
+        },
+        showAllArrows: true
+    };
+    const res = calculateTaxes(state);
+    assert.strictEqual(res.w2WagesCalc.result, 210000, 'Combined W-2 wages = 95,000 + 115,000 = 210,000');
+    assert.strictEqual(res.capitalGainsCalc.result, 12100, 'Net capital gains = -2,400 + 14,500 = 12,100');
+    assert.strictEqual(res.grossIncomeCalc.result, 245920, 'Gross income = 210,000 + 1,850 + 1,420 + 3,600 + 2,150 + 14,800 + 12,100 = 245,920');
+    assert.strictEqual(res.agiCalc.result, 243920, 'AGI = 245,920 - 2,000 HSA = 243,920');
+    assert.strictEqual(res.deductionCalc.result, 23700, 'Itemized deduction = $10,000 SALT + $11,200 Mortgage + $2,500 Charity = $23,700');
+    assert.strictEqual(res.taxableIncomeCalc.result, 220220, 'Taxable income = 243,920 - 23,700 = 220,220');
+    assert.strictEqual(res.stateReturnsCalc.length, 2, 'Generates NY Resident + DC Nonresident returns');
+    console.log("✓ TS Test 13: NYC Job Switch + DC Condo Rental & Investments scenario verified correctly!");
+}
+console.log("\nAll 13 TypeScript test suites PASSED with 100% accuracy!\n");
