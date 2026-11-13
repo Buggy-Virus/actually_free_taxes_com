@@ -2457,6 +2457,66 @@ body.filter-hide-niche .priority-skip {
   animation: fadeIn 0.25s ease;
 }
 
+/* Collapsible Cards & Sections */
+.btn-minimize-card,
+.btn-minimize-section {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  line-height: 1.25;
+}
+
+.btn-minimize-card:hover,
+.btn-minimize-section:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.calc-card.is-collapsed .card-collapsible-body {
+  display: none;
+}
+
+.calc-card.is-collapsed {
+  padding-bottom: 0.75rem;
+}
+
+.calc-card.is-collapsed .input-card-title {
+  margin-bottom: 0;
+}
+
+section.is-section-collapsed > :not(.section-header-bar) {
+  display: none;
+}
+
+.sub-advanced-details {
+  margin-top: 0.45rem;
+  margin-bottom: 0.35rem;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 0.35rem;
+}
+
+.sub-advanced-details > summary {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0.35rem;
+}
+
+.sub-advanced-details > summary:hover {
+  color: #0f172a;
+}
+
 
 
 

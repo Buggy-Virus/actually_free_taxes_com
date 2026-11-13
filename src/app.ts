@@ -529,6 +529,81 @@ class TaxApp {
     setVal('input-itemized-gambling', this.state.itemizedDeductions?.gamblingLosses);
 
     this.renderYearBadges();
+    this.syncCollapsedStates();
+  }
+
+  private setCardCollapsed(card: HTMLElement, collapsed: boolean): void {
+    card.classList.toggle('is-collapsed', collapsed);
+    const btn = card.querySelector<HTMLButtonElement>(`[data-card-toggle="${card.id}"]`);
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(!collapsed));
+      btn.textContent = collapsed ? 'Expand ▾' : 'Minimize ▴';
+    }
+  }
+
+  private setSectionCollapsed(section: HTMLElement, collapsed: boolean): void {
+    section.classList.toggle('is-section-collapsed', collapsed);
+    const btn = section.querySelector<HTMLButtonElement>(`[data-section-toggle="${section.id}"]`);
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(!collapsed));
+      btn.textContent = collapsed ? 'Expand ▾' : 'Minimize ▴';
+    }
+  }
+
+  private syncCollapsedStates(): void {
+    document.querySelectorAll<HTMLElement>('.calc-card[data-auto-collapse="true"]').forEach(card => {
+      const inputs = Array.from(card.querySelectorAll<HTMLInputElement>('input'));
+      const hasData = inputs.some(input => {
+        if (input.type === 'number') {
+          const val = parseFloat(input.value);
+          return !Number.isNaN(val) && val !== 0;
+        }
+        return input.value.trim() !== '';
+      });
+      this.setCardCollapsed(card, !hasData);
+    });
+
+    const capGainsDetails = document.getElementById('details-capital-gains-special') as HTMLDetailsElement | null;
+    if (capGainsDetails) {
+      const cap = this.state.otherIncome?.capitalGains;
+      const hasSpecialCapGains = Boolean((cap?.collectiblesGain ?? 0) !== 0 || (cap?.unrecaptured1250Gain ?? 0) !== 0);
+      capGainsDetails.open = hasSpecialCapGains;
+    }
+
+    this.arrowEngine?.scheduleRedraw();
+  }
+
+  private bindCollapseControls(): void {
+    document.querySelectorAll<HTMLButtonElement>('[data-card-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cardId = btn.dataset.cardToggle;
+        if (!cardId) return;
+        const card = document.getElementById(cardId);
+        if (!card) return;
+        const nextCollapsed = !card.classList.contains('is-collapsed');
+        this.setCardCollapsed(card, nextCollapsed);
+        this.arrowEngine?.scheduleRedraw();
+      });
+    });
+
+    document.querySelectorAll<HTMLButtonElement>('[data-section-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sectionId = btn.dataset.sectionToggle;
+        if (!sectionId) return;
+        const section = document.getElementById(sectionId);
+        if (!section) return;
+        const nextCollapsed = !section.classList.contains('is-section-collapsed');
+        this.setSectionCollapsed(section, nextCollapsed);
+        this.arrowEngine?.scheduleRedraw();
+      });
+    });
+
+    const capGainsDetails = document.getElementById('details-capital-gains-special');
+    if (capGainsDetails) {
+      capGainsDetails.addEventListener('toggle', () => {
+        this.arrowEngine?.scheduleRedraw();
+      });
+    }
   }
 
   private bindGlobalEvents(): void {
@@ -675,6 +750,8 @@ class TaxApp {
     bindInput('input-itemized-mortgage', val => getItemized().mortgageInterest = val);
     bindInput('input-itemized-charity', val => getItemized().charity = val);
     bindInput('input-itemized-gambling', val => getItemized().gamblingLosses = val);
+
+    this.bindCollapseControls();
 
     const dedMethodSelect = document.getElementById('select-deduction-method') as HTMLSelectElement | null;
     if (dedMethodSelect) {

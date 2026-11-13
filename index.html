@@ -348,9 +348,12 @@
     <section id="section-other-inputs">
       <div class="section-header-bar">
         <h2>2. Other Income, Adjustments &amp; Credits</h2>
-        <button type="button" class="btn" id="btn-add-income-source">
-          + Add Income Source (1099-NEC, 1099-DIV, etc.)
-        </button>
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="btn" id="btn-add-income-source">
+            + Add Income Source (1099-NEC, 1099-DIV, etc.)
+          </button>
+          <button type="button" class="btn-minimize-section" data-section-toggle="section-other-inputs" aria-expanded="true">Minimize ▴</button>
+        </div>
       </div>
 
       <!-- Container for Dynamic Extra Income Sources (1099-NEC, 1099-DIV, etc.) -->
@@ -452,21 +455,26 @@
                 <input type="number" step="any" class="w2-input" id="input-capital-gains-lt" value="0" placeholder="0">
               </div>
             </div>
-            <div>
-              <label for="input-capital-gains-collectibles" class="input-sublabel">28% Collectibles Gain</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-capital-gains-collectibles" value="0" placeholder="0">
-              </div>
-            </div>
-            <div>
-              <label for="input-capital-gains-1250" class="input-sublabel">25% Sec. 1250 Deprec. Gain</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-capital-gains-1250" value="0" placeholder="0">
-              </div>
-            </div>
           </div>
+          <details id="details-capital-gains-special" class="sub-advanced-details">
+            <summary>28% Collectibles &amp; 25% Sec. 1250 Gains</summary>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.4rem;">
+              <div>
+                <label for="input-capital-gains-collectibles" class="input-sublabel">28% Collectibles Gain</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-capital-gains-collectibles" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-capital-gains-1250" class="input-sublabel">25% Sec. 1250 Deprec. Gain</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-capital-gains-1250" value="0" placeholder="0">
+                </div>
+              </div>
+            </div>
+          </details>
           <div class="input-card-hint">Stocks, crypto, collectibles (28% cap), or Sec. 1250 depreciation recapture (25% cap). Losses capped at -$3,000.</div>
           <div class="field-explain-drawer" id="drawer-explain-capital-gains" hidden aria-hidden="true">
             <div class="explain-drawer-content">
@@ -500,7 +508,7 @@
         </div>
 
         <!-- Schedule E Rental Real Estate (Condo / Property) -->
-        <div class="calc-card input-panel priority-saver" id="card-schedule-e-rental">
+        <div class="calc-card input-panel priority-saver" id="card-schedule-e-rental" data-auto-collapse="true">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule E Part I / Form 4562</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -513,41 +521,44 @@
                 <span class="pill-text">Rental Real Estate</span>
                 <span class="pill-info-icon">ⓘ</span>
               </span>
+              <button type="button" class="btn-minimize-card" data-card-toggle="card-schedule-e-rental" aria-expanded="true">Minimize ▴</button>
             </div>
           </div>
           <div class="input-card-title">Rental Real Estate (Schedule E)</div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
-            <div>
-              <label for="input-rental-gross" class="input-sublabel">Gross Rents ($)</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-rental-gross" value="0" placeholder="0">
+          <div class="card-collapsible-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+              <div>
+                <label for="input-rental-gross" class="input-sublabel">Gross Rents ($)</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-rental-gross" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-rental-expenses" class="input-sublabel">Expenses / HOA / Tax ($)</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-rental-expenses" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-rental-depreciation" class="input-sublabel">Depreciation (27.5-yr)</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-rental-depreciation" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-rental-state" class="input-sublabel">Property State / DC</label>
+                <input type="text" maxlength="2" class="w2-input" id="input-rental-state" value="" placeholder="DC, NY, CA" style="text-align: left; padding-left: 0.5rem; text-transform: uppercase;">
               </div>
             </div>
-            <div>
-              <label for="input-rental-expenses" class="input-sublabel">Expenses / HOA / Tax ($)</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-rental-expenses" value="0" placeholder="0">
-              </div>
-            </div>
-            <div>
-              <label for="input-rental-depreciation" class="input-sublabel">Depreciation (27.5-yr)</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-rental-depreciation" value="0" placeholder="0">
-              </div>
-            </div>
-            <div>
-              <label for="input-rental-state" class="input-sublabel">Property State / DC</label>
-              <input type="text" maxlength="2" class="w2-input" id="input-rental-state" value="" placeholder="DC, NY, CA" style="text-align: left; padding-left: 0.5rem; text-transform: uppercase;">
-            </div>
+            <div class="input-card-hint">Gross rental income minus operating expenses &amp; MACRS depreciation (Schedule 1 Line 5).</div>
           </div>
-          <div class="input-card-hint">Gross rental income minus operating expenses &amp; MACRS depreciation (Schedule 1 Line 5).</div>
         </div>
 
         <!-- Schedule C Freelance Business Expenses -->
-        <div class="calc-card input-panel priority-saver" id="card-1099-nec-expenses">
+        <div class="calc-card input-panel priority-saver" id="card-1099-nec-expenses" data-auto-collapse="true">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule C Part II</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -565,39 +576,42 @@
                 <span class="pill-text">Money Saver</span>
                 <span class="pill-info-icon">ⓘ</span>
               </span>
+              <button type="button" class="btn-minimize-card" data-card-toggle="card-1099-nec-expenses" aria-expanded="true">Minimize ▴</button>
             </div>
           </div>
           <div class="input-card-title">Freelance Business Expenses</div>
-          <div class="w2-input-wrapper">
-            <span class="currency-symbol">$</span>
-            <input type="number" step="any" class="w2-input" id="input-1099-nec-expenses" value="0" placeholder="0">
-          </div>
-          <div class="input-card-hint">Ordinary & necessary business expenses reducing your 1099-NEC earnings.</div>
-          <div class="field-explain-drawer" id="drawer-explain-1099-nec-expenses" hidden aria-hidden="true">
-            <div class="explain-drawer-content">
-              <div class="explain-header">
-                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                  <span class="explain-icon">💡</span>
-                  <span class="explain-title">Schedule C Business Expenses</span>
+          <div class="card-collapsible-body">
+            <div class="w2-input-wrapper">
+              <span class="currency-symbol">$</span>
+              <input type="number" step="any" class="w2-input" id="input-1099-nec-expenses" value="0" placeholder="0">
+            </div>
+            <div class="input-card-hint">Ordinary & necessary business expenses reducing your 1099-NEC earnings.</div>
+            <div class="field-explain-drawer" id="drawer-explain-1099-nec-expenses" hidden aria-hidden="true">
+              <div class="explain-drawer-content">
+                <div class="explain-header">
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span class="explain-icon">💡</span>
+                    <span class="explain-title">Schedule C Business Expenses</span>
+                  </div>
+                  <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-1099-nec-expenses" aria-label="Close explanation">✕</button>
                 </div>
-                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-1099-nec-expenses" aria-label="Close explanation">✕</button>
-              </div>
-              <div class="explain-body">
-                <div class="explain-section">
-                  <span class="explain-label">What does this mean?</span>
-                  <p class="explain-text">Costs you incurred to earn self-employment / 1099 income (mileage, software, laptop, home office, supplies).</p>
-                </div>
-                <div class="explain-section">
-                  <span class="explain-label">Where to find it:</span>
-                  <p class="explain-text">Your receipts, bank statements, mileage logs, and bookkeeping software for independent contractor activity.</p>
-                </div>
-                <div class="explain-section">
-                  <span class="explain-label">Why it matters for your taxes:</span>
-                  <p class="explain-text">Business expenses directly reduce your Schedule C net profit dollar-for-dollar, cutting both your income tax and 15.3% self-employment tax!</p>
-                </div>
-                <div class="explain-section explain-tip-box">
-                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
-                  <p class="explain-text">Never pay taxes on gross 1099 revenue! Deduct all legitimate business expenses you have receipts or records for.</p>
+                <div class="explain-body">
+                  <div class="explain-section">
+                    <span class="explain-label">What does this mean?</span>
+                    <p class="explain-text">Costs you incurred to earn self-employment / 1099 income (mileage, software, laptop, home office, supplies).</p>
+                  </div>
+                  <div class="explain-section">
+                    <span class="explain-label">Where to find it:</span>
+                    <p class="explain-text">Your receipts, bank statements, mileage logs, and bookkeeping software for independent contractor activity.</p>
+                  </div>
+                  <div class="explain-section">
+                    <span class="explain-label">Why it matters for your taxes:</span>
+                    <p class="explain-text">Business expenses directly reduce your Schedule C net profit dollar-for-dollar, cutting both your income tax and 15.3% self-employment tax!</p>
+                  </div>
+                  <div class="explain-section explain-tip-box">
+                    <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                    <p class="explain-text">Never pay taxes on gross 1099 revenue! Deduct all legitimate business expenses you have receipts or records for.</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -779,46 +793,51 @@
         </div>
 
         <!-- Additional Schedule 1 Part II Adjustments -->
-        <div class="calc-card input-panel priority-saver" id="card-adj-other">
+        <div class="calc-card input-panel priority-saver" id="card-adj-other" data-auto-collapse="true">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule 1 Lines 11, 16, 17, 19</div>
-            <span class="field-rating-pill badge-priority-saver" data-rating-field="adj-ira" role="button" tabindex="0">
-              <span class="pill-text">Above-the-Line</span>
-              <span class="pill-info-icon">ⓘ</span>
-            </span>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="adj-ira" role="button" tabindex="0">
+                <span class="pill-text">Above-the-Line</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+              <button type="button" class="btn-minimize-card" data-card-toggle="card-adj-other" aria-expanded="true">Minimize ▴</button>
+            </div>
           </div>
           <div class="input-card-title">Other Schedule 1 Adjustments</div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
-            <div>
-              <label for="input-adj-educator" class="input-sublabel">Educator Expenses (≤$300)</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-adj-educator" value="0" placeholder="0">
+          <div class="card-collapsible-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+              <div>
+                <label for="input-adj-educator" class="input-sublabel">Educator Expenses (≤$300)</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-adj-educator" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-adj-se-retirement" class="input-sublabel">SEP / SIMPLE / Solo 401k</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-adj-se-retirement" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-adj-se-health" class="input-sublabel">SE Health Insurance</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-adj-se-health" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-adj-alimony" class="input-sublabel">Alimony Paid (Pre-2019)</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-adj-alimony" value="0" placeholder="0">
+                </div>
               </div>
             </div>
-            <div>
-              <label for="input-adj-se-retirement" class="input-sublabel">SEP / SIMPLE / Solo 401k</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-adj-se-retirement" value="0" placeholder="0">
-              </div>
-            </div>
-            <div>
-              <label for="input-adj-se-health" class="input-sublabel">SE Health Insurance</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-adj-se-health" value="0" placeholder="0">
-              </div>
-            </div>
-            <div>
-              <label for="input-adj-alimony" class="input-sublabel">Alimony Paid (Pre-2019)</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-adj-alimony" value="0" placeholder="0">
-              </div>
-            </div>
+            <div class="input-card-hint">½ Self-Employment Tax (Schedule SE) is also deducted automatically when 1099-NEC profit ≥ $400.</div>
           </div>
-          <div class="input-card-hint">½ Self-Employment Tax (Schedule SE) is also deducted automatically when 1099-NEC profit ≥ $400.</div>
         </div>
 
         <!-- Qualifying Children, Other Dependents & Age 65+/Blind -->
@@ -896,60 +915,65 @@
         </div>
 
         <!-- Additional Tax Credits & Estimated Tax Payments (Schedule 3 / Forms 2441, 8863, 1116, 5695, 1040-ES) -->
-        <div class="calc-card input-panel priority-saver" id="card-other-credits-payments">
+        <div class="calc-card input-panel priority-saver" id="card-other-credits-payments" data-auto-collapse="true">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule 3 / Forms 2441, 8863, 1116, 5695, 1040-ES</div>
-            <span class="field-rating-pill badge-priority-saver" data-rating-field="credits-children" role="button" tabindex="0">
-              <span class="pill-text">Credits &amp; Pre-Payments</span>
-              <span class="pill-info-icon">ⓘ</span>
-            </span>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="credits-children" role="button" tabindex="0">
+                <span class="pill-text">Credits &amp; Pre-Payments</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+              <button type="button" class="btn-minimize-card" data-card-toggle="card-other-credits-payments" aria-expanded="true">Minimize ▴</button>
+            </div>
           </div>
           <div class="input-card-title">Child Care, Education, Energy Credits &amp; 1040-ES</div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
-            <div>
-              <label for="input-child-care" class="input-sublabel">Child Care Exp. (2441)</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-child-care" value="0" placeholder="0">
+          <div class="card-collapsible-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+              <div>
+                <label for="input-child-care" class="input-sublabel">Child Care Exp. (2441)</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-child-care" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-edu-aotc" class="input-sublabel">AOTC Tuition (8863)</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-edu-aotc" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-edu-llc" class="input-sublabel">LLC Tuition (8863)</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-edu-llc" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-foreign-tax-credit" class="input-sublabel">Foreign Tax Cr (1116)</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-foreign-tax-credit" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-clean-energy-credit" class="input-sublabel">Clean Energy/EV (5695)</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-clean-energy-credit" value="0" placeholder="0">
+                </div>
+              </div>
+              <div>
+                <label for="input-estimated-payments" class="input-sublabel">1040-ES Est. Paid</label>
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input" id="input-estimated-payments" value="0" placeholder="0">
+                </div>
               </div>
             </div>
-            <div>
-              <label for="input-edu-aotc" class="input-sublabel">AOTC Tuition (8863)</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-edu-aotc" value="0" placeholder="0">
-              </div>
-            </div>
-            <div>
-              <label for="input-edu-llc" class="input-sublabel">LLC Tuition (8863)</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-edu-llc" value="0" placeholder="0">
-              </div>
-            </div>
-            <div>
-              <label for="input-foreign-tax-credit" class="input-sublabel">Foreign Tax Cr (1116)</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-foreign-tax-credit" value="0" placeholder="0">
-              </div>
-            </div>
-            <div>
-              <label for="input-clean-energy-credit" class="input-sublabel">Clean Energy/EV (5695)</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-clean-energy-credit" value="0" placeholder="0">
-              </div>
-            </div>
-            <div>
-              <label for="input-estimated-payments" class="input-sublabel">1040-ES Est. Paid</label>
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input" id="input-estimated-payments" value="0" placeholder="0">
-              </div>
-            </div>
+            <div class="input-card-hint">Saver's Credit (Form 8880) &amp; Earned Income Tax Credit (Schedule EIC) are also computed automatically.</div>
           </div>
-          <div class="input-card-hint">Saver's Credit (Form 8880) &amp; Earned Income Tax Credit (Schedule EIC) are also computed automatically.</div>
         </div>
       </div>
     </section>
@@ -958,6 +982,7 @@
     <section id="section-itemized-inputs">
       <div class="section-header-bar">
         <h2>3. Schedule A Itemized Deductions</h2>
+        <button type="button" class="btn-minimize-section" data-section-toggle="section-itemized-inputs" aria-expanded="true">Minimize ▴</button>
       </div>
 
       <div class="input-cards-grid" style="margin-bottom: 1rem;">
@@ -980,39 +1005,42 @@
                 <span class="pill-text">>7.5% AGI Only</span>
                 <span class="pill-info-icon">ⓘ</span>
               </span>
+              <button type="button" class="btn-minimize-card" data-card-toggle="card-itemized-medical" aria-expanded="true">Minimize ▴</button>
             </div>
           </div>
           <div class="input-card-title">Medical &amp; Dental Expenses</div>
-          <div class="w2-input-wrapper">
-            <span class="currency-symbol">$</span>
-            <input type="number" step="any" class="w2-input" id="input-itemized-medical" value="0" placeholder="0">
-          </div>
-          <div class="input-card-hint">Out-of-pocket medical costs exceeding 7.5% of your AGI are deductible.</div>
-          <div class="field-explain-drawer" id="drawer-explain-itemized-medical" hidden aria-hidden="true">
-            <div class="explain-drawer-content">
-              <div class="explain-header">
-                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                  <span class="explain-icon">💡</span>
-                  <span class="explain-title">Medical and Dental Expenses (Schedule A)</span>
+          <div class="card-collapsible-body">
+            <div class="w2-input-wrapper">
+              <span class="currency-symbol">$</span>
+              <input type="number" step="any" class="w2-input" id="input-itemized-medical" value="0" placeholder="0">
+            </div>
+            <div class="input-card-hint">Out-of-pocket medical costs exceeding 7.5% of your AGI are deductible.</div>
+            <div class="field-explain-drawer" id="drawer-explain-itemized-medical" hidden aria-hidden="true">
+              <div class="explain-drawer-content">
+                <div class="explain-header">
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span class="explain-icon">💡</span>
+                    <span class="explain-title">Medical and Dental Expenses (Schedule A)</span>
+                  </div>
+                  <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-medical" aria-label="Close explanation">✕</button>
                 </div>
-                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-medical" aria-label="Close explanation">✕</button>
-              </div>
-              <div class="explain-body">
-                <div class="explain-section">
-                  <span class="explain-label">What does this mean?</span>
-                  <p class="explain-text">Total unreimbursed out-of-pocket doctor visits, prescriptions, surgeries, therapy, dental and vision bills.</p>
-                </div>
-                <div class="explain-section">
-                  <span class="explain-label">Where to find it:</span>
-                  <p class="explain-text">Health insurance Explanations of Benefits (EOBs), pharmacy receipts, medical bills.</p>
-                </div>
-                <div class="explain-section">
-                  <span class="explain-label">Why it matters for your taxes:</span>
-                  <p class="explain-text">Strict 7.5% AGI floor: only medical expenses IN EXCESS of 7.5% of your AGI count toward itemizing.</p>
-                </div>
-                <div class="explain-section explain-tip-box">
-                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
-                  <p class="explain-text">For most filers without catastrophic medical costs, the 7.5% floor makes this $0. If you had major surgery, add it up!</p>
+                <div class="explain-body">
+                  <div class="explain-section">
+                    <span class="explain-label">What does this mean?</span>
+                    <p class="explain-text">Total unreimbursed out-of-pocket doctor visits, prescriptions, surgeries, therapy, dental and vision bills.</p>
+                  </div>
+                  <div class="explain-section">
+                    <span class="explain-label">Where to find it:</span>
+                    <p class="explain-text">Health insurance Explanations of Benefits (EOBs), pharmacy receipts, medical bills.</p>
+                  </div>
+                  <div class="explain-section">
+                    <span class="explain-label">Why it matters for your taxes:</span>
+                    <p class="explain-text">Strict 7.5% AGI floor: only medical expenses IN EXCESS of 7.5% of your AGI count toward itemizing.</p>
+                  </div>
+                  <div class="explain-section explain-tip-box">
+                    <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                    <p class="explain-text">For most filers without catastrophic medical costs, the 7.5% floor makes this $0. If you had major surgery, add it up!</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1038,39 +1066,42 @@
                 <span class="pill-text">$10k Cap</span>
                 <span class="pill-info-icon">ⓘ</span>
               </span>
+              <button type="button" class="btn-minimize-card" data-card-toggle="card-itemized-salt" aria-expanded="true">Minimize ▴</button>
             </div>
           </div>
           <div class="input-card-title">Real Estate / Property Taxes</div>
-          <div class="w2-input-wrapper">
-            <span class="currency-symbol">$</span>
-            <input type="number" step="any" class="w2-input" id="input-itemized-salt" value="0" placeholder="0">
-          </div>
-          <div class="input-card-hint">County/city property taxes on home/land. Combined with state tax withheld (max $10k cap).</div>
-          <div class="field-explain-drawer" id="drawer-explain-itemized-salt" hidden aria-hidden="true">
-            <div class="explain-drawer-content">
-              <div class="explain-header">
-                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                  <span class="explain-icon">💡</span>
-                  <span class="explain-title">State and Local Taxes (SALT Cap)</span>
+          <div class="card-collapsible-body">
+            <div class="w2-input-wrapper">
+              <span class="currency-symbol">$</span>
+              <input type="number" step="any" class="w2-input" id="input-itemized-salt" value="0" placeholder="0">
+            </div>
+            <div class="input-card-hint">County/city property taxes on home/land. Combined with state tax withheld (max $10k cap).</div>
+            <div class="field-explain-drawer" id="drawer-explain-itemized-salt" hidden aria-hidden="true">
+              <div class="explain-drawer-content">
+                <div class="explain-header">
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span class="explain-icon">💡</span>
+                    <span class="explain-title">State and Local Taxes (SALT Cap)</span>
+                  </div>
+                  <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-salt" aria-label="Close explanation">✕</button>
                 </div>
-                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-salt" aria-label="Close explanation">✕</button>
-              </div>
-              <div class="explain-body">
-                <div class="explain-section">
-                  <span class="explain-label">What does this mean?</span>
-                  <p class="explain-text">Real estate property taxes you paid on your primary residence, vacation home, or personal property.</p>
-                </div>
-                <div class="explain-section">
-                  <span class="explain-label">Where to find it:</span>
-                  <p class="explain-text">Form 1098 Box 10 (from mortgage servicer) or county tax assessor bills.</p>
-                </div>
-                <div class="explain-section">
-                  <span class="explain-label">Why it matters for your taxes:</span>
-                  <p class="explain-text">Federal law caps the total SALT deduction (sum of state income taxes + property taxes) at $10,000 ($5,000 if married filing separately).</p>
-                </div>
-                <div class="explain-section explain-tip-box">
-                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
-                  <p class="explain-text">The engine automatically combines your W-2 state withholding (Box 17) with this property tax number and caps it at $10,000.</p>
+                <div class="explain-body">
+                  <div class="explain-section">
+                    <span class="explain-label">What does this mean?</span>
+                    <p class="explain-text">Real estate property taxes you paid on your primary residence, vacation home, or personal property.</p>
+                  </div>
+                  <div class="explain-section">
+                    <span class="explain-label">Where to find it:</span>
+                    <p class="explain-text">Form 1098 Box 10 (from mortgage servicer) or county tax assessor bills.</p>
+                  </div>
+                  <div class="explain-section">
+                    <span class="explain-label">Why it matters for your taxes:</span>
+                    <p class="explain-text">Federal law caps the total SALT deduction (sum of state income taxes + property taxes) at $10,000 ($5,000 if married filing separately).</p>
+                  </div>
+                  <div class="explain-section explain-tip-box">
+                    <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                    <p class="explain-text">The engine automatically combines your W-2 state withholding (Box 17) with this property tax number and caps it at $10,000.</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1096,39 +1127,42 @@
                 <span class="pill-text">High Savings</span>
                 <span class="pill-info-icon">ⓘ</span>
               </span>
+              <button type="button" class="btn-minimize-card" data-card-toggle="card-itemized-mortgage" aria-expanded="true">Minimize ▴</button>
             </div>
           </div>
           <div class="input-card-title">Home Mortgage Interest</div>
-          <div class="w2-input-wrapper">
-            <span class="currency-symbol">$</span>
-            <input type="number" step="any" class="w2-input" id="input-itemized-mortgage" value="0" placeholder="0">
-          </div>
-          <div class="input-card-hint">Interest paid on home loans up to $750,000 principal reported on Form 1098.</div>
-          <div class="field-explain-drawer" id="drawer-explain-itemized-mortgage" hidden aria-hidden="true">
-            <div class="explain-drawer-content">
-              <div class="explain-header">
-                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                  <span class="explain-icon">💡</span>
-                  <span class="explain-title">Home Mortgage Interest (Form 1098)</span>
+          <div class="card-collapsible-body">
+            <div class="w2-input-wrapper">
+              <span class="currency-symbol">$</span>
+              <input type="number" step="any" class="w2-input" id="input-itemized-mortgage" value="0" placeholder="0">
+            </div>
+            <div class="input-card-hint">Interest paid on home loans up to $750,000 principal reported on Form 1098.</div>
+            <div class="field-explain-drawer" id="drawer-explain-itemized-mortgage" hidden aria-hidden="true">
+              <div class="explain-drawer-content">
+                <div class="explain-header">
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span class="explain-icon">💡</span>
+                    <span class="explain-title">Home Mortgage Interest (Form 1098)</span>
+                  </div>
+                  <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-mortgage" aria-label="Close explanation">✕</button>
                 </div>
-                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-mortgage" aria-label="Close explanation">✕</button>
-              </div>
-              <div class="explain-body">
-                <div class="explain-section">
-                  <span class="explain-label">What does this mean?</span>
-                  <p class="explain-text">Interest paid on acquisition indebtedness used to buy, build, or substantially improve your primary or second home.</p>
-                </div>
-                <div class="explain-section">
-                  <span class="explain-label">Where to find it:</span>
-                  <p class="explain-text">Form 1098 Box 1 sent in January by your mortgage lender (Chase, Wells Fargo, Rocket, etc.).</p>
-                </div>
-                <div class="explain-section">
-                  <span class="explain-label">Why it matters for your taxes:</span>
-                  <p class="explain-text">This is usually the #1 expense that pushes homeowners past the Standard Deduction threshold!</p>
-                </div>
-                <div class="explain-section explain-tip-box">
-                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
-                  <p class="explain-text">If you bought a home recently with mortgage rates at 6-7%, your interest often easily exceeds the Standard Deduction.</p>
+                <div class="explain-body">
+                  <div class="explain-section">
+                    <span class="explain-label">What does this mean?</span>
+                    <p class="explain-text">Interest paid on acquisition indebtedness used to buy, build, or substantially improve your primary or second home.</p>
+                  </div>
+                  <div class="explain-section">
+                    <span class="explain-label">Where to find it:</span>
+                    <p class="explain-text">Form 1098 Box 1 sent in January by your mortgage lender (Chase, Wells Fargo, Rocket, etc.).</p>
+                  </div>
+                  <div class="explain-section">
+                    <span class="explain-label">Why it matters for your taxes:</span>
+                    <p class="explain-text">This is usually the #1 expense that pushes homeowners past the Standard Deduction threshold!</p>
+                  </div>
+                  <div class="explain-section explain-tip-box">
+                    <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                    <p class="explain-text">If you bought a home recently with mortgage rates at 6-7%, your interest often easily exceeds the Standard Deduction.</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1154,39 +1188,42 @@
                 <span class="pill-text">Money Saver</span>
                 <span class="pill-info-icon">ⓘ</span>
               </span>
+              <button type="button" class="btn-minimize-card" data-card-toggle="card-itemized-charity" aria-expanded="true">Minimize ▴</button>
             </div>
           </div>
           <div class="input-card-title">Gifts to Charity (Cash &amp; Goods)</div>
-          <div class="w2-input-wrapper">
-            <span class="currency-symbol">$</span>
-            <input type="number" step="any" class="w2-input" id="input-itemized-charity" value="0" placeholder="0">
-          </div>
-          <div class="input-card-hint">Donations to 501(c)(3) churches, non-profits, and educational institutions.</div>
-          <div class="field-explain-drawer" id="drawer-explain-itemized-charity" hidden aria-hidden="true">
-            <div class="explain-drawer-content">
-              <div class="explain-header">
-                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                  <span class="explain-icon">💡</span>
-                  <span class="explain-title">Charitable Contributions (Schedule A)</span>
+          <div class="card-collapsible-body">
+            <div class="w2-input-wrapper">
+              <span class="currency-symbol">$</span>
+              <input type="number" step="any" class="w2-input" id="input-itemized-charity" value="0" placeholder="0">
+            </div>
+            <div class="input-card-hint">Donations to 501(c)(3) churches, non-profits, and educational institutions.</div>
+            <div class="field-explain-drawer" id="drawer-explain-itemized-charity" hidden aria-hidden="true">
+              <div class="explain-drawer-content">
+                <div class="explain-header">
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span class="explain-icon">💡</span>
+                    <span class="explain-title">Charitable Contributions (Schedule A)</span>
+                  </div>
+                  <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-charity" aria-label="Close explanation">✕</button>
                 </div>
-                <button type="button" class="btn-close-drawer" data-close-drawer="drawer-explain-itemized-charity" aria-label="Close explanation">✕</button>
-              </div>
-              <div class="explain-body">
-                <div class="explain-section">
-                  <span class="explain-label">What does this mean?</span>
-                  <p class="explain-text">Donations of cash, check, or property to qualifying non-profit 501(c)(3) organizations.</p>
-                </div>
-                <div class="explain-section">
-                  <span class="explain-label">Where to find it:</span>
-                  <p class="explain-text">Year-end contribution receipts or written acknowledgments from the charities.</p>
-                </div>
-                <div class="explain-section">
-                  <span class="explain-label">Why it matters for your taxes:</span>
-                  <p class="explain-text">Reduces your taxable income when itemizing. For donations >$250, you must keep a written receipt from the charity.</p>
-                </div>
-                <div class="explain-section explain-tip-box">
-                  <span class="explain-label">📌 Pro-Tip / Verdict:</span>
-                  <p class="explain-text">Political contributions or GoFundMe personal fundraisers are NOT tax deductible.</p>
+                <div class="explain-body">
+                  <div class="explain-section">
+                    <span class="explain-label">What does this mean?</span>
+                    <p class="explain-text">Donations of cash, check, or property to qualifying non-profit 501(c)(3) organizations.</p>
+                  </div>
+                  <div class="explain-section">
+                    <span class="explain-label">Where to find it:</span>
+                    <p class="explain-text">Year-end contribution receipts or written acknowledgments from the charities.</p>
+                  </div>
+                  <div class="explain-section">
+                    <span class="explain-label">Why it matters for your taxes:</span>
+                    <p class="explain-text">Reduces your taxable income when itemizing. For donations >$250, you must keep a written receipt from the charity.</p>
+                  </div>
+                  <div class="explain-section explain-tip-box">
+                    <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+                    <p class="explain-text">Political contributions or GoFundMe personal fundraisers are NOT tax deductible.</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1194,20 +1231,25 @@
         </div>
 
         <!-- Gambling Losses (Schedule A Line 16, up to W-2G Winnings) -->
-        <div class="calc-card input-panel priority-saver" id="card-itemized-gambling">
+        <div class="calc-card input-panel priority-saver" id="card-itemized-gambling" data-auto-collapse="true">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
             <div class="step-indicator">Schedule A Line 16</div>
-            <span class="field-rating-pill badge-priority-saver" data-rating-field="itemized-charity" role="button" tabindex="0">
-              <span class="pill-text">Up to W-2G Winnings</span>
-              <span class="pill-info-icon">ⓘ</span>
-            </span>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <span class="field-rating-pill badge-priority-saver" data-rating-field="itemized-charity" role="button" tabindex="0">
+                <span class="pill-text">Up to W-2G Winnings</span>
+                <span class="pill-info-icon">ⓘ</span>
+              </span>
+              <button type="button" class="btn-minimize-card" data-card-toggle="card-itemized-gambling" aria-expanded="true">Minimize ▴</button>
+            </div>
           </div>
           <div class="input-card-title">Gambling Losses (Schedule A Line 16)</div>
-          <div class="w2-input-wrapper">
-            <span class="currency-symbol">$</span>
-            <input type="number" step="any" class="w2-input" id="input-itemized-gambling" value="0" placeholder="0">
+          <div class="card-collapsible-body">
+            <div class="w2-input-wrapper">
+              <span class="currency-symbol">$</span>
+              <input type="number" step="any" class="w2-input" id="input-itemized-gambling" value="0" placeholder="0">
+            </div>
+            <div class="input-card-hint">Wagering losses are deductible on Schedule A only to the extent of W-2G gambling winnings reported.</div>
           </div>
-          <div class="input-card-hint">Wagering losses are deductible on Schedule A only to the extent of W-2G gambling winnings reported.</div>
         </div>
       </div>
 
@@ -1238,6 +1280,7 @@
     <section class="step-container" id="section-federal-calculations">
       <div class="section-header-bar">
         <h2>4. Federal Tax Calculations (Form 1040)</h2>
+        <button type="button" class="btn-minimize-section" data-section-toggle="section-federal-calculations" aria-expanded="true">Minimize ▴</button>
       </div>
 
       <!-- Step 1: Total W-2 Wages -->
@@ -1572,6 +1615,7 @@
     <section id="section-state-returns">
       <div class="section-header-bar">
         <h2>5. State Tax Calculations</h2>
+        <button type="button" class="btn-minimize-section" data-section-toggle="section-state-returns" aria-expanded="true">Minimize ▴</button>
       </div>
       <div id="container-state-returns">
         <!-- Populated dynamically by app.ts for each resident and nonresident state -->

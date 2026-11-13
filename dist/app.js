@@ -505,6 +505,77 @@ class TaxApp {
         setVal('input-itemized-charity', this.state.itemizedDeductions?.charity);
         setVal('input-itemized-gambling', this.state.itemizedDeductions?.gamblingLosses);
         this.renderYearBadges();
+        this.syncCollapsedStates();
+    }
+    setCardCollapsed(card, collapsed) {
+        card.classList.toggle('is-collapsed', collapsed);
+        const btn = card.querySelector(`[data-card-toggle="${card.id}"]`);
+        if (btn) {
+            btn.setAttribute('aria-expanded', String(!collapsed));
+            btn.textContent = collapsed ? 'Expand ▾' : 'Minimize ▴';
+        }
+    }
+    setSectionCollapsed(section, collapsed) {
+        section.classList.toggle('is-section-collapsed', collapsed);
+        const btn = section.querySelector(`[data-section-toggle="${section.id}"]`);
+        if (btn) {
+            btn.setAttribute('aria-expanded', String(!collapsed));
+            btn.textContent = collapsed ? 'Expand ▾' : 'Minimize ▴';
+        }
+    }
+    syncCollapsedStates() {
+        document.querySelectorAll('.calc-card[data-auto-collapse="true"]').forEach(card => {
+            const inputs = Array.from(card.querySelectorAll('input'));
+            const hasData = inputs.some(input => {
+                if (input.type === 'number') {
+                    const val = parseFloat(input.value);
+                    return !Number.isNaN(val) && val !== 0;
+                }
+                return input.value.trim() !== '';
+            });
+            this.setCardCollapsed(card, !hasData);
+        });
+        const capGainsDetails = document.getElementById('details-capital-gains-special');
+        if (capGainsDetails) {
+            const cap = this.state.otherIncome?.capitalGains;
+            const hasSpecialCapGains = Boolean((cap?.collectiblesGain ?? 0) !== 0 || (cap?.unrecaptured1250Gain ?? 0) !== 0);
+            capGainsDetails.open = hasSpecialCapGains;
+        }
+        this.arrowEngine?.scheduleRedraw();
+    }
+    bindCollapseControls() {
+        document.querySelectorAll('[data-card-toggle]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const cardId = btn.dataset.cardToggle;
+                if (!cardId)
+                    return;
+                const card = document.getElementById(cardId);
+                if (!card)
+                    return;
+                const nextCollapsed = !card.classList.contains('is-collapsed');
+                this.setCardCollapsed(card, nextCollapsed);
+                this.arrowEngine?.scheduleRedraw();
+            });
+        });
+        document.querySelectorAll('[data-section-toggle]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const sectionId = btn.dataset.sectionToggle;
+                if (!sectionId)
+                    return;
+                const section = document.getElementById(sectionId);
+                if (!section)
+                    return;
+                const nextCollapsed = !section.classList.contains('is-section-collapsed');
+                this.setSectionCollapsed(section, nextCollapsed);
+                this.arrowEngine?.scheduleRedraw();
+            });
+        });
+        const capGainsDetails = document.getElementById('details-capital-gains-special');
+        if (capGainsDetails) {
+            capGainsDetails.addEventListener('toggle', () => {
+                this.arrowEngine?.scheduleRedraw();
+            });
+        }
     }
     bindGlobalEvents() {
         const yearSelect = document.getElementById('select-tax-year');
@@ -639,6 +710,7 @@ class TaxApp {
         bindInput('input-itemized-mortgage', val => getItemized().mortgageInterest = val);
         bindInput('input-itemized-charity', val => getItemized().charity = val);
         bindInput('input-itemized-gambling', val => getItemized().gamblingLosses = val);
+        this.bindCollapseControls();
         const dedMethodSelect = document.getElementById('select-deduction-method');
         if (dedMethodSelect) {
             dedMethodSelect.value = this.state.deductionMethod || 'auto';
