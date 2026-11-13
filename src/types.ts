@@ -2,7 +2,12 @@
  * Actually Free Taxes - Type Definitions
  */
 
-export type FilingStatus = 'single' | 'married_joint' | 'married_separate' | 'head_of_household';
+export type FilingStatus =
+  | 'single'
+  | 'married_joint'
+  | 'married_separate'
+  | 'head_of_household'
+  | 'qualifying_surviving_spouse';
 
 export type TaxYear = 2024 | 2025;
 
@@ -32,19 +37,36 @@ export interface W2Data {
   states: StateTaxLine[];
 }
 
+export type IncomeSourceType =
+  | '1099-NEC'
+  | '1099-DIV'
+  | '1099-INT'
+  | '1099-MISC'
+  | '1099-R'
+  | 'SSA-1099'
+  | 'Schedule K-1'
+  | '1099-G'
+  | 'W-2G'
+  | 'Other';
+
 export interface IncomeSource {
   id: number;
-  type: '1099-NEC' | '1099-DIV' | '1099-INT' | '1099-MISC' | 'Other';
+  type: IncomeSourceType;
   payer: string;
   amount: number;
   qualifiedDividends?: number; // 1099-DIV Box 1b
   accruedInterestPaid?: number; // 1099-INT Schedule B adjustment for accrued interest paid on bond purchase
+  taxExemptInterest?: number; // 1099-INT Box 8 municipal bond tax-exempt interest (included in MAGI/SS provisional income)
+  earlyDistributionPenalty?: boolean; // 1099-R Code 1 (Form 5329 10% early withdrawal penalty)
+  federalTaxWithheld?: number; // Box 4 federal income tax withheld on 1099
   state?: string;
 }
 
 export interface CapitalGainsInput {
   shortTerm: number;
   longTerm: number;
+  collectiblesGain?: number; // 28% rate gain (Schedule D Line 18)
+  unrecaptured1250Gain?: number; // 25% unrecaptured Section 1250 depreciation gain (Schedule D Line 19)
 }
 
 export interface ScheduleERentalInput {
@@ -59,6 +81,7 @@ export interface ItemizedDeductionsInput {
   realEstateTax: number;
   mortgageInterest: number;
   charity: number;
+  gamblingLosses?: number; // Deductible on Schedule A Line 16 up to W-2G gambling winnings
 }
 
 export interface OtherIncome {
@@ -73,10 +96,22 @@ export interface Adjustments {
   studentLoan: number;
   ira: number;
   hsa: number;
+  educatorExpenses?: number; // Schedule 1 Line 11 (up to $300 / $600 MFJ)
+  seRetirement?: number; // Schedule 1 Line 16 (SEP, SIMPLE, Solo 401k)
+  seHealthInsurance?: number; // Schedule 1 Line 17 (Self-employed health insurance)
+  alimonyPaid?: number; // Schedule 1 Line 19a (Pre-2019 divorce agreements)
 }
 
 export interface Dependents {
-  childrenCount: number;
+  childrenCount: number; // Qualifying children under 17 ($2,000 CTC)
+  otherDependentsCount?: number; // Qualifying older children/relatives ($500 ODC)
+  age65OrBlindCount?: number; // Number of Age 65+ or Blind boxes checked on Form 1040 (0 to 4)
+  childCareExpenses?: number; // Form 2441 qualifying child/dependent care expenses
+  educationExpensesAotc?: number; // Form 8863 American Opportunity Tax Credit qualified tuition
+  educationExpensesLlc?: number; // Form 8863 Lifetime Learning Credit qualified tuition
+  foreignTaxCredit?: number; // Form 1116 Foreign Tax Credit
+  cleanEnergyCredit?: number; // Form 5695 / Form 8936 Clean Energy & EV Credit
+  estimatedTaxPayments?: number; // Form 1040-ES quarterly estimated tax payments
 }
 
 export type DeductionMethod = 'auto' | 'standard' | 'itemized';
@@ -124,6 +159,23 @@ export interface TaxBeforeCreditsResult extends CalculationResult {
   preferentialTax: number;
   ordinaryTaxableIncome: number;
   ordinaryTax: number;
+  collectiblesTax?: number;
+  unrecaptured1250Tax?: number;
+}
+
+export interface CreditsCalculation extends CalculationResult {
+  childTaxCredit: number;
+  additionalChildTaxCredit: number; // Schedule 8812 refundable ACTC
+  otherDependentsCredit: number; // $500 ODC
+  eitc: number; // Earned Income Tax Credit (Schedule EIC)
+  childCareCredit: number; // Form 2441
+  educationCreditNonRefundable: number; // Form 8863
+  educationCreditRefundable: number; // Form 8863 40% AOTC refundable
+  saversCredit: number; // Form 8880 Retirement Savings Contributions Credit
+  foreignTaxCredit: number; // Form 1116
+  cleanEnergyCredit: number; // Form 5695 / 8936
+  totalNonRefundableCredits: number;
+  totalRefundableCredits: number;
 }
 
 export interface FinalResultCalculation extends CalculationResult {
@@ -147,12 +199,17 @@ export interface ScheduleECalculation extends CalculationResult {
   netBeforePal: number;
   allowableNet: number;
   disallowedPassiveLoss: number;
+  k1Income?: number;
   propertyState: string;
 }
 
 export interface OtherTaxesCalculation extends CalculationResult {
+  selfEmploymentTax: number; // Schedule SE (15.3% on 92.35% of net Schedule C profit)
+  halfSelfEmploymentTaxDeduction: number; // Schedule 1 Line 15 (50% of SE tax)
   additionalMedicareTax: number; // Form 8959 (0.9% over $200k/$250k)
   niit: number; // Form 8960 (3.8% Net Investment Income Tax)
+  amt: number; // Form 6251 Alternative Minimum Tax
+  earlyDistributionPenaltyTax: number; // Form 5329 10% early withdrawal penalty
   netInvestmentIncome: number;
   totalOtherTaxes: number;
 }
@@ -247,6 +304,7 @@ export interface ItemizedDeductionCalculation extends CalculationResult {
   charity: number;
   standardDeductionAmount: number;
   standardDeduction: number;
+  qbiDeduction?: number;
   chosenDeduction: number;
   chosenMethod: 'standard' | 'itemized';
   savingsOverAlternate: number;
@@ -261,12 +319,13 @@ export interface TaxCalculationSummary {
   adjustmentsCalc: CalculationResult;
   agiCalc: CalculationResult;
   deductionCalc: CalculationResult;
+  qbiDeduction: number;
   itemizedCalc: ItemizedDeductionCalculation;
   capitalGainsCalc: CapitalGainsCalculation;
   scheduleECalc: ScheduleECalculation;
   taxableIncomeCalc: CalculationResult;
   taxBeforeCreditsCalc: TaxBeforeCreditsResult;
-  creditsCalc: CalculationResult;
+  creditsCalc: CreditsCalculation;
   otherTaxesCalc: OtherTaxesCalculation;
   totalTaxCalc: CalculationResult;
   withholdingCalc: CalculationResult;

@@ -498,10 +498,24 @@ class TaxApp {
     setVal('input-adj-student-loan', this.state.adjustments?.studentLoan);
     setVal('input-adj-ira', this.state.adjustments?.ira);
     setVal('input-adj-hsa', this.state.adjustments?.hsa);
+    setVal('input-adj-educator', this.state.adjustments?.educatorExpenses);
+    setVal('input-adj-se-retirement', this.state.adjustments?.seRetirement);
+    setVal('input-adj-se-health', this.state.adjustments?.seHealthInsurance);
+    setVal('input-adj-alimony', this.state.adjustments?.alimonyPaid);
     setVal('input-other-interest', this.state.otherIncome?.interest);
     setVal('input-children-count', this.state.dependents?.childrenCount);
+    setVal('input-other-dependents', this.state.dependents?.otherDependentsCount);
+    setVal('input-age65-blind', this.state.dependents?.age65OrBlindCount);
+    setVal('input-child-care', this.state.dependents?.childCareExpenses);
+    setVal('input-edu-aotc', this.state.dependents?.educationExpensesAotc);
+    setVal('input-edu-llc', this.state.dependents?.educationExpensesLlc);
+    setVal('input-foreign-tax-credit', this.state.dependents?.foreignTaxCredit);
+    setVal('input-clean-energy-credit', this.state.dependents?.cleanEnergyCredit);
+    setVal('input-estimated-payments', this.state.dependents?.estimatedTaxPayments);
     setVal('input-capital-gains-st', this.state.otherIncome?.capitalGains?.shortTerm);
     setVal('input-capital-gains-lt', this.state.otherIncome?.capitalGains?.longTerm);
+    setVal('input-capital-gains-collectibles', this.state.otherIncome?.capitalGains?.collectiblesGain);
+    setVal('input-capital-gains-1250', this.state.otherIncome?.capitalGains?.unrecaptured1250Gain);
     setVal('input-1099-nec-expenses', this.state.otherIncome?.scheduleCExpenses);
     setVal('input-rental-gross', this.state.otherIncome?.scheduleERental?.grossRents);
     setVal('input-rental-expenses', this.state.otherIncome?.scheduleERental?.expenses);
@@ -512,6 +526,7 @@ class TaxApp {
     setVal('input-itemized-salt', this.state.itemizedDeductions?.realEstateTax);
     setVal('input-itemized-mortgage', this.state.itemizedDeductions?.mortgageInterest);
     setVal('input-itemized-charity', this.state.itemizedDeductions?.charity);
+    setVal('input-itemized-gambling', this.state.itemizedDeductions?.gamblingLosses);
 
     this.renderYearBadges();
   }
@@ -603,8 +618,20 @@ class TaxApp {
     bindInput('input-adj-student-loan', val => this.state.adjustments.studentLoan = val);
     bindInput('input-adj-ira', val => this.state.adjustments.ira = val);
     bindInput('input-adj-hsa', val => this.state.adjustments.hsa = val);
+    bindInput('input-adj-educator', val => this.state.adjustments.educatorExpenses = val);
+    bindInput('input-adj-se-retirement', val => this.state.adjustments.seRetirement = val);
+    bindInput('input-adj-se-health', val => this.state.adjustments.seHealthInsurance = val);
+    bindInput('input-adj-alimony', val => this.state.adjustments.alimonyPaid = val);
     bindInput('input-other-interest', val => this.state.otherIncome.interest = val);
     bindInput('input-children-count', val => this.state.dependents.childrenCount = val);
+    bindInput('input-other-dependents', val => this.state.dependents.otherDependentsCount = val);
+    bindInput('input-age65-blind', val => this.state.dependents.age65OrBlindCount = val);
+    bindInput('input-child-care', val => this.state.dependents.childCareExpenses = val);
+    bindInput('input-edu-aotc', val => this.state.dependents.educationExpensesAotc = val);
+    bindInput('input-edu-llc', val => this.state.dependents.educationExpensesLlc = val);
+    bindInput('input-foreign-tax-credit', val => this.state.dependents.foreignTaxCredit = val);
+    bindInput('input-clean-energy-credit', val => this.state.dependents.cleanEnergyCredit = val);
+    bindInput('input-estimated-payments', val => this.state.dependents.estimatedTaxPayments = val);
 
     const getCapitalGains = () => {
       if (!this.state.otherIncome.capitalGains) {
@@ -628,6 +655,8 @@ class TaxApp {
     // Capital gains, Schedule E rental & Schedule C expenses
     bindInput('input-capital-gains-st', val => getCapitalGains().shortTerm = val);
     bindInput('input-capital-gains-lt', val => getCapitalGains().longTerm = val);
+    bindInput('input-capital-gains-collectibles', val => getCapitalGains().collectiblesGain = val);
+    bindInput('input-capital-gains-1250', val => getCapitalGains().unrecaptured1250Gain = val);
     bindInput('input-1099-nec-expenses', val => this.state.otherIncome.scheduleCExpenses = val);
     bindInput('input-rental-gross', val => getScheduleERental().grossRents = val);
     bindInput('input-rental-expenses', val => getScheduleERental().expenses = val);
@@ -645,6 +674,7 @@ class TaxApp {
     bindInput('input-itemized-salt', val => getItemized().realEstateTax = val);
     bindInput('input-itemized-mortgage', val => getItemized().mortgageInterest = val);
     bindInput('input-itemized-charity', val => getItemized().charity = val);
+    bindInput('input-itemized-gambling', val => getItemized().gamblingLosses = val);
 
     const dedMethodSelect = document.getElementById('select-deduction-method') as HTMLSelectElement | null;
     if (dedMethodSelect) {
@@ -1325,7 +1355,7 @@ class TaxApp {
     this.recalculateAndRender();
   }
 
-  public addIncomeSource(type: '1099-NEC' | '1099-DIV' | '1099-INT' | '1099-MISC' | 'Other' = '1099-NEC'): void {
+  public addIncomeSource(type: IncomeSource['type'] = '1099-NEC'): void {
     if (!this.state.otherIncome.sources) {
       this.state.otherIncome.sources = [];
     }
@@ -1371,7 +1401,7 @@ class TaxApp {
       if (src.type === '1099-DIV') {
         ratingKey = 'income-1099-div';
         priorityClass = 'priority-verify';
-      } else if (src.type === '1099-MISC' || src.type === 'Other') {
+      } else if (src.type === '1099-MISC' || src.type === '1099-G' || src.type === 'W-2G' || src.type === 'Other') {
         ratingKey = 'income-1099-misc';
         priorityClass = 'priority-skip';
       } else if (src.type === '1099-INT') {
@@ -1390,8 +1420,13 @@ class TaxApp {
             <select class="w2-input" id="select-income-type-${src.id}" style="padding: 0.25rem 0.5rem; width: auto;">
               <option value="1099-NEC" ${src.type === '1099-NEC' ? 'selected' : ''}>Form 1099-NEC (Freelance/Contract)</option>
               <option value="1099-DIV" ${src.type === '1099-DIV' ? 'selected' : ''}>Form 1099-DIV (Dividends)</option>
-              <option value="1099-MISC" ${src.type === '1099-MISC' ? 'selected' : ''}>Form 1099-MISC (Prizes/Other)</option>
               <option value="1099-INT" ${src.type === '1099-INT' ? 'selected' : ''}>Form 1099-INT (Interest)</option>
+              <option value="1099-R" ${src.type === '1099-R' ? 'selected' : ''}>Form 1099-R (IRA / 401k / Pension)</option>
+              <option value="SSA-1099" ${src.type === 'SSA-1099' ? 'selected' : ''}>Form SSA-1099 (Social Security)</option>
+              <option value="Schedule K-1" ${src.type === 'Schedule K-1' ? 'selected' : ''}>Schedule K-1 (Partnership / S-Corp)</option>
+              <option value="1099-G" ${src.type === '1099-G' ? 'selected' : ''}>Form 1099-G (Unemployment / Refund)</option>
+              <option value="W-2G" ${src.type === 'W-2G' ? 'selected' : ''}>Form W-2G (Gambling Winnings)</option>
+              <option value="1099-MISC" ${src.type === '1099-MISC' ? 'selected' : ''}>Form 1099-MISC (Prizes/Other)</option>
               <option value="Other" ${src.type === 'Other' ? 'selected' : ''}>Other Taxable Income</option>
             </select>
             ${renderExplainToggleBtn(`drawer-explain-income-${src.id}`)}
@@ -1424,14 +1459,38 @@ class TaxApp {
         </div>
         ` : ''}
         ${src.type === '1099-INT' ? `
-        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
-          <label for="input-income-accrued-${src.id}" style="font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap;">Accrued Interest Paid Offset ($):</label>
-          <div class="w2-input-wrapper" style="flex: 1;">
-            <span class="currency-symbol">$</span>
-            <input type="number" step="any" class="w2-input" id="input-income-accrued-${src.id}" value="${src.accruedInterestPaid || 0}" placeholder="0">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
+          <div>
+            <label for="input-income-accrued-${src.id}" class="input-sublabel">Accrued Interest Paid ($)</label>
+            <div class="w2-input-wrapper">
+              <span class="currency-symbol">$</span>
+              <input type="number" step="any" class="w2-input" id="input-income-accrued-${src.id}" value="${src.accruedInterestPaid || 0}" placeholder="0">
+            </div>
+          </div>
+          <div>
+            <label for="input-income-taxexempt-${src.id}" class="input-sublabel">Box 8 Tax-Exempt Int ($)</label>
+            <div class="w2-input-wrapper">
+              <span class="currency-symbol">$</span>
+              <input type="number" step="any" class="w2-input" id="input-income-taxexempt-${src.id}" value="${src.taxExemptInterest || 0}" placeholder="0">
+            </div>
           </div>
         </div>
         ` : ''}
+        ${src.type === '1099-R' ? `
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+          <label style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem; cursor: pointer;">
+            <input type="checkbox" id="input-income-penalty-${src.id}" ${src.earlyDistributionPenalty ? 'checked' : ''}>
+            Subject to 10% Early Withdrawal Penalty (Form 5329, Code 1)
+          </label>
+        </div>
+        ` : ''}
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+          <label for="input-income-fedwh-${src.id}" style="font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap;">Box 4 Federal Tax Withheld ($):</label>
+          <div class="w2-input-wrapper" style="flex: 1;">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-income-fedwh-${src.id}" value="${src.federalTaxWithheld || 0}" placeholder="0">
+          </div>
+        </div>
         <div class="input-card-hint">
           Reported on Form 1040 and feeds into Gross Income and State Sourced Income.
         </div>
@@ -1493,6 +1552,30 @@ class TaxApp {
         });
       }
 
+      const taxExemptInput = card.querySelector(`#input-income-taxexempt-${src.id}`) as HTMLInputElement | null;
+      if (taxExemptInput) {
+        taxExemptInput.addEventListener('input', (e) => {
+          src.taxExemptInterest = Number((e.target as HTMLInputElement).value) || 0;
+          this.recalculateAndRender();
+        });
+      }
+
+      const penaltyChk = card.querySelector(`#input-income-penalty-${src.id}`) as HTMLInputElement | null;
+      if (penaltyChk) {
+        penaltyChk.addEventListener('change', (e) => {
+          src.earlyDistributionPenalty = (e.target as HTMLInputElement).checked;
+          this.recalculateAndRender();
+        });
+      }
+
+      const fedWhInput = card.querySelector(`#input-income-fedwh-${src.id}`) as HTMLInputElement | null;
+      if (fedWhInput) {
+        fedWhInput.addEventListener('input', (e) => {
+          src.federalTaxWithheld = Number((e.target as HTMLInputElement).value) || 0;
+          this.recalculateAndRender();
+        });
+      }
+
       const delBtn = card.querySelector(`#btn-del-income-${src.id}`) as HTMLButtonElement | null;
       if (delBtn) {
         delBtn.addEventListener('click', () => {
@@ -1505,7 +1588,7 @@ class TaxApp {
   private loadPreset(presetName: string): void {
     // Reset optional state fields before applying preset
     this.state.otherIncome.sources = [];
-    this.state.otherIncome.capitalGains = { shortTerm: 0, longTerm: 0 };
+    this.state.otherIncome.capitalGains = { shortTerm: 0, longTerm: 0, collectiblesGain: 0, unrecaptured1250Gain: 0 };
     this.state.otherIncome.scheduleCExpenses = 0;
     this.state.otherIncome.scheduleERental = {
       grossRents: 0,
@@ -1513,11 +1596,24 @@ class TaxApp {
       depreciation: 0,
       propertyState: ''
     };
+    this.state.adjustments = { studentLoan: 0, ira: 0, hsa: 0, educatorExpenses: 0, seRetirement: 0, seHealthInsurance: 0, alimonyPaid: 0 };
+    this.state.dependents = {
+      childrenCount: 0,
+      otherDependentsCount: 0,
+      age65OrBlindCount: 0,
+      childCareExpenses: 0,
+      educationExpensesAotc: 0,
+      educationExpensesLlc: 0,
+      foreignTaxCredit: 0,
+      cleanEnergyCredit: 0,
+      estimatedTaxPayments: 0
+    };
     this.state.itemizedDeductions = {
       medicalExpenses: 0,
       realEstateTax: 0,
       mortgageInterest: 0,
-      charity: 0
+      charity: 0,
+      gamblingLosses: 0
     };
     this.state.deductionMethod = 'auto';
 
@@ -1797,37 +1893,7 @@ class TaxApp {
       this.state.dependents.childrenCount = 0;
     }
 
-    const statusSelect = document.getElementById('select-filing-status') as HTMLSelectElement | null;
-    if (statusSelect) statusSelect.value = this.state.filingStatus;
-
-    const resStateSelect = document.getElementById('select-resident-state') as HTMLSelectElement | null;
-    if (resStateSelect && this.state.residentState) resStateSelect.value = this.state.residentState;
-
-    const dedMethodSelect = document.getElementById('select-deduction-method') as HTMLSelectElement | null;
-    if (dedMethodSelect) dedMethodSelect.value = this.state.deductionMethod || 'auto';
-
-    const setVal = (id: string, val: number) => {
-      const el = document.getElementById(id) as HTMLInputElement | null;
-      if (el) el.value = String(val);
-    };
-    setVal('input-adj-student-loan', this.state.adjustments.studentLoan);
-    setVal('input-adj-ira', this.state.adjustments.ira);
-    setVal('input-adj-hsa', this.state.adjustments.hsa);
-    setVal('input-other-interest', this.state.otherIncome.interest);
-    setVal('input-children-count', this.state.dependents.childrenCount);
-    setVal('input-capital-gains-st', this.state.otherIncome.capitalGains?.shortTerm || 0);
-    setVal('input-capital-gains-lt', this.state.otherIncome.capitalGains?.longTerm || 0);
-    setVal('input-1099-nec-expenses', this.state.otherIncome.scheduleCExpenses || 0);
-    setVal('input-rental-gross', this.state.otherIncome.scheduleERental?.grossRents || 0);
-    setVal('input-rental-expenses', this.state.otherIncome.scheduleERental?.expenses || 0);
-    setVal('input-rental-depreciation', this.state.otherIncome.scheduleERental?.depreciation || 0);
-    const rentalStateSelect = document.getElementById('input-rental-state') as HTMLSelectElement | null;
-    if (rentalStateSelect) rentalStateSelect.value = this.state.otherIncome.scheduleERental?.propertyState || '';
-    setVal('input-itemized-medical', this.state.itemizedDeductions?.medicalExpenses || 0);
-    setVal('input-itemized-salt', this.state.itemizedDeductions?.realEstateTax || 0);
-    setVal('input-itemized-mortgage', this.state.itemizedDeductions?.mortgageInterest || 0);
-    setVal('input-itemized-charity', this.state.itemizedDeductions?.charity || 0);
-
+    this.syncAllDomInputs();
     this.renderW2Forms();
     this.renderIncomeSources();
     this.recalculateAndRender();

@@ -199,6 +199,7 @@
               <option value="married_joint">Married Filing Jointly</option>
               <option value="married_separate">Married Filing Separately</option>
               <option value="head_of_household">Head of Household</option>
+              <option value="qualifying_surviving_spouse">Qualifying Surviving Spouse</option>
             </select>
           </div>
 
@@ -451,8 +452,22 @@
                 <input type="number" step="any" class="w2-input" id="input-capital-gains-lt" value="0" placeholder="0">
               </div>
             </div>
+            <div>
+              <label for="input-capital-gains-collectibles" class="input-sublabel">28% Collectibles Gain</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-capital-gains-collectibles" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-capital-gains-1250" class="input-sublabel">25% Sec. 1250 Deprec. Gain</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-capital-gains-1250" value="0" placeholder="0">
+              </div>
+            </div>
           </div>
-          <div class="input-card-hint">Stocks, crypto, or property sales from 1099-B. Losses offset income up to -$3,000 cap.</div>
+          <div class="input-card-hint">Stocks, crypto, collectibles (28% cap), or Sec. 1250 depreciation recapture (25% cap). Losses capped at -$3,000.</div>
           <div class="field-explain-drawer" id="drawer-explain-capital-gains" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -763,10 +778,53 @@
           </div>
         </div>
 
-        <!-- Qualifying Children -->
+        <!-- Additional Schedule 1 Part II Adjustments -->
+        <div class="calc-card input-panel priority-saver" id="card-adj-other">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Schedule 1 Lines 11, 16, 17, 19</div>
+            <span class="field-rating-pill badge-priority-saver" data-rating-field="adj-ira" role="button" tabindex="0">
+              <span class="pill-text">Above-the-Line</span>
+              <span class="pill-info-icon">ⓘ</span>
+            </span>
+          </div>
+          <div class="input-card-title">Other Schedule 1 Adjustments</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <div>
+              <label for="input-adj-educator" class="input-sublabel">Educator Expenses (≤$300)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-adj-educator" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-adj-se-retirement" class="input-sublabel">SEP / SIMPLE / Solo 401k</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-adj-se-retirement" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-adj-se-health" class="input-sublabel">SE Health Insurance</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-adj-se-health" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-adj-alimony" class="input-sublabel">Alimony Paid (Pre-2019)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-adj-alimony" value="0" placeholder="0">
+              </div>
+            </div>
+          </div>
+          <div class="input-card-hint">½ Self-Employment Tax (Schedule SE) is also deducted automatically when 1099-NEC profit ≥ $400.</div>
+        </div>
+
+        <!-- Qualifying Children, Other Dependents & Age 65+/Blind -->
         <div class="calc-card input-panel priority-saver" id="card-children-count">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
-            <div class="step-indicator">Tax Credits</div>
+            <div class="step-indicator">Schedule 8812 &amp; Form 1040</div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
               <button type="button" class="btn-explain-toggle" data-explain-target="drawer-explain-children-count" aria-expanded="false" title="Click to view explanation">
                 <span class="explain-btn-icon">💡</span>
@@ -784,11 +842,28 @@
               </span>
             </div>
           </div>
-          <div class="input-card-title">Qualifying Children under 17</div>
-          <div class="w2-input-wrapper">
-            <input type="number" min="0" max="10" step="1" class="w2-input" id="input-children-count" value="0" style="padding-left: 0.75rem; text-align: left;">
+          <div class="input-card-title">Dependents &amp; Age 65+ / Blind</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <div>
+              <label for="input-children-count" class="input-sublabel">Children &lt;17 ($2k)</label>
+              <div class="w2-input-wrapper">
+                <input type="number" min="0" max="10" step="1" class="w2-input" id="input-children-count" value="0" style="padding-left: 0.5rem; text-align: left;">
+              </div>
+            </div>
+            <div>
+              <label for="input-other-dependents" class="input-sublabel">Other Deps ($500)</label>
+              <div class="w2-input-wrapper">
+                <input type="number" min="0" max="10" step="1" class="w2-input" id="input-other-dependents" value="0" style="padding-left: 0.5rem; text-align: left;">
+              </div>
+            </div>
+            <div>
+              <label for="input-age65-blind" class="input-sublabel">65+ / Blind (0–4)</label>
+              <div class="w2-input-wrapper">
+                <input type="number" min="0" max="4" step="1" class="w2-input" id="input-age65-blind" value="0" style="padding-left: 0.5rem; text-align: left;">
+              </div>
+            </div>
           </div>
-          <div class="input-card-hint">$2,000 Child Tax Credit per eligible child.</div>
+          <div class="input-card-hint">$2,000 CTC (up to $1,700 refundable ACTC) + EITC + $500 Other Dependent Credit + Add'l Std Deduction.</div>
           <div class="field-explain-drawer" id="drawer-explain-children-count" hidden aria-hidden="true">
             <div class="explain-drawer-content">
               <div class="explain-header">
@@ -818,6 +893,63 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Additional Tax Credits & Estimated Tax Payments (Schedule 3 / Forms 2441, 8863, 1116, 5695, 1040-ES) -->
+        <div class="calc-card input-panel priority-saver" id="card-other-credits-payments">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Schedule 3 / Forms 2441, 8863, 1116, 5695, 1040-ES</div>
+            <span class="field-rating-pill badge-priority-saver" data-rating-field="credits-children" role="button" tabindex="0">
+              <span class="pill-text">Credits &amp; Pre-Payments</span>
+              <span class="pill-info-icon">ⓘ</span>
+            </span>
+          </div>
+          <div class="input-card-title">Child Care, Education, Energy Credits &amp; 1040-ES</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <div>
+              <label for="input-child-care" class="input-sublabel">Child Care Exp. (2441)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-child-care" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-edu-aotc" class="input-sublabel">AOTC Tuition (8863)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-edu-aotc" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-edu-llc" class="input-sublabel">LLC Tuition (8863)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-edu-llc" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-foreign-tax-credit" class="input-sublabel">Foreign Tax Cr (1116)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-foreign-tax-credit" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-clean-energy-credit" class="input-sublabel">Clean Energy/EV (5695)</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-clean-energy-credit" value="0" placeholder="0">
+              </div>
+            </div>
+            <div>
+              <label for="input-estimated-payments" class="input-sublabel">1040-ES Est. Paid</label>
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input" id="input-estimated-payments" value="0" placeholder="0">
+              </div>
+            </div>
+          </div>
+          <div class="input-card-hint">Saver's Credit (Form 8880) &amp; Earned Income Tax Credit (Schedule EIC) are also computed automatically.</div>
         </div>
       </div>
     </section>
@@ -1059,6 +1191,23 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Gambling Losses (Schedule A Line 16, up to W-2G Winnings) -->
+        <div class="calc-card input-panel priority-saver" id="card-itemized-gambling">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="step-indicator">Schedule A Line 16</div>
+            <span class="field-rating-pill badge-priority-saver" data-rating-field="itemized-charity" role="button" tabindex="0">
+              <span class="pill-text">Up to W-2G Winnings</span>
+              <span class="pill-info-icon">ⓘ</span>
+            </span>
+          </div>
+          <div class="input-card-title">Gambling Losses (Schedule A Line 16)</div>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-itemized-gambling" value="0" placeholder="0">
+          </div>
+          <div class="input-card-hint">Wagering losses are deductible on Schedule A only to the extent of W-2G gambling winnings reported.</div>
         </div>
       </div>
 

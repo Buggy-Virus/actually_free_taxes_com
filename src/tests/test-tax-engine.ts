@@ -243,12 +243,15 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
 
   const res = calculateTaxes(state);
   // Total Gross Income: 70,000 (W2) + 1,200 (INT) + 8,000 (NEC) + 1,500 (DIV) = 80,700
+  // Schedule SE Tax on $8,000 NEC: 8,000 * 0.9235 * 0.153 = $1,130.36; ½ SE Tax Deduction = $565.18
   assert.strictEqual(res.grossIncomeCalc.result, 80700, 'Gross income with extra income sources');
-  assert.strictEqual(res.agiCalc.result, 80200, 'AGI with $500 student loan interest adjustment');
+  assert.strictEqual(res.otherTaxesCalc.selfEmploymentTax, 1130.36, 'Schedule SE tax on $8,000 NEC is $1,130.36');
+  assert.strictEqual(res.otherTaxesCalc.halfSelfEmploymentTaxDeduction, 565.18, 'Half SE tax deduction is $565.18');
+  assert.strictEqual(res.agiCalc.result, 79634.82, 'AGI with $500 student loan + $565.18 half SE tax adjustment');
   assert(res.grossIncomeCalc.sourceFields.includes('input-income-source-1'), 'Sources include freelance input');
   assert(res.grossIncomeCalc.sourceFields.includes('input-income-source-2'), 'Sources include dividends input');
 
-  console.log("✓ TS Test 5: Additional Income Sources (1099-NEC + 1099-DIV) verified correctly!");
+  console.log("✓ TS Test 5: Additional Income Sources (1099-NEC + 1099-DIV + Auto Schedule SE) verified correctly!");
 }
 
 // Test Case 6: Field Ratings & IRS Risk Assessment Engine with Color Circles & Exclamation Marks
@@ -374,23 +377,22 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   // Gross income: 80,000 (W2) + 500 (INT) + (12,000 - 4,000 = 8,000 1099 Net) + (-3,000 Cap Gains) = 85,500
   assert.strictEqual(resA.grossIncomeCalc.result, 85500, 'Gross income with Schedule C expenses and capped capital losses');
 
-  // Adjustments: 2,000 (IRA) + 3,500 (HSA) = 5,500
-  assert.strictEqual(resA.adjustmentsCalc.result, 5500, 'Adjustments include IRA and HSA');
+  // Adjustments: 2,000 (IRA) + 3,500 (HSA) + 565.18 (½ SE Tax on $8,000 NEC) = 6,065.18
+  assert.strictEqual(resA.adjustmentsCalc.result, 6065.18, 'Adjustments include IRA, HSA, and ½ SE Tax');
 
-  // AGI: 85,500 - 5,500 = 80,000
-  assert.strictEqual(resA.agiCalc.result, 80000, 'AGI is 80,000');
+  // AGI: 85,500 - 6,065.18 = 79,434.82
+  assert.strictEqual(resA.agiCalc.result, 79434.82, 'AGI is 79,434.82');
 
   // Standard deduction is $14,600, higher than $0 itemized, so auto picks standard
   assert.strictEqual(resA.deductionCalc.result, 14600, 'Auto picks Standard Deduction when itemized is lower');
   assert.strictEqual(resA.itemizedCalc.chosenMethod, 'standard', 'Chosen method is standard');
 
   // Sub-case B: Schedule A Itemized Deductions exceeding Standard Deduction
-  // AGI = $80,000. 7.5% of AGI = $6,000 floor.
-  // Medical = $10,000 -> Deductible = 10,000 - 6,000 = $4,000.
+  // AGI = $79,434.82. 7.5% of AGI = $5,957.6115 floor.
+  // Medical = $10,000 -> Deductible = 10,000 - 5,957.6115 = $4,042.3885.
   // State tax withheld = $3,500 + Real estate tax = $8,000 -> Sum = $11,500, capped at $10,000 SALT!
   // Mortgage interest = $9,000. Charity = $2,500.
-  // Total Itemized = $4,000 (Medical) + $10,000 (SALT) + $9,000 (Mortgage) + $2,500 (Charity) = $25,500!
-  // $25,500 > $14,600 standard deduction -> Engine should automatically select itemized!
+  // Total Itemized = $4,042.3885 + $10,000 + $9,000 + $2,500 = $25,542.3885!
   const stateB: TaxAppState = {
     ...stateA,
     itemizedDeductions: {
@@ -402,11 +404,11 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   };
 
   const resB = calculateTaxes(stateB);
-  assert.strictEqual(resB.itemizedCalc.medicalDeductible, 4000, 'Medical deductible after 7.5% floor (10k - 6k)');
+  assert.strictEqual(Math.round(resB.itemizedCalc.medicalDeductible * 100) / 100, 4042.39, 'Medical deductible after 7.5% floor');
   assert.strictEqual(resB.itemizedCalc.saltDeduction, 10000, 'SALT capped at $10,000 (3,500 CA tax + 8,000 property = 11,500 -> 10,000)');
-  assert.strictEqual(resB.itemizedCalc.totalItemizedDeductions, 25500, 'Total itemized = 4,000 + 10,000 + 9,000 + 2,500 = 25,500');
+  assert.strictEqual(Math.round(resB.itemizedCalc.totalItemizedDeductions * 100) / 100, 25542.39, 'Total itemized = 25,542.39');
   assert.strictEqual(resB.itemizedCalc.chosenMethod, 'itemized', 'Auto optimal method switches to itemized');
-  assert.strictEqual(resB.deductionCalc.result, 25500, 'Deduction applied to return is $25,500 (saving an extra $10,900 off income!)');
+  assert.strictEqual(Math.round(resB.deductionCalc.result * 100) / 100, 25542.39, 'Deduction applied to return is $25,542.39');
 
   // Sub-case C: Manual override to force Standard Deduction
   const stateC: TaxAppState = {
@@ -796,6 +798,123 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   console.log("✓ TS Test 13: NYC Job Switch + DC Condo Rental & Investments scenario verified correctly!");
 }
 
-console.log("\nAll 13 TypeScript test suites PASSED with 100% accuracy!\n");
+// Test Case 14: Comprehensive Verification of All Newly Supported Federal & State Features
+{
+  // 14A: Qualifying Surviving Spouse + Age 65+/Blind + SSA-1099 Social Security (85% Worksheet) + 1099-R Penalty + K-1 QBI + Credits
+  const state14A: TaxAppState = {
+    year: 2024,
+    filingStatus: 'qualifying_surviving_spouse',
+    residentState: 'SC', // South Carolina (44% LTCG exclusion)
+    w2s: [{
+      id: 0,
+      employer: 'Charleston Medical Group',
+      ein: '57-1122334',
+      box1: 45000,
+      box2: 3500,
+      box3: 45000,
+      box4: 2790,
+      box5: 45000,
+      box6: 652.50,
+      states: [{ id: 0, state: 'SC', stateId: 'SC-1', stateWages: 45000, stateTaxWithheld: 1800, localWages: 0, localTaxWithheld: 0, localityName: '' }]
+    }],
+    otherIncome: {
+      interest: 500,
+      sources: [
+        { id: 1, type: 'SSA-1099', payer: 'Social Security Admin', amount: 24000 },
+        { id: 2, type: '1099-R', payer: 'Fidelity IRA Early Dist', amount: 10000, earlyDistributionPenalty: true, federalTaxWithheld: 1000 },
+        { id: 3, type: 'Schedule K-1', payer: 'Palmetto Partners LP', amount: 15000 },
+        { id: 4, type: '1099-INT', payer: 'SC Muni Bonds', amount: 200, taxExemptInterest: 4000 }
+      ],
+      capitalGains: {
+        shortTerm: 0,
+        longTerm: 10000,
+        collectiblesGain: 2000,
+        unrecaptured1250Gain: 3000
+      }
+    },
+    adjustments: {
+      studentLoan: 0,
+      ira: 0,
+      hsa: 0,
+      educatorExpenses: 300,
+      seRetirement: 0,
+      seHealthInsurance: 0,
+      alimonyPaid: 0
+    },
+    dependents: {
+      childrenCount: 1,
+      otherDependentsCount: 1,
+      age65OrBlindCount: 1, // +$1,550 for QSS in 2024 -> 29,200 + 1,550 = 30,750
+      childCareExpenses: 3000,
+      educationExpensesAotc: 4000, // $2,500 AOTC ($1,500 nonrefundable + $1,000 refundable)
+      educationExpensesLlc: 0,
+      foreignTaxCredit: 200,
+      cleanEnergyCredit: 500,
+      estimatedTaxPayments: 1500
+    },
+    showAllArrows: true
+  };
+
+  const res14A = calculateTaxes(state14A);
+  assert.strictEqual(res14A.deductionCalc.result, 30750, 'QSS ($29,200) + 1 Age 65/Blind box ($1,550) = $30,750 standard deduction');
+  assert.ok((res14A.qbiDeduction || 0) > 0, '20% QBI deduction (Form 8995) computed on Schedule K-1 pass-through income');
+  assert.strictEqual(res14A.otherTaxesCalc.earlyDistributionPenaltyTax, 1000, 'Form 5329 10% early withdrawal penalty on $10,000 1099-R = $1,000');
+  assert.ok((res14A.creditsCalc.otherDependentsCredit || 0) === 500, 'Credit for Other Dependents ($500) applied');
+  assert.ok((res14A.creditsCalc.childCareCredit || 0) === 600, 'Form 2441 Child Care Credit (20% of $3,000) = $600');
+  assert.ok((res14A.creditsCalc.educationCreditRefundable || 0) === 1000, 'Form 8863 40% Refundable AOTC = $1,000');
+  assert.ok(res14A.withholdingCalc.pluggedFormula.includes('$1,000 (1099 WH)'), 'Includes 1099 Box 4 withholding');
+  assert.ok(res14A.withholdingCalc.pluggedFormula.includes('$1,500 (1040-ES)'), 'Includes Form 1040-ES estimated payments');
+  const scRet = res14A.stateReturnsCalc.find(s => s.state === 'SC')!;
+  // SC starts from Federal AGI and excludes 44% of $10,000 LTCG ($4,400)
+  assert.strictEqual(scRet.stateWages, res14A.agiCalc.result - 4400, 'SC applies 44% net long-term capital gain exclusion ($4,400)');
+
+  // 14B: Washington 7% Long-Term Capital Gains Excise Tax (> $270,000) & New Hampshire 3% Interest & Dividends Tax (Form DP-10)
+  const stateWA: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    residentState: 'WA',
+    w2s: [{ id: 0, employer: 'Seattle Cloud Inc', ein: '91-1234567', box1: 150000, box2: 24000, box3: 150000, box4: 9300, box5: 150000, box6: 2175, states: [{ id: 0, state: 'WA', stateId: '', stateWages: 150000, stateTaxWithheld: 0, localWages: 0, localTaxWithheld: 0, localityName: '' }] }],
+    otherIncome: { interest: 0, capitalGains: { shortTerm: 0, longTerm: 370000 } },
+    adjustments: { studentLoan: 0, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 0 },
+    showAllArrows: true
+  };
+  const resWA = calculateTaxes(stateWA);
+  const waRet = resWA.stateReturnsCalc.find(s => s.state === 'WA')!;
+  assert.strictEqual(waRet.stateTaxLiability, 7000, 'WA 7% LTCG Excise Tax on ($370,000 - $270,000) = $7,000');
+
+  const stateNH: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    residentState: 'NH',
+    w2s: [{ id: 0, employer: 'Manchester Tech', ein: '02-1234567', box1: 80000, box2: 10000, box3: 80000, box4: 4960, box5: 80000, box6: 1160, states: [{ id: 0, state: 'NH', stateId: '', stateWages: 80000, stateTaxWithheld: 0, localWages: 0, localTaxWithheld: 0, localityName: '' }] }],
+    otherIncome: { interest: 6400, sources: [{ id: 1, type: '1099-DIV', payer: 'Fidelity', amount: 6000 }] },
+    adjustments: { studentLoan: 0, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 0 },
+    showAllArrows: true
+  };
+  const resNH = calculateTaxes(stateNH);
+  const nhRet = resNH.stateReturnsCalc.find(s => s.state === 'NH')!;
+  assert.strictEqual(nhRet.stateTaxLiability, 300, 'NH Form DP-10 3% I&D tax on ($12,400 - $2,400 exemption) = $300');
+
+  // 14C: Massachusetts 8.5% Short-Term Capital Gains (5% base on $115,600 = $5,780 + 3.5% STCG surcharge on $20,000 = $700 -> $6,480)
+  const stateMA: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    residentState: 'MA',
+    w2s: [{ id: 0, employer: 'Boston Biotech', ein: '04-1234567', box1: 100000, box2: 15000, box3: 100000, box4: 6200, box5: 100000, box6: 1450, states: [{ id: 0, state: 'MA', stateId: '', stateWages: 100000, stateTaxWithheld: 5000, localWages: 0, localTaxWithheld: 0, localityName: '' }] }],
+    otherIncome: { interest: 0, capitalGains: { shortTerm: 20000, longTerm: 0 } },
+    adjustments: { studentLoan: 0, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 0 },
+    showAllArrows: true
+  };
+  const resMA = calculateTaxes(stateMA);
+  const maRet = resMA.stateReturnsCalc.find(s => s.state === 'MA')!;
+  assert.strictEqual(maRet.stateTaxLiability, 6480, 'MA applies 5% base + 3.5% add-on (8.5% total) on short-term capital gains = $6,480');
+
+  console.log("✓ TS Test 14: All newly supported Federal & 50-State tax features (QSS, 65+/Blind, SSA-1099, 1099-R, K-1 QBI, SE Tax, Credits, WA LTCG, NH I&D, MA 8.5% STCG, SC 44% LTCG) verified!");
+}
+
+console.log("\nAll 14 TypeScript test suites PASSED with 100% accuracy!\n");
 
 
