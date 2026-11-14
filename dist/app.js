@@ -59,6 +59,7 @@ export const US_STATES = [
 ];
 const STORAGE_KEY_DRAFT = 'aft_local_draft_v2';
 const STORAGE_KEY_TOS = 'aft_tos_accepted_v1';
+const STORAGE_KEY_COLLAPSE = 'aft_collapse_state_v1';
 function getDefaultTaxAppState() {
     return {
         year: 2024,
@@ -195,6 +196,35 @@ function getOfficialIrsMailingAddress(stateCode, isRefund) {
     }
 }
 class TaxApp {
+    loadCollapseState() {
+        if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+            return { cards: {}, sections: {} };
+        }
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY_COLLAPSE);
+            if (!raw)
+                return { cards: {}, sections: {} };
+            const parsed = JSON.parse(raw);
+            return {
+                cards: parsed.cards && typeof parsed.cards === 'object' ? parsed.cards : {},
+                sections: parsed.sections && typeof parsed.sections === 'object' ? parsed.sections : {},
+                detailsCapGains: typeof parsed.detailsCapGains === 'boolean' ? parsed.detailsCapGains : undefined
+            };
+        }
+        catch {
+            return { cards: {}, sections: {} };
+        }
+    }
+    saveCollapseState() {
+        if (typeof window === 'undefined' || typeof localStorage === 'undefined')
+            return;
+        try {
+            localStorage.setItem(STORAGE_KEY_COLLAPSE, JSON.stringify(this.collapseState));
+        }
+        catch (e) {
+            console.warn('Could not save collapse state to localStorage:', e);
+        }
+    }
     constructor() {
         this.state = getDefaultTaxAppState();
         this.arrowEngine = null;
@@ -203,6 +233,7 @@ class TaxApp {
         this.incomeSourceCounter = 1;
         this.scrollspyAttached = false;
         this.isTosAccepted = false;
+        this.collapseState = this.loadCollapseState();
         this.init();
     }
     init() {
@@ -371,11 +402,13 @@ class TaxApp {
             if (typeof localStorage !== 'undefined') {
                 try {
                     localStorage.removeItem(STORAGE_KEY_DRAFT);
+                    localStorage.removeItem(STORAGE_KEY_COLLAPSE);
                 }
                 catch (e) {
                     console.warn("Failed to remove saved draft:", e);
                 }
             }
+            this.collapseState = { cards: {}, sections: {} };
             this.state = getDefaultTaxAppState();
             this.updateIdCounters();
             this.syncAllDomInputs();
@@ -523,23 +556,55 @@ class TaxApp {
             btn.textContent = collapsed ? 'Expand ▾' : 'Minimize ▴';
         }
     }
+    toggleCardCollapse(cardId) {
+        const card = document.getElementById(cardId);
+        if (!card)
+            return;
+        const nextCollapsed = !card.classList.contains('is-collapsed');
+        this.setCardCollapsed(card, nextCollapsed);
+        this.collapseState.cards[cardId] = nextCollapsed;
+        this.saveCollapseState();
+        this.arrowEngine?.scheduleRedraw();
+    }
     syncCollapsedStates() {
-        document.querySelectorAll('.calc-card[data-auto-collapse="true"]').forEach(card => {
-            const inputs = Array.from(card.querySelectorAll('input'));
-            const hasData = inputs.some(input => {
-                if (input.type === 'number') {
-                    const val = parseFloat(input.value);
-                    return !Number.isNaN(val) && val !== 0;
-                }
-                return input.value.trim() !== '';
-            });
-            this.setCardCollapsed(card, !hasData);
+        document.querySelectorAll('.calc-card[id]').forEach(card => {
+            if (Object.prototype.hasOwnProperty.call(this.collapseState.cards, card.id)) {
+                this.setCardCollapsed(card, Boolean(this.collapseState.cards[card.id]));
+                return;
+            }
+            if (card.dataset.autoCollapse === 'true') {
+                const inputs = Array.from(card.querySelectorAll('input'));
+                const hasData = inputs.some(input => {
+                    if (input.type === 'number') {
+                        const val = parseFloat(input.value);
+                        return !Number.isNaN(val) && val !== 0;
+                    }
+                    return input.value.trim() !== '';
+                });
+                this.setCardCollapsed(card, !hasData);
+            }
+            else if (card.querySelector(`[data-card-toggle="${card.id}"]`)) {
+                this.setCardCollapsed(card, false);
+            }
+        });
+        document.querySelectorAll('section[id]').forEach(section => {
+            if (Object.prototype.hasOwnProperty.call(this.collapseState.sections, section.id)) {
+                this.setSectionCollapsed(section, Boolean(this.collapseState.sections[section.id]));
+            }
+            else if (section.querySelector(`[data-section-toggle="${section.id}"]`)) {
+                this.setSectionCollapsed(section, false);
+            }
         });
         const capGainsDetails = document.getElementById('details-capital-gains-special');
         if (capGainsDetails) {
-            const cap = this.state.otherIncome?.capitalGains;
-            const hasSpecialCapGains = Boolean((cap?.collectiblesGain ?? 0) !== 0 || (cap?.unrecaptured1250Gain ?? 0) !== 0);
-            capGainsDetails.open = hasSpecialCapGains;
+            if (typeof this.collapseState.detailsCapGains === 'boolean') {
+                capGainsDetails.open = this.collapseState.detailsCapGains;
+            }
+            else {
+                const cap = this.state.otherIncome?.capitalGains;
+                const hasSpecialCapGains = Boolean((cap?.collectiblesGain ?? 0) !== 0 || (cap?.unrecaptured1250Gain ?? 0) !== 0);
+                capGainsDetails.open = hasSpecialCapGains;
+            }
         }
         this.arrowEngine?.scheduleRedraw();
     }
@@ -547,14 +612,8 @@ class TaxApp {
         document.querySelectorAll('[data-card-toggle]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const cardId = btn.dataset.cardToggle;
-                if (!cardId)
-                    return;
-                const card = document.getElementById(cardId);
-                if (!card)
-                    return;
-                const nextCollapsed = !card.classList.contains('is-collapsed');
-                this.setCardCollapsed(card, nextCollapsed);
-                this.arrowEngine?.scheduleRedraw();
+                if (cardId)
+                    this.toggleCardCollapse(cardId);
             });
         });
         document.querySelectorAll('[data-section-toggle]').forEach(btn => {
@@ -567,12 +626,16 @@ class TaxApp {
                     return;
                 const nextCollapsed = !section.classList.contains('is-section-collapsed');
                 this.setSectionCollapsed(section, nextCollapsed);
+                this.collapseState.sections[sectionId] = nextCollapsed;
+                this.saveCollapseState();
                 this.arrowEngine?.scheduleRedraw();
             });
         });
         const capGainsDetails = document.getElementById('details-capital-gains-special');
         if (capGainsDetails) {
             capGainsDetails.addEventListener('toggle', () => {
+                this.collapseState.detailsCapGains = capGainsDetails.open;
+                this.saveCollapseState();
                 this.arrowEngine?.scheduleRedraw();
             });
         }
@@ -1572,7 +1635,9 @@ class TaxApp {
         });
     }
     loadPreset(presetName) {
-        // Reset optional state fields before applying preset
+        // Reset collapse overrides and optional state fields before applying preset
+        this.collapseState = { cards: {}, sections: {} };
+        this.saveCollapseState();
         this.state.otherIncome.sources = [];
         this.state.otherIncome.capitalGains = { shortTerm: 0, longTerm: 0, collectiblesGain: 0, unrecaptured1250Gain: 0 };
         this.state.otherIncome.scheduleCExpenses = 0;
@@ -2917,26 +2982,38 @@ class TaxApp {
             </div>
             <h3 class="calc-card-title">${sr.stateName}: ${sr.formName}</h3>
           </div>
-          <span class="irs-line-tag">${sr.formName}</span>
-        </div>
-
-        <div class="formula-box">
-          <div class="formula-row">
-            <span class="formula-badge general">General Formula</span>
-            <span class="formula-math formula-general">${sr.generalFormula}</span>
-          </div>
-          <div class="formula-row" id="calc-state-${sr.state.toLowerCase()}-liability">
-            <span class="formula-badge plugged">With Your Numbers</span>
-            <span class="formula-math plugged-highlight formula-plugged">${sr.pluggedFormula}</span>
+          <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+            <span class="irs-line-tag">${sr.formName}</span>
+            <button type="button" class="btn-minimize-card" data-card-toggle="${cardId}" aria-expanded="true">Minimize ▴</button>
           </div>
         </div>
 
-        ${sr.reciprocityNote ? `
-          <div class="state-note-box">
-            <strong>Reciprocity Note:</strong> ${sr.reciprocityNote}
+        <div class="card-collapsible-body">
+          <div class="formula-box">
+            <div class="formula-row">
+              <span class="formula-badge general">General Formula</span>
+              <span class="formula-math formula-general">${sr.generalFormula}</span>
+            </div>
+            <div class="formula-row" id="calc-state-${sr.state.toLowerCase()}-liability">
+              <span class="formula-badge plugged">With Your Numbers</span>
+              <span class="formula-math plugged-highlight formula-plugged">${sr.pluggedFormula}</span>
+            </div>
           </div>
-        ` : ''}
+
+          ${sr.reciprocityNote ? `
+            <div class="state-note-box">
+              <strong>Reciprocity Note:</strong> ${sr.reciprocityNote}
+            </div>
+          ` : ''}
+        </div>
       `;
+            const toggleBtn = card.querySelector(`[data-card-toggle="${cardId}"]`);
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', () => this.toggleCardCollapse(cardId));
+            }
+            if (Object.prototype.hasOwnProperty.call(this.collapseState.cards, cardId)) {
+                this.setCardCollapsed(card, Boolean(this.collapseState.cards[cardId]));
+            }
             card.addEventListener('mouseenter', () => this.arrowEngine?.setActiveTarget(cardId));
             card.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
             container.appendChild(card);
