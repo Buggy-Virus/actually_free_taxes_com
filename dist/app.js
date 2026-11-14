@@ -60,6 +60,8 @@ export const US_STATES = [
 const STORAGE_KEY_DRAFT = 'aft_local_draft_v2';
 const STORAGE_KEY_TOS = 'aft_tos_accepted_v1';
 const STORAGE_KEY_COLLAPSE = 'aft_collapse_state_v1';
+const STORAGE_KEY_DRAFTS = 'aft_saved_drafts_v1';
+const STORAGE_KEY_UI_PREFS = 'aft_ui_prefs_v1';
 function getDefaultTaxAppState() {
     return {
         year: 2024,
@@ -196,6 +198,89 @@ function getOfficialIrsMailingAddress(stateCode, isRefund) {
     }
 }
 class TaxApp {
+    loadUiPrefs() {
+        if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+            return {};
+        }
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY_UI_PREFS);
+            if (!raw)
+                return {};
+            const parsed = JSON.parse(raw);
+            return {
+                showAllArrows: typeof parsed.showAllArrows === 'boolean' ? parsed.showAllArrows : undefined,
+                ratingFilter: typeof parsed.ratingFilter === 'string' ? parsed.ratingFilter : undefined,
+                expandAllExplanations: typeof parsed.expandAllExplanations === 'boolean' ? parsed.expandAllExplanations : undefined
+            };
+        }
+        catch {
+            return {};
+        }
+    }
+    saveUiPrefs() {
+        if (typeof window === 'undefined' || typeof localStorage === 'undefined')
+            return;
+        try {
+            localStorage.setItem(STORAGE_KEY_UI_PREFS, JSON.stringify(this.uiPrefs));
+        }
+        catch (e) {
+            console.warn('Could not save UI preferences to localStorage:', e);
+        }
+    }
+    loadDraftsStore() {
+        const fallbackState = getDefaultTaxAppState();
+        const fallback = {
+            activeId: 'draft-1',
+            drafts: [{ id: 'draft-1', name: 'Draft 1', updatedAt: Date.now(), state: fallbackState }]
+        };
+        if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+            return fallback;
+        }
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY_DRAFTS);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && Array.isArray(parsed.drafts) && parsed.drafts.length > 0) {
+                    const activeExists = parsed.drafts.some(d => d.id === parsed.activeId);
+                    return {
+                        activeId: activeExists && parsed.activeId ? parsed.activeId : parsed.drafts[0].id,
+                        drafts: parsed.drafts
+                    };
+                }
+            }
+            // Migrate legacy single draft if present
+            const legacy = localStorage.getItem(STORAGE_KEY_DRAFT);
+            if (legacy) {
+                const parsedLegacy = JSON.parse(legacy);
+                if (parsedLegacy && Array.isArray(parsedLegacy.w2s)) {
+                    return {
+                        activeId: 'draft-1',
+                        drafts: [{
+                                id: 'draft-1',
+                                name: 'Draft 1',
+                                updatedAt: Date.now(),
+                                state: parsedLegacy,
+                                collapseState: this.collapseState
+                            }]
+                    };
+                }
+            }
+        }
+        catch (e) {
+            console.warn('Could not load saved drafts store:', e);
+        }
+        return fallback;
+    }
+    saveDraftsStore() {
+        if (typeof window === 'undefined' || typeof localStorage === 'undefined')
+            return;
+        try {
+            localStorage.setItem(STORAGE_KEY_DRAFTS, JSON.stringify(this.draftsStore));
+        }
+        catch (e) {
+            console.warn('Could not save drafts store to localStorage:', e);
+        }
+    }
     loadCollapseState() {
         if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
             return { cards: {}, sections: {} };
@@ -234,6 +319,8 @@ class TaxApp {
         this.scrollspyAttached = false;
         this.isTosAccepted = false;
         this.collapseState = this.loadCollapseState();
+        this.uiPrefs = this.loadUiPrefs();
+        this.draftsStore = this.loadDraftsStore();
         this.init();
     }
     init() {
@@ -257,6 +344,11 @@ class TaxApp {
         if (!loadedFromPreset) {
             this.loadDraft();
         }
+        if (typeof this.uiPrefs.showAllArrows === 'boolean') {
+            this.state.showAllArrows = this.uiPrefs.showAllArrows;
+            this.arrowEngine?.setShowAll(this.state.showAllArrows);
+        }
+        this.renderDraftSelector();
         this.renderW2Forms();
         this.renderIncomeSources();
         this.syncAllDomInputs();
@@ -351,11 +443,148 @@ class TaxApp {
     /* --------------------------------------------------------------------------
        Client-Side Local Storage & Auto-Save Methods
        -------------------------------------------------------------------------- */
+    getActiveDraft() {
+        return this.draftsStore.drafts.find(d => d.id === this.draftsStore.activeId) || this.draftsStore.drafts[0];
+    }
+    renderDraftSelector() {
+        const select = document.getElementById('select-draft');
+        if (!select)
+            return;
+        select.innerHTML = '';
+        this.draftsStore.drafts.forEach(draft => {
+            const opt = document.createElement('option');
+            opt.value = draft.id;
+            opt.textContent = draft.name;
+            if (draft.id === this.draftsStore.activeId)
+                opt.selected = true;
+            select.appendChild(opt);
+        });
+    }
+    applyDraftEntry(draft) {
+        this.state = JSON.parse(JSON.stringify(draft.state));
+        if (typeof this.uiPrefs.showAllArrows === 'boolean') {
+            this.state.showAllArrows = this.uiPrefs.showAllArrows;
+        }
+        this.collapseState = draft.collapseState
+            ? JSON.parse(JSON.stringify(draft.collapseState))
+            : { cards: {}, sections: {} };
+        this.saveCollapseState();
+        this.updateIdCounters();
+        this.renderDraftSelector();
+        this.renderW2Forms();
+        this.renderIncomeSources();
+        this.syncAllDomInputs();
+        this.recalculateAndRender();
+    }
+    switchDraft(draftId) {
+        const target = this.draftsStore.drafts.find(d => d.id === draftId);
+        if (!target)
+            return;
+        this.draftsStore.activeId = target.id;
+        this.saveDraftsStore();
+        this.applyDraftEntry(target);
+        const statusText = document.getElementById('storage-status-text');
+        if (statusText)
+            statusText.textContent = `Switched to "${target.name}"`;
+    }
+    createNewDraft() {
+        const nextNum = this.draftsStore.drafts.length + 1;
+        const inputName = typeof window !== 'undefined'
+            ? window.prompt('Name for the new blank draft:', `Draft ${nextNum}`)
+            : `Draft ${nextNum}`;
+        if (inputName === null)
+            return;
+        const name = inputName.trim() || `Draft ${nextNum}`;
+        const newDraft = {
+            id: `draft-${Date.now()}`,
+            name,
+            updatedAt: Date.now(),
+            state: getDefaultTaxAppState(),
+            collapseState: { cards: {}, sections: {} }
+        };
+        this.draftsStore.drafts.push(newDraft);
+        this.draftsStore.activeId = newDraft.id;
+        this.saveDraftsStore();
+        this.applyDraftEntry(newDraft);
+        const statusText = document.getElementById('storage-status-text');
+        if (statusText)
+            statusText.textContent = `Created "${name}"`;
+    }
+    duplicateCurrentDraft() {
+        const current = this.getActiveDraft();
+        const baseName = current ? current.name : 'Draft';
+        const defaultCopyName = `${baseName} (Copy)`;
+        const inputName = typeof window !== 'undefined'
+            ? window.prompt('Name for the copied draft:', defaultCopyName)
+            : defaultCopyName;
+        if (inputName === null)
+            return;
+        const name = inputName.trim() || defaultCopyName;
+        const copyDraft = {
+            id: `draft-${Date.now()}`,
+            name,
+            updatedAt: Date.now(),
+            state: JSON.parse(JSON.stringify(this.state)),
+            collapseState: JSON.parse(JSON.stringify(this.collapseState))
+        };
+        this.draftsStore.drafts.push(copyDraft);
+        this.draftsStore.activeId = copyDraft.id;
+        this.saveDraftsStore();
+        this.renderDraftSelector();
+        const statusText = document.getElementById('storage-status-text');
+        if (statusText)
+            statusText.textContent = `Copied to "${name}"`;
+    }
+    renameCurrentDraft() {
+        const current = this.getActiveDraft();
+        if (!current || typeof window === 'undefined')
+            return;
+        const inputName = window.prompt('Rename current draft:', current.name);
+        if (inputName === null)
+            return;
+        const trimmed = inputName.trim();
+        if (!trimmed)
+            return;
+        current.name = trimmed;
+        current.updatedAt = Date.now();
+        this.saveDraftsStore();
+        this.renderDraftSelector();
+        const statusText = document.getElementById('storage-status-text');
+        if (statusText)
+            statusText.textContent = `Renamed draft to "${trimmed}"`;
+    }
+    deleteCurrentDraft() {
+        const current = this.getActiveDraft();
+        if (!current || typeof window === 'undefined')
+            return;
+        if (!window.confirm(`Delete draft "${current.name}"?`))
+            return;
+        if (this.draftsStore.drafts.length <= 1) {
+            current.name = 'Draft 1';
+            current.state = getDefaultTaxAppState();
+            current.collapseState = { cards: {}, sections: {} };
+            current.updatedAt = Date.now();
+            this.saveDraftsStore();
+            this.applyDraftEntry(current);
+            return;
+        }
+        this.draftsStore.drafts = this.draftsStore.drafts.filter(d => d.id !== current.id);
+        this.draftsStore.activeId = this.draftsStore.drafts[0].id;
+        this.saveDraftsStore();
+        this.applyDraftEntry(this.draftsStore.drafts[0]);
+    }
     saveDraft() {
         if (typeof window === 'undefined' || typeof localStorage === 'undefined')
             return;
         try {
             localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(this.state));
+            const active = this.getActiveDraft();
+            if (active) {
+                active.state = JSON.parse(JSON.stringify(this.state));
+                active.collapseState = JSON.parse(JSON.stringify(this.collapseState));
+                active.updatedAt = Date.now();
+            }
+            this.saveDraftsStore();
             const statusText = document.getElementById('storage-status-text');
             const dot = document.getElementById('storage-dot');
             if (statusText) {
@@ -375,11 +604,25 @@ class TaxApp {
         if (typeof window === 'undefined' || typeof localStorage === 'undefined')
             return false;
         try {
+            const active = this.getActiveDraft();
+            if (active && active.state && Array.isArray(active.state.w2s)) {
+                this.state = JSON.parse(JSON.stringify(active.state));
+                if (active.collapseState) {
+                    this.collapseState = JSON.parse(JSON.stringify(active.collapseState));
+                    this.saveCollapseState();
+                }
+                this.updateIdCounters();
+                const statusText = document.getElementById('storage-status-text');
+                if (statusText) {
+                    statusText.textContent = `Restored "${active.name}" from this device`;
+                }
+                return true;
+            }
             const saved = localStorage.getItem(STORAGE_KEY_DRAFT);
             if (!saved)
                 return false;
             const parsed = JSON.parse(saved);
-            if (parsed && Array.isArray(parsed.w2s) && parsed.w2s.length > 0) {
+            if (parsed && Array.isArray(parsed.w2s)) {
                 this.state = parsed;
                 this.updateIdCounters();
                 const statusText = document.getElementById('storage-status-text');
@@ -396,12 +639,13 @@ class TaxApp {
     }
     clearDraft() {
         if (typeof window !== 'undefined') {
-            const confirmed = window.confirm("Are you sure you want to clear your saved tax progress and reset to blank/default?");
+            const confirmed = window.confirm("Are you sure you want to clear all saved drafts and reset to blank/default?");
             if (!confirmed)
                 return;
             if (typeof localStorage !== 'undefined') {
                 try {
                     localStorage.removeItem(STORAGE_KEY_DRAFT);
+                    localStorage.removeItem(STORAGE_KEY_DRAFTS);
                     localStorage.removeItem(STORAGE_KEY_COLLAPSE);
                 }
                 catch (e) {
@@ -410,6 +654,11 @@ class TaxApp {
             }
             this.collapseState = { cards: {}, sections: {} };
             this.state = getDefaultTaxAppState();
+            this.draftsStore = {
+                activeId: 'draft-1',
+                drafts: [{ id: 'draft-1', name: 'Draft 1', updatedAt: Date.now(), state: JSON.parse(JSON.stringify(this.state)) }]
+            };
+            this.renderDraftSelector();
             this.updateIdCounters();
             this.syncAllDomInputs();
             this.renderW2Forms();
@@ -537,6 +786,10 @@ class TaxApp {
         setVal('input-itemized-mortgage', this.state.itemizedDeductions?.mortgageInterest);
         setVal('input-itemized-charity', this.state.itemizedDeductions?.charity);
         setVal('input-itemized-gambling', this.state.itemizedDeductions?.gamblingLosses);
+        const toggleArrows = document.getElementById('toggle-all-arrows');
+        if (toggleArrows)
+            toggleArrows.checked = Boolean(this.state.showAllArrows);
+        this.arrowEngine?.setShowAll(Boolean(this.state.showAllArrows));
         this.renderYearBadges();
         this.syncCollapsedStates();
     }
@@ -671,11 +924,31 @@ class TaxApp {
             toggleArrows.checked = this.state.showAllArrows;
             toggleArrows.addEventListener('change', (e) => {
                 this.state.showAllArrows = e.target.checked;
+                this.uiPrefs.showAllArrows = this.state.showAllArrows;
+                this.saveUiPrefs();
                 if (this.arrowEngine) {
                     this.arrowEngine.setShowAll(this.state.showAllArrows);
                 }
             });
         }
+        const selectDraft = document.getElementById('select-draft');
+        if (selectDraft) {
+            selectDraft.addEventListener('change', (e) => {
+                this.switchDraft(e.target.value);
+            });
+        }
+        const btnNewDraft = document.getElementById('btn-new-draft');
+        if (btnNewDraft)
+            btnNewDraft.addEventListener('click', () => this.createNewDraft());
+        const btnDupDraft = document.getElementById('btn-duplicate-draft');
+        if (btnDupDraft)
+            btnDupDraft.addEventListener('click', () => this.duplicateCurrentDraft());
+        const btnRenameDraft = document.getElementById('btn-rename-draft');
+        if (btnRenameDraft)
+            btnRenameDraft.addEventListener('click', () => this.renameCurrentDraft());
+        const btnDeleteDraft = document.getElementById('btn-delete-draft');
+        if (btnDeleteDraft)
+            btnDeleteDraft.addEventListener('click', () => this.deleteCurrentDraft());
         // Bind all Add W-2 buttons (header, section header, bottom banner, and left TOC button)
         ['btn-add-w2', 'btn-add-w2-section', 'btn-add-w2-bottom', 'btn-add-w2-toc'].forEach(btnId => {
             const btn = document.getElementById(btnId);
@@ -1256,61 +1529,82 @@ class TaxApp {
                 }
             };
         });
-        const globalToggle = document.getElementById('btn-toggle-all-explain');
-        if (globalToggle && !globalToggle.dataset.bound) {
-            globalToggle.dataset.bound = 'true';
-            let allExpanded = false;
-            globalToggle.addEventListener('click', () => {
-                allExpanded = !allExpanded;
-                const drawers = document.querySelectorAll('.field-explain-drawer');
-                const toggleBtns = document.querySelectorAll('.btn-explain-toggle');
-                drawers.forEach(drawer => {
-                    if (allExpanded) {
-                        drawer.classList.add('open');
-                        drawer.removeAttribute('hidden');
-                        drawer.setAttribute('aria-hidden', 'false');
-                    }
-                    else {
-                        drawer.classList.remove('open');
-                        drawer.setAttribute('hidden', '');
-                        drawer.setAttribute('aria-hidden', 'true');
-                    }
-                });
-                toggleBtns.forEach(btn => {
-                    btn.setAttribute('aria-expanded', allExpanded ? 'true' : 'false');
-                    if (allExpanded)
-                        btn.classList.add('active');
-                    else
-                        btn.classList.remove('active');
-                });
+        const applyAllExplanations = (allExpanded) => {
+            const drawers = document.querySelectorAll('.field-explain-drawer');
+            const toggleBtns = document.querySelectorAll('.btn-explain-toggle');
+            drawers.forEach(drawer => {
+                if (allExpanded) {
+                    drawer.classList.add('open');
+                    drawer.removeAttribute('hidden');
+                    drawer.setAttribute('aria-hidden', 'false');
+                }
+                else {
+                    drawer.classList.remove('open');
+                    drawer.setAttribute('hidden', '');
+                    drawer.setAttribute('aria-hidden', 'true');
+                }
+            });
+            toggleBtns.forEach(btn => {
+                btn.setAttribute('aria-expanded', allExpanded ? 'true' : 'false');
+                if (allExpanded)
+                    btn.classList.add('active');
+                else
+                    btn.classList.remove('active');
+            });
+            if (globalToggle) {
                 globalToggle.innerHTML = allExpanded
                     ? '🔒 Collapse All Explanations'
                     : '💡 Expand All Explanations';
                 globalToggle.style.background = allExpanded ? '#fef3c7' : '#f0fdf4';
                 globalToggle.style.color = allExpanded ? '#b45309' : '#15803d';
                 globalToggle.style.borderColor = allExpanded ? '#fde68a' : '#bbf7d0';
+            }
+        };
+        const globalToggle = document.getElementById('btn-toggle-all-explain');
+        if (globalToggle && !globalToggle.dataset.bound) {
+            globalToggle.dataset.bound = 'true';
+            let allExpanded = Boolean(this.uiPrefs.expandAllExplanations);
+            if (allExpanded)
+                applyAllExplanations(true);
+            globalToggle.addEventListener('click', () => {
+                allExpanded = !allExpanded;
+                applyAllExplanations(allExpanded);
+                this.uiPrefs.expandAllExplanations = allExpanded;
+                this.saveUiPrefs();
             });
+        }
+        else if (this.uiPrefs.expandAllExplanations) {
+            applyAllExplanations(true);
         }
     }
     bindFilterToolbar() {
         const toolbar = document.getElementById('ratings-filter-toolbar');
         if (!toolbar)
             return;
+        const applyRatingFilter = (filter) => {
+            toolbar.querySelectorAll('.filter-chip').forEach(c => {
+                c.classList.toggle('active', c.dataset.filter === filter);
+            });
+            document.body.classList.remove('filter-must-only', 'filter-savers-only', 'filter-hide-niche');
+            if (filter === 'must-only') {
+                document.body.classList.add('filter-must-only');
+            }
+            else if (filter === 'savers-only') {
+                document.body.classList.add('filter-savers-only');
+            }
+            else if (filter === 'hide-niche') {
+                document.body.classList.add('filter-hide-niche');
+            }
+        };
+        if (this.uiPrefs.ratingFilter) {
+            applyRatingFilter(this.uiPrefs.ratingFilter);
+        }
         toolbar.querySelectorAll('.filter-chip').forEach(chip => {
             chip.addEventListener('click', () => {
-                toolbar.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-                chip.classList.add('active');
-                const filter = chip.dataset.filter;
-                document.body.classList.remove('filter-must-only', 'filter-savers-only', 'filter-hide-niche');
-                if (filter === 'must-only') {
-                    document.body.classList.add('filter-must-only');
-                }
-                else if (filter === 'savers-only') {
-                    document.body.classList.add('filter-savers-only');
-                }
-                else if (filter === 'hide-niche') {
-                    document.body.classList.add('filter-hide-niche');
-                }
+                const filter = chip.dataset.filter || 'all';
+                applyRatingFilter(filter);
+                this.uiPrefs.ratingFilter = filter;
+                this.saveUiPrefs();
             });
         });
         const legendBtn = document.getElementById('btn-open-ratings-legend');
@@ -1918,6 +2212,90 @@ class TaxApp {
             this.state.otherIncome.interest = 50;
             this.state.adjustments = { studentLoan: 1800, ira: 1000, hsa: 0 };
             this.state.dependents.childrenCount = 0;
+        }
+        else if (presetName === 'freelancer-solo401k') {
+            this.state.filingStatus = 'single';
+            this.state.residentState = 'CO';
+            this.state.w2s = [];
+            this.state.otherIncome.sources = [
+                {
+                    id: 1,
+                    type: '1099-NEC',
+                    payer: 'Acme Consulting Clients',
+                    amount: 145000,
+                    qualifiedDividends: 0,
+                    federalTaxWithheld: 0,
+                    state: 'CO'
+                }
+            ];
+            this.state.otherIncome.scheduleCExpenses = 18500;
+            this.state.otherIncome.interest = 620;
+            this.state.adjustments.seRetirement = 22000;
+            this.state.adjustments.seHealthInsurance = 7200;
+            this.state.dependents.estimatedTaxPayments = 24000;
+        }
+        else if (presetName === 'retiree-ssa-pension') {
+            this.state.filingStatus = 'married_joint';
+            this.state.residentState = 'AZ';
+            this.state.w2s = [];
+            this.state.dependents.age65OrBlindCount = 2;
+            this.state.otherIncome.interest = 3200;
+            this.state.otherIncome.sources = [
+                {
+                    id: 1,
+                    type: 'SSA-1099',
+                    payer: 'Social Security Administration',
+                    amount: 48000,
+                    qualifiedDividends: 0,
+                    federalTaxWithheld: 0,
+                    state: 'AZ'
+                },
+                {
+                    id: 2,
+                    type: '1099-R',
+                    payer: 'Fidelity Traditional IRA / Pension',
+                    amount: 55000,
+                    qualifiedDividends: 0,
+                    federalTaxWithheld: 6000,
+                    state: 'AZ'
+                },
+                {
+                    id: 3,
+                    type: '1099-DIV',
+                    payer: 'Vanguard Retirement Income Fund',
+                    amount: 8500,
+                    qualifiedDividends: 6400,
+                    federalTaxWithheld: 0,
+                    state: 'AZ'
+                }
+            ];
+        }
+        else if (presetName === 'reciprocal-pa-nj') {
+            this.state.filingStatus = 'single';
+            this.state.residentState = 'PA';
+            this.state.w2s = [{
+                    id: 0,
+                    employer: 'Camden Riverfront Corp (NJ)',
+                    ein: '22-3344556',
+                    box1: 92000,
+                    box2: 11800,
+                    box3: 92000,
+                    box4: 5704,
+                    box5: 92000,
+                    box6: 1334,
+                    states: [{
+                            id: 0,
+                            state: 'NJ',
+                            stateId: 'NJ-998877',
+                            stateWages: 92000,
+                            stateTaxWithheld: 0,
+                            localWages: 0,
+                            localTaxWithheld: 0,
+                            localityName: ''
+                        }]
+                }];
+            this.state.otherIncome.interest = 350;
+            this.state.adjustments = { studentLoan: 0, ira: 3000, hsa: 0 };
         }
         else if (presetName === 'blank') {
             this.state.filingStatus = 'single';

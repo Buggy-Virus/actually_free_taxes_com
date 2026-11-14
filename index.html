@@ -279,16 +279,26 @@
           <button type="button" class="preset-chip" data-preset="multi-state-dual">Multi-State Workers (CA + NY)</button>
           <button type="button" class="preset-chip" data-preset="married-dual-140k">Dual-Income Married ($140k + 1 Kid)</button>
           <button type="button" class="preset-chip" data-preset="student-grad">College Grad with Student Loans</button>
+          <button type="button" class="preset-chip" data-preset="freelancer-solo401k">Freelancer (1099-NEC + Solo 401k)</button>
+          <button type="button" class="preset-chip" data-preset="retiree-ssa-pension">Retiree (SSA-1099 + 1099-R)</button>
+          <button type="button" class="preset-chip" data-preset="reciprocal-pa-nj">Reciprocal Commuter (PA + NJ)</button>
           <button type="button" class="preset-chip" data-preset="blank">Blank Slate</button>
         </div>
 
-        <!-- Client-Side Local Storage & Privacy Bar -->
-        <div class="storage-bar" id="storage-bar">
+        <!-- Client-Side Local Storage & Drafts Bar -->
+        <div class="storage-bar" id="storage-bar" style="flex-wrap: wrap; gap: 0.5rem;">
           <div class="storage-status-group">
             <span class="storage-pulse-dot" id="storage-dot"></span>
             <span class="storage-status-text" id="storage-status-text">Draft auto-saved locally in browser</span>
           </div>
-          <div class="storage-actions-group">
+          <div class="storage-actions-group" style="flex-wrap: wrap;">
+            <label for="select-draft" style="font-size: 0.85rem; font-weight: 600; color: #334155;">Draft:</label>
+            <select id="select-draft" class="storage-btn" style="padding: 0.25rem 0.5rem; font-weight: 600;"></select>
+            <button type="button" class="storage-btn" id="btn-new-draft" title="Start a blank new draft">+ New</button>
+            <button type="button" class="storage-btn" id="btn-duplicate-draft" title="Create a new draft by copying the current draft">Copy Current</button>
+            <button type="button" class="storage-btn" id="btn-rename-draft" title="Rename the active draft">Rename</button>
+            <button type="button" class="storage-btn text-danger" id="btn-delete-draft" title="Delete the active draft">Delete</button>
+            <span style="color: #cbd5e1;">|</span>
             <button type="button" class="storage-btn" id="btn-export-draft">Export Backup (.json)</button>
             <button type="button" class="storage-btn" id="btn-import-draft-trigger">Import Backup</button>
             <input type="file" id="input-import-draft" accept=".json,.aft" style="display: none;">
