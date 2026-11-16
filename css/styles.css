@@ -2656,3 +2656,42 @@ section.is-section-collapsed > :not(.section-header-bar) {
   cursor: pointer;
   font-size: inherit;
 }
+
+.howto-ratings-panel {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.howto-rating-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.howto-rating-circles {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 98px;
+  flex-shrink: 0;
+}
+
+.howto-rating-desc {
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #1e293b;
+}
+
+@media (max-width: 600px) {
+  .howto-rating-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+}
