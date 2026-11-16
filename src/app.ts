@@ -727,32 +727,243 @@ class TaxApp {
     }
   }
 
+  private parseAndNormalizeTaxState(rawText: string): TaxAppState {
+    const trimmed = rawText.trim();
+    const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    const jsonText = fenceMatch ? fenceMatch[1].trim() : trimmed;
+    const parsed = JSON.parse(jsonText);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('Root JSON value must be an object.');
+    }
+
+    const base = getDefaultTaxAppState();
+    const validYear = parsed.year === 2024 || parsed.year === 2025 ? parsed.year : base.year;
+    const validStatuses: FilingStatus[] = ['single', 'married_joint', 'married_separate', 'head_of_household', 'qualifying_surviving_spouse'];
+    const validStatus = validStatuses.includes(parsed.filingStatus) ? parsed.filingStatus : base.filingStatus;
+
+    const rawW2s = Array.isArray(parsed.w2s) ? parsed.w2s : [];
+    const normalizedW2s: W2Data[] = rawW2s.map((w: any, wIdx: number) => {
+      const statesRaw = Array.isArray(w?.states) ? w.states : [];
+      return {
+        id: typeof w?.id === 'number' ? w.id : wIdx,
+        employer: String(w?.employer ?? `Employer ${wIdx + 1}`),
+        ein: String(w?.ein ?? ''),
+        box1: Number(w?.box1) || 0,
+        box2: Number(w?.box2) || 0,
+        box3: Number(w?.box3) || 0,
+        box4: Number(w?.box4) || 0,
+        box5: Number(w?.box5) || 0,
+        box6: Number(w?.box6) || 0,
+        states: statesRaw.map((s: any, sIdx: number) => ({
+          id: typeof s?.id === 'number' ? s.id : sIdx,
+          state: String(s?.state ?? parsed.residentState ?? base.residentState).toUpperCase().trim(),
+          stateId: String(s?.stateId ?? ''),
+          stateWages: Number(s?.stateWages) || 0,
+          stateTaxWithheld: Number(s?.stateTaxWithheld) || 0,
+          localWages: Number(s?.localWages) || 0,
+          localTaxWithheld: Number(s?.localTaxWithheld) || 0,
+          localityName: String(s?.localityName ?? '')
+        }))
+      };
+    });
+
+    const rawSources = Array.isArray(parsed.otherIncome?.sources) ? parsed.otherIncome.sources : [];
+    const normalizedSources: IncomeSource[] = rawSources.map((src: any, idx: number) => ({
+      id: typeof src?.id === 'number' ? src.id : idx + 1,
+      type: src?.type || '1099-NEC',
+      payer: String(src?.payer ?? `Payer ${idx + 1}`),
+      amount: Number(src?.amount) || 0,
+      qualifiedDividends: Number(src?.qualifiedDividends) || 0,
+      accruedInterestPaid: Number(src?.accruedInterestPaid) || 0,
+      taxExemptInterest: Number(src?.taxExemptInterest) || 0,
+      qbiEligible: Boolean(src?.qbiEligible),
+      earlyDistributionPenalty: Boolean(src?.earlyDistributionPenalty),
+      federalTaxWithheld: Number(src?.federalTaxWithheld) || 0,
+      state: src?.state ? String(src.state).toUpperCase().trim() : ''
+    }));
+
+    return {
+      year: validYear,
+      filingStatus: validStatus,
+      residentState: String(parsed.residentState ?? base.residentState).toUpperCase().trim() || 'CA',
+      w2s: normalizedW2s,
+      otherIncome: {
+        interest: Number(parsed.otherIncome?.interest) || 0,
+        sources: normalizedSources,
+        capitalGains: {
+          shortTerm: Number(parsed.otherIncome?.capitalGains?.shortTerm) || 0,
+          longTerm: Number(parsed.otherIncome?.capitalGains?.longTerm) || 0,
+          collectiblesGain: Number(parsed.otherIncome?.capitalGains?.collectiblesGain) || 0,
+          unrecaptured1250Gain: Number(parsed.otherIncome?.capitalGains?.unrecaptured1250Gain) || 0
+        },
+        scheduleCExpenses: Number(parsed.otherIncome?.scheduleCExpenses) || 0,
+        scheduleERental: {
+          grossRents: Number(parsed.otherIncome?.scheduleERental?.grossRents) || 0,
+          expenses: Number(parsed.otherIncome?.scheduleERental?.expenses) || 0,
+          depreciation: Number(parsed.otherIncome?.scheduleERental?.depreciation) || 0,
+          propertyState: String(parsed.otherIncome?.scheduleERental?.propertyState ?? '').toUpperCase().trim()
+        }
+      },
+      adjustments: {
+        studentLoan: Number(parsed.adjustments?.studentLoan) || 0,
+        ira: Number(parsed.adjustments?.ira) || 0,
+        hsa: Number(parsed.adjustments?.hsa) || 0,
+        educatorExpenses: Number(parsed.adjustments?.educatorExpenses) || 0,
+        seRetirement: Number(parsed.adjustments?.seRetirement) || 0,
+        seHealthInsurance: Number(parsed.adjustments?.seHealthInsurance) || 0,
+        alimonyPaid: Number(parsed.adjustments?.alimonyPaid) || 0
+      },
+      dependents: {
+        childrenCount: Number(parsed.dependents?.childrenCount) || 0,
+        otherDependentsCount: Number(parsed.dependents?.otherDependentsCount) || 0,
+        age65OrBlindCount: Number(parsed.dependents?.age65OrBlindCount) || 0,
+        childCareExpenses: Number(parsed.dependents?.childCareExpenses) || 0,
+        educationExpensesAotc: Number(parsed.dependents?.educationExpensesAotc) || 0,
+        educationExpensesLlc: Number(parsed.dependents?.educationExpensesLlc) || 0,
+        foreignTaxCredit: Number(parsed.dependents?.foreignTaxCredit) || 0,
+        cleanEnergyCredit: Number(parsed.dependents?.cleanEnergyCredit) || 0,
+        estimatedTaxPayments: Number(parsed.dependents?.estimatedTaxPayments) || 0
+      },
+      itemizedDeductions: {
+        medicalExpenses: Number(parsed.itemizedDeductions?.medicalExpenses) || 0,
+        realEstateTax: Number(parsed.itemizedDeductions?.realEstateTax) || 0,
+        mortgageInterest: Number(parsed.itemizedDeductions?.mortgageInterest) || 0,
+        charity: Number(parsed.itemizedDeductions?.charity) || 0,
+        gamblingLosses: Number(parsed.itemizedDeductions?.gamblingLosses) || 0
+      },
+      deductionMethod: parsed.deductionMethod === 'standard' || parsed.deductionMethod === 'itemized' ? parsed.deductionMethod : 'auto',
+      showAllArrows: typeof parsed.showAllArrows === 'boolean' ? parsed.showAllArrows : this.state.showAllArrows
+    };
+  }
+
+  private applyImportedTaxState(newState: TaxAppState, statusMsg: string): void {
+    this.collapseState = { cards: {}, sections: {} };
+    this.saveCollapseState();
+    this.state = newState;
+    this.updateIdCounters();
+    this.syncAllDomInputs();
+    this.renderW2Forms();
+    this.renderIncomeSources();
+    this.recalculateAndRender();
+    const statusText = document.getElementById('storage-status-text');
+    if (statusText) statusText.textContent = statusMsg;
+  }
+
   public importDraft(file: File): void {
     const reader = new FileReader();
     reader.onload = (e: ProgressEvent<FileReader>) => {
       try {
         const text = e.target?.result as string;
-        const parsed = JSON.parse(text);
-        if (parsed && Array.isArray(parsed.w2s) && parsed.w2s.length > 0) {
-          this.state = parsed;
-          this.updateIdCounters();
-          this.syncAllDomInputs();
-          this.renderW2Forms();
-          this.renderIncomeSources();
-          this.recalculateAndRender();
-          const statusText = document.getElementById('storage-status-text');
-          if (statusText) {
-            statusText.textContent = `Imported backup (${file.name}) successfully!`;
-          }
-          alert(`Successfully imported backup file: ${file.name}`);
-        } else {
-          alert("Invalid tax backup file format. Expected an ActuallyFreeTaxes JSON file with W-2 entries.");
-        }
+        const normalized = this.parseAndNormalizeTaxState(text);
+        this.applyImportedTaxState(normalized, `Imported backup (${file.name}) successfully!`);
+        alert(`Successfully imported backup file: ${file.name}`);
       } catch (err) {
-        alert("Failed to read backup file. Please ensure it is a valid JSON file.");
+        alert("Failed to read backup file: " + (err as Error).message);
       }
     };
     reader.readAsText(file);
+  }
+
+  public openJsonIoModal(): void {
+    const overlay = document.getElementById('json-io-modal-overlay');
+    const textarea = document.getElementById('textarea-json-io') as HTMLTextAreaElement | null;
+    const feedback = document.getElementById('json-io-feedback');
+    if (textarea) {
+      const exportObj = { ...this.state };
+      textarea.value = JSON.stringify(exportObj, null, 2);
+    }
+    if (feedback) {
+      feedback.textContent = '';
+      feedback.style.color = '#475569';
+    }
+    if (overlay) overlay.classList.add('open');
+  }
+
+  public closeJsonIoModal(): void {
+    const overlay = document.getElementById('json-io-modal-overlay');
+    if (overlay) overlay.classList.remove('open');
+  }
+
+  public applyJsonIoText(): void {
+    const textarea = document.getElementById('textarea-json-io') as HTMLTextAreaElement | null;
+    const feedback = document.getElementById('json-io-feedback');
+    if (!textarea) return;
+    try {
+      const normalized = this.parseAndNormalizeTaxState(textarea.value);
+      this.applyImportedTaxState(normalized, 'Applied pasted JSON to current draft');
+      this.closeJsonIoModal();
+    } catch (err) {
+      if (feedback) {
+        feedback.textContent = `Invalid JSON: ${(err as Error).message}`;
+        feedback.style.color = '#dc2626';
+      }
+    }
+  }
+
+  public copyJsonIoText(): void {
+    const textarea = document.getElementById('textarea-json-io') as HTMLTextAreaElement | null;
+    const feedback = document.getElementById('json-io-feedback');
+    if (!textarea) return;
+    navigator.clipboard?.writeText(textarea.value).then(() => {
+      if (feedback) {
+        feedback.textContent = 'Copied JSON to clipboard.';
+        feedback.style.color = '#15803d';
+      }
+    }).catch(() => {
+      textarea.select();
+      if (feedback) {
+        feedback.textContent = 'Selected JSON text — press Ctrl+C to copy.';
+        feedback.style.color = '#475569';
+      }
+    });
+  }
+
+  public copyAiPromptSchema(): void {
+    const feedback = document.getElementById('json-io-feedback');
+    const promptText = `Convert my tax documents/notes into a single valid JSON object matching this schema for ActuallyFreeTaxes.com (output ONLY raw JSON, no commentary):
+
+{
+  "year": 2024, // 2024 or 2025
+  "filingStatus": "single", // "single" | "married_joint" | "married_separate" | "head_of_household" | "qualifying_surviving_spouse"
+  "residentState": "NY", // 2-letter US state code or "DC"
+  "w2s": [
+    {
+      "employer": "Company Name",
+      "ein": "12-3456789",
+      "box1": 0, "box2": 0, // Wages, Federal Tax Withheld
+      "box3": 0, "box4": 0, // SS Wages, SS Tax Withheld
+      "box5": 0, "box6": 0, // Medicare Wages, Medicare Tax Withheld
+      "states": [
+        { "state": "NY", "stateId": "", "stateWages": 0, "stateTaxWithheld": 0, "localWages": 0, "localTaxWithheld": 0, "localityName": "NYC" }
+      ]
+    }
+  ],
+  "otherIncome": {
+    "interest": 0, // Bank 1099-INT taxable interest
+    "sources": [
+      // type: "1099-NEC" | "1099-DIV" | "1099-INT" | "1099-MISC" | "1099-G" | "1099-K" | "1099-R" | "SSA-1099" | "Schedule K-1" | "W-2G"
+      { "type": "1099-DIV", "payer": "Vanguard", "amount": 0, "qualifiedDividends": 0, "accruedInterestPaid": 0, "taxExemptInterest": 0, "qbiEligible": false, "earlyDistributionPenalty": false, "federalTaxWithheld": 0, "state": "NY" }
+    ],
+    "capitalGains": { "shortTerm": 0, "longTerm": 0, "collectiblesGain": 0, "unrecaptured1250Gain": 0 },
+    "scheduleCExpenses": 0,
+    "scheduleERental": { "grossRents": 0, "expenses": 0, "depreciation": 0, "propertyState": "" }
+  },
+  "adjustments": { "studentLoan": 0, "ira": 0, "hsa": 0, "educatorExpenses": 0, "seRetirement": 0, "seHealthInsurance": 0, "alimonyPaid": 0 },
+  "dependents": { "childrenCount": 0, "otherDependentsCount": 0, "age65OrBlindCount": 0, "childCareExpenses": 0, "educationExpensesAotc": 0, "educationExpensesLlc": 0, "foreignTaxCredit": 0, "cleanEnergyCredit": 0, "estimatedTaxPayments": 0 },
+  "itemizedDeductions": { "medicalExpenses": 0, "realEstateTax": 0, "mortgageInterest": 0, "charity": 0, "gamblingLosses": 0 },
+  "deductionMethod": "auto" // "auto" | "standard" | "itemized"
+}`;
+    navigator.clipboard?.writeText(promptText).then(() => {
+      if (feedback) {
+        feedback.textContent = 'Copied AI prompt + schema to clipboard! Paste it into your AI with your tax numbers, then paste the JSON back here.';
+        feedback.style.color = '#15803d';
+      }
+    }).catch(() => {
+      if (feedback) {
+        feedback.textContent = 'Could not access clipboard automatically.';
+        feedback.style.color = '#dc2626';
+      }
+    });
   }
 
   private updateIdCounters(): void {
@@ -1199,6 +1410,27 @@ class TaxApp {
     if (btnDownloadPacketJson) {
       btnDownloadPacketJson.addEventListener('click', () => this.exportDraft());
     }
+
+    const btnOpenJsonIo = document.getElementById('btn-open-json-io');
+    if (btnOpenJsonIo) btnOpenJsonIo.addEventListener('click', () => this.openJsonIoModal());
+    ['btn-close-json-io-modal', 'btn-cancel-json-io'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) btn.addEventListener('click', () => this.closeJsonIoModal());
+    });
+    const jsonIoOverlay = document.getElementById('json-io-modal-overlay');
+    if (jsonIoOverlay) {
+      jsonIoOverlay.addEventListener('click', (e: Event) => {
+        if (e.target === jsonIoOverlay) this.closeJsonIoModal();
+      });
+    }
+    const btnApplyJsonIo = document.getElementById('btn-apply-json-io');
+    if (btnApplyJsonIo) btnApplyJsonIo.addEventListener('click', () => this.applyJsonIoText());
+    const btnCopyJsonIo = document.getElementById('btn-copy-json-io');
+    if (btnCopyJsonIo) btnCopyJsonIo.addEventListener('click', () => this.copyJsonIoText());
+    const btnCopyAiPrompt = document.getElementById('btn-copy-ai-prompt');
+    if (btnCopyAiPrompt) btnCopyAiPrompt.addEventListener('click', () => this.copyAiPromptSchema());
+    const btnRefreshJsonIo = document.getElementById('btn-refresh-json-io');
+    if (btnRefreshJsonIo) btnRefreshJsonIo.addEventListener('click', () => this.openJsonIoModal());
 
     document.querySelectorAll<HTMLElement>('[data-filing-tab]').forEach(tabBtn => {
       tabBtn.addEventListener('click', (e: Event) => {
