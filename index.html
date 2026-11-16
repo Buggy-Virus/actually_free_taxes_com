@@ -27,6 +27,12 @@
           <input type="checkbox" id="toggle-all-arrows" checked>
           <span>Dependency Arrows</span>
         </label>
+        <button type="button" class="btn" id="btn-header-about" title="About ActuallyFreeTaxes.com">
+          About
+        </button>
+        <button type="button" class="btn" id="btn-header-howto" title="How To Use &amp; AI Walkthrough">
+          How To Use
+        </button>
         <button type="button" class="btn" id="btn-header-tos" title="View Terms of Service and Disclaimers">
           Terms &amp; Advisory
         </button>
@@ -2170,6 +2176,322 @@
       <div class="tos-modal-footer">
         <button type="button" class="storage-btn" id="btn-cancel-json-io">Cancel</button>
         <button type="button" class="btn btn-primary" id="btn-apply-json-io">Apply JSON to Return</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- First-Visit Welcome & Terms Modal -->
+  <div class="tos-modal-overlay" id="welcome-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="welcome-modal-title">
+    <div class="tos-modal-dialog" style="max-width: 780px;">
+      <div class="tos-modal-header">
+        <div class="tos-header-title-group">
+          <span class="tos-badge">Welcome</span>
+          <h3 id="welcome-modal-title">Welcome to ActuallyFreeTaxes.com</h3>
+        </div>
+        <button type="button" class="tos-modal-close-btn" id="btn-close-welcome-modal" aria-label="Close Welcome Dialog" disabled title="Check 'I Understand &amp; Agree' below to enable closing immediately">✕</button>
+      </div>
+
+      <div class="tos-modal-body">
+        <p style="margin: 0 0 0.6rem 0; color: #0f172a;">
+          US taxes should not be difficult and could be close to automatic. This free, non-profit open-source application is built to make calculating and submitting your taxes as straightforward and transparent as possible.
+          <button type="button" class="inline-link-btn" id="link-welcome-about">Read more in About</button>.
+        </p>
+        <p style="margin: 0 0 0.6rem 0; color: #0f172a;">
+          We use zero cookies and never store, collect, or share your personal tax data on any server — everything runs and stays on your own device.
+          <button type="button" class="inline-link-btn" id="link-welcome-privacy">Read our Privacy details in About</button>.
+        </p>
+        <p style="margin: 0 0 0.75rem 0; color: #0f172a;">
+          New here? Check out the <button type="button" class="inline-link-btn" id="link-welcome-howto">How To Use guide</button>, which includes a walkthrough on how to use an AI assistant to quickly prepare and upload your tax information.
+        </p>
+
+        <div class="welcome-terms-box" aria-label="Terms and Advisory">
+          <h4>Terms &amp; Advisory</h4>
+          <p><strong>1. Educational Tool &amp; Computations:</strong> ActuallyFreeTaxes.com is an open, interactive computational visualizer designed to demystify IRS and state tax formulas. Unless you explicitly choose to transmit a return through a certified third-party e-file provider, this application does not submit or electronically transmit your return to the IRS or any state tax agency.</p>
+          <p><strong>2. No Tax, Accounting, or Legal Advice:</strong> Content, calculations, formula visualizations, and guidance on this site are for informational and educational purposes only and do not constitute professional tax, accounting, financial, or legal advice. No CPA-client, attorney-client, or fiduciary relationship is formed. Always verify your return against official IRS/state instructions or consult a licensed CPA, Enrolled Agent, or Tax Attorney.</p>
+          <p><strong>3. "AS IS" Warranty Disclaimer &amp; $0 Liability:</strong> All formulas, calculations, and software are provided "AS IS" and "AS AVAILABLE" without warranties of any kind, express or implied, including accuracy or completeness. In no event shall the authors, hosts, or contributors be liable for any penalties, interest, audit assessments, lost refunds, or damages. Aggregate liability is strictly capped at $0.00.</p>
+          <p><strong>4. Client-Side Privacy &amp; Local Auto-Save:</strong> We run zero databases and zero tracking pixels. Your drafts and preferences are stored only in your browser's localStorage on your own machine, and you can permanently clear or export them anytime via the toolbar.</p>
+          <p><strong>5. Government Non-Affiliation:</strong> ActuallyFreeTaxes.com is an independent open-source project and is not affiliated with, endorsed by, sponsored by, or operated by the IRS, the U.S. Department of the Treasury, or any federal, state, or municipal government agency.</p>
+        </div>
+      </div>
+
+      <div class="tos-modal-footer">
+        <label class="tos-agree-checkbox-label">
+          <input type="checkbox" id="welcome-agree-checkbox">
+          <span>I Understand &amp; Agree</span>
+        </label>
+        <button type="button" class="btn btn-primary" id="btn-welcome-got-it" disabled>
+          Got It (5s)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- About Modal -->
+  <div class="tos-modal-overlay" id="about-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
+    <div class="tos-modal-dialog" style="max-width: 820px;">
+      <div class="tos-modal-header">
+        <div class="tos-header-title-group">
+          <span class="tos-badge">About</span>
+          <h3 id="about-modal-title">About ActuallyFreeTaxes.com</h3>
+        </div>
+        <button type="button" class="tos-modal-close-btn" id="btn-close-about-modal" aria-label="Close About Dialog">✕</button>
+      </div>
+
+      <div class="tos-modal-body" id="about-modal-body">
+        <div class="about-section-block" id="about-mission-section">
+          <h4>Mission Statement</h4>
+          <p style="margin: 0 0 0.5rem 0;">
+            ActuallyFreeTaxes.com is built to make doing taxes as easy as possible — from calculating your return to submitting it — without any profit motivation.
+          </p>
+          <p style="margin: 0;">
+            We believe US taxes should not be difficult and could be close to automatic. This site works toward that model by directly giving taxpayers the clearest, most transparent tools and line-by-line formulas possible.
+          </p>
+        </div>
+
+        <div class="about-section-block" id="about-privacy-section">
+          <h4>Privacy &amp; Local-Only Architecture</h4>
+          <ul style="margin: 0 0 0.65rem 0; padding-left: 1.25rem; line-height: 1.75;">
+            <li>
+              <strong>No Cookies</strong>
+              <span class="info-tip-badge" tabindex="0" data-tooltip="This application sets zero HTTP or JavaScript cookies (no document.cookie, no tracking cookies, and no third-party ad/analytics cookies). Nothing is sent in HTTP request headers.">ⓘ</span>
+            </li>
+            <li>
+              <strong>No Stored User Data</strong>
+              <span class="info-tip-badge" tabindex="0" data-tooltip="We operate zero backend databases, zero user accounts, and zero telemetry servers. We cannot see, access, recover, or sell any numbers you enter.">ⓘ</span>
+            </li>
+            <li>
+              <strong>All Data Stored Directly on the User's Local Machine</strong>
+              <span class="info-tip-badge" tabindex="0" data-tooltip="Your drafts and UI preferences are saved locally in your browser's localStorage under keys: aft_saved_drafts_v1, aft_local_draft_v2, aft_collapse_state_v1, aft_ui_prefs_v1, and aft_tos_accepted_v1. To delete them, click 'Clear Data' in the toolbar or clear Site Data in your browser's Developer Tools / Privacy settings.">ⓘ</span>
+              <div style="font-size: 0.86rem; color: #475569; margin: 0.15rem 0 0.25rem 0; line-height: 1.45;">
+                Stored exclusively in your browser's <code>localStorage</code> (<code>aft_saved_drafts_v1</code>, <code>aft_local_draft_v2</code>, <code>aft_collapse_state_v1</code>, <code>aft_ui_prefs_v1</code>, <code>aft_tos_accepted_v1</code>). You can delete all stored data anytime by clicking <strong>Clear Data</strong> in the drafts bar or clearing Site Data in your browser settings.
+              </div>
+            </li>
+            <li>
+              <strong>All Logic Executed Client-Side</strong>
+              <span class="info-tip-badge" tabindex="0" data-tooltip="Every federal and 50-state tax calculation, bracket lookup, credit phaseout, and printable Form 1040 summary runs locally in JavaScript inside your own web browser.">ⓘ</span>
+            </li>
+          </ul>
+          <p style="margin: 0; font-size: 0.9rem; color: #334155;">
+            <strong>Our Privacy Commitment:</strong> Financial privacy is a core principle of this project, not an afterthought. Your tax life belongs solely to you, and our architecture ensures your numbers never leave your device unless you explicitly choose to export or transmit them.
+          </p>
+        </div>
+
+        <div class="about-section-block" id="about-filing-section">
+          <h4>Filing &amp; 1-Click e-File API</h4>
+          <p style="margin: 0 0 0.5rem 0;">
+            We provide step-by-step instructions and auto-filled line sheets so you can file as easily as possible for free via <strong>Print &amp; Mail</strong>, <strong>IRS Direct File</strong>, or <strong>IRS Free File Fillable Forms</strong>.
+          </p>
+          <p style="margin: 0 0 0.5rem 0;">
+            We also provide access to a <strong>1-Click e-File API</strong> integrated with a certified IRS Modernized e-File (MeF) partner, allowing you to pay a flat pass-through transmission fee to file electronically. <strong>ActuallyFreeTaxes.com does not own or operate this API, the transmission fee is paid directly to the certified e-file provider, and no balance or funds are ever held by this application.</strong>
+          </p>
+          <p style="margin: 0; font-size: 0.86rem; color: #475569;">
+            <strong>Provider Legal &amp; Privacy Notice:</strong> When you choose to submit electronically through the certified MeF partner, your return payload, contact details, and required IRS e-file authorization data are transmitted directly to that provider and processed under their privacy policy, security controls, and IRS Electronic Return Originator (ERO) / transmitter obligations. No SSNs or return payloads are retained on ActuallyFreeTaxes.com servers.
+          </p>
+        </div>
+
+        <div class="about-section-block" id="about-opensource-section">
+          <h4>Hosting, Funding &amp; Open Source</h4>
+          <p style="margin: 0 0 0.5rem 0;">
+            This site is hosted completely out of pocket. It accepts no donations, runs no ads, and no one is paid any salary to build or maintain it.
+          </p>
+          <p style="margin: 0;">
+            The project is open source, and community contributions are welcome if you see ways to improve tax accuracy, accessibility, or clarity. Please note that the review process is very strict to protect calculation integrity, and there is no guarantee that pull requests will be reviewed or merged.
+          </p>
+        </div>
+
+        <div class="about-section-block" id="about-sources-section">
+          <h4>Official Tax Logic &amp; Calculation Sources</h4>
+          <p style="margin: 0 0 0.45rem 0; font-size: 0.9rem;">
+            Tax brackets, deductions, credits, and form instructions are sourced from official federal and state revenue agencies:
+          </p>
+          <ul style="margin: 0 0 0.75rem 0; padding-left: 1.25rem; font-size: 0.9rem;">
+            <li><strong>Federal (IRS):</strong> <a href="https://www.irs.gov" target="_blank" rel="noopener">https://www.irs.gov</a></li>
+            <li><strong>IRS Forms &amp; Instructions:</strong> <a href="https://www.irs.gov/forms-instructions" target="_blank" rel="noopener">https://www.irs.gov/forms-instructions</a></li>
+            <li><strong>IRS Form 1040 Overview:</strong> <a href="https://www.irs.gov/forms-pubs/about-form-1040" target="_blank" rel="noopener">https://www.irs.gov/forms-pubs/about-form-1040</a></li>
+          </ul>
+          <strong style="font-size: 0.9rem;">Official State &amp; DC Tax Agencies (Alphabetical):</strong>
+          <ul class="sources-state-list">
+            <li>Alabama — <a href="https://www.revenue.alabama.gov" target="_blank" rel="noopener">revenue.alabama.gov</a></li>
+            <li>Alaska — <a href="https://tax.alaska.gov" target="_blank" rel="noopener">tax.alaska.gov</a></li>
+            <li>Arizona — <a href="https://azdor.gov" target="_blank" rel="noopener">azdor.gov</a></li>
+            <li>Arkansas — <a href="https://www.dfa.arkansas.gov" target="_blank" rel="noopener">dfa.arkansas.gov</a></li>
+            <li>California — <a href="https://www.ftb.ca.gov" target="_blank" rel="noopener">ftb.ca.gov</a></li>
+            <li>Colorado — <a href="https://tax.colorado.gov" target="_blank" rel="noopener">tax.colorado.gov</a></li>
+            <li>Connecticut — <a href="https://portal.ct.gov/drs" target="_blank" rel="noopener">portal.ct.gov/drs</a></li>
+            <li>Delaware — <a href="https://revenue.delaware.gov" target="_blank" rel="noopener">revenue.delaware.gov</a></li>
+            <li>District of Columbia — <a href="https://otr.cfo.dc.gov" target="_blank" rel="noopener">otr.cfo.dc.gov</a></li>
+            <li>Florida — <a href="https://floridarevenue.com" target="_blank" rel="noopener">floridarevenue.com</a></li>
+            <li>Georgia — <a href="https://dor.georgia.gov" target="_blank" rel="noopener">dor.georgia.gov</a></li>
+            <li>Hawaii — <a href="https://tax.hawaii.gov" target="_blank" rel="noopener">tax.hawaii.gov</a></li>
+            <li>Idaho — <a href="https://tax.idaho.gov" target="_blank" rel="noopener">tax.idaho.gov</a></li>
+            <li>Illinois — <a href="https://tax.illinois.gov" target="_blank" rel="noopener">tax.illinois.gov</a></li>
+            <li>Indiana — <a href="https://www.in.gov/dor" target="_blank" rel="noopener">in.gov/dor</a></li>
+            <li>Iowa — <a href="https://revenue.iowa.gov" target="_blank" rel="noopener">revenue.iowa.gov</a></li>
+            <li>Kansas — <a href="https://www.ksrevenue.gov" target="_blank" rel="noopener">ksrevenue.gov</a></li>
+            <li>Kentucky — <a href="https://revenue.ky.gov" target="_blank" rel="noopener">revenue.ky.gov</a></li>
+            <li>Louisiana — <a href="https://revenue.louisiana.gov" target="_blank" rel="noopener">revenue.louisiana.gov</a></li>
+            <li>Maine — <a href="https://www.maine.gov/revenue" target="_blank" rel="noopener">maine.gov/revenue</a></li>
+            <li>Maryland — <a href="https://www.marylandtaxes.gov" target="_blank" rel="noopener">marylandtaxes.gov</a></li>
+            <li>Massachusetts — <a href="https://www.mass.gov/orgs/massachusetts-department-of-revenue" target="_blank" rel="noopener">mass.gov/dor</a></li>
+            <li>Michigan — <a href="https://www.michigan.gov/taxes" target="_blank" rel="noopener">michigan.gov/taxes</a></li>
+            <li>Minnesota — <a href="https://www.revenue.state.mn.us" target="_blank" rel="noopener">revenue.state.mn.us</a></li>
+            <li>Mississippi — <a href="https://www.dor.ms.gov" target="_blank" rel="noopener">dor.ms.gov</a></li>
+            <li>Missouri — <a href="https://dor.mo.gov" target="_blank" rel="noopener">dor.mo.gov</a></li>
+            <li>Montana — <a href="https://mtrevenue.gov" target="_blank" rel="noopener">mtrevenue.gov</a></li>
+            <li>Nebraska — <a href="https://revenue.nebraska.gov" target="_blank" rel="noopener">revenue.nebraska.gov</a></li>
+            <li>Nevada — <a href="https://tax.nv.gov" target="_blank" rel="noopener">tax.nv.gov</a></li>
+            <li>New Hampshire — <a href="https://www.revenue.nh.gov" target="_blank" rel="noopener">revenue.nh.gov</a></li>
+            <li>New Jersey — <a href="https://www.nj.gov/treasury/taxation" target="_blank" rel="noopener">nj.gov/treasury/taxation</a></li>
+            <li>New Mexico — <a href="https://www.tax.newmexico.gov" target="_blank" rel="noopener">tax.newmexico.gov</a></li>
+            <li>New York — <a href="https://www.tax.ny.gov" target="_blank" rel="noopener">tax.ny.gov</a></li>
+            <li>North Carolina — <a href="https://www.ncdor.gov" target="_blank" rel="noopener">ncdor.gov</a></li>
+            <li>North Dakota — <a href="https://www.tax.nd.gov" target="_blank" rel="noopener">tax.nd.gov</a></li>
+            <li>Ohio — <a href="https://tax.ohio.gov" target="_blank" rel="noopener">tax.ohio.gov</a></li>
+            <li>Oklahoma — <a href="https://oklahoma.gov/tax" target="_blank" rel="noopener">oklahoma.gov/tax</a></li>
+            <li>Oregon — <a href="https://www.oregon.gov/dor" target="_blank" rel="noopener">oregon.gov/dor</a></li>
+            <li>Pennsylvania — <a href="https://www.revenue.pa.gov" target="_blank" rel="noopener">revenue.pa.gov</a></li>
+            <li>Rhode Island — <a href="https://tax.ri.gov" target="_blank" rel="noopener">tax.ri.gov</a></li>
+            <li>South Carolina — <a href="https://dor.sc.gov" target="_blank" rel="noopener">dor.sc.gov</a></li>
+            <li>South Dakota — <a href="https://dor.sd.gov" target="_blank" rel="noopener">dor.sd.gov</a></li>
+            <li>Tennessee — <a href="https://www.tn.gov/revenue" target="_blank" rel="noopener">tn.gov/revenue</a></li>
+            <li>Texas — <a href="https://comptroller.texas.gov" target="_blank" rel="noopener">comptroller.texas.gov</a></li>
+            <li>Utah — <a href="https://tax.utah.gov" target="_blank" rel="noopener">tax.utah.gov</a></li>
+            <li>Vermont — <a href="https://tax.vermont.gov" target="_blank" rel="noopener">tax.vermont.gov</a></li>
+            <li>Virginia — <a href="https://www.tax.virginia.gov" target="_blank" rel="noopener">tax.virginia.gov</a></li>
+            <li>Washington — <a href="https://dor.wa.gov" target="_blank" rel="noopener">dor.wa.gov</a></li>
+            <li>West Virginia — <a href="https://tax.wv.gov" target="_blank" rel="noopener">tax.wv.gov</a></li>
+            <li>Wisconsin — <a href="https://www.revenue.wi.gov" target="_blank" rel="noopener">revenue.wi.gov</a></li>
+            <li>Wyoming — <a href="https://revenue.wyo.gov" target="_blank" rel="noopener">revenue.wyo.gov</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tos-modal-footer">
+        <button type="button" class="btn btn-primary" id="btn-close-about-footer">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- How To Use Modal -->
+  <div class="tos-modal-overlay" id="howto-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="howto-modal-title">
+    <div class="tos-modal-dialog" style="max-width: 840px;">
+      <div class="tos-modal-header">
+        <div class="tos-header-title-group">
+          <span class="tos-badge">Guide</span>
+          <h3 id="howto-modal-title">How To Use ActuallyFreeTaxes.com</h3>
+        </div>
+        <button type="button" class="tos-modal-close-btn" id="btn-close-howto-modal" aria-label="Close How To Use Dialog">✕</button>
+      </div>
+
+      <div class="tos-modal-body">
+        <div class="howto-section-block">
+          <h4>1. High-Level Features &amp; Field Ratings (Red / Yellow / Green)</h4>
+          <p style="margin: 0 0 0.5rem 0;">
+            Every number on the page updates live as you type, showing both the general IRS/state formula and your exact numbers plugged in. Blue-bordered panels accept your inputs, while red-bordered panels highlight key outputs (like AGI and Total Tax).
+          </p>
+          <ul style="margin: 0; padding-left: 1.25rem; line-height: 1.65;">
+            <li><strong>Yellow Circles (Attention):</strong> Shows how important a field is to check (from optional to critical).</li>
+            <li><strong>Red Circles (IRS Audit Risk):</strong> Indicates how closely the IRS cross-checks that number against W-2/1099 transcripts.</li>
+            <li><strong>Green Circles (Money Savings):</strong> Highlights deductions and credits that directly reduce your tax bill.</li>
+            <li><strong><code>!</code> Marker &amp; Filter Bar:</strong> A <code>!</code> inside a circle marks the highest tier. Use the toolbar filters (<code>All Fields</code>, <code>Required Only</code>, <code>Money Savers</code>, <code>Dim Optional</code>) to focus on what matters for your return.</li>
+          </ul>
+        </div>
+
+        <div class="howto-section-block">
+          <h4>2. Step-by-Step: How To Use the Site</h4>
+          <ol style="margin: 0; padding-left: 1.25rem; line-height: 1.65;">
+            <li><strong>Return Settings:</strong> Choose your Tax Year, Filing Status, and Primary Resident State (or load a Sample Scenario to explore).</li>
+            <li><strong>Section 1 (W-2s):</strong> Enter each W-2 (or remove all W-2s if you have none). Add multiple state/local lines on a W-2 if you moved or worked in NYC/Yonkers.</li>
+            <li><strong>Section 2 (Other Income, Adjustments &amp; Credits):</strong> Click <strong>+ Add Income Source</strong> for <code>1099-NEC</code>, <code>1099-DIV</code>, <code>1099-INT</code>, <code>1099-R</code>, <code>SSA-1099</code>, <code>Schedule K-1</code>, or <code>W-2G</code>. Optional `$0` cards start collapsed and expand automatically when populated.</li>
+            <li><strong>Section 3 (Schedule A Itemized Deductions):</strong> Enter medical, property tax, mortgage interest, or charity; the engine automatically picks whichever is higher between Standard and Itemized (unless overridden).</li>
+            <li><strong>Sections 4–6 (Calculations &amp; Final Summary):</strong> Review every Form 1040 line, bracket breakdown, and auto-generated resident/nonresident state returns. Hover any card to trace its Dependency Arrows.</li>
+            <li><strong>Drafts &amp; Section 7 (Filing):</strong> Use the Drafts bar to save, switch, or copy drafts, and open Section 7 to print your 1040 packet, copy values into IRS Free File Fillable Forms, or submit via 1-Click e-File.</li>
+          </ol>
+        </div>
+
+        <div class="howto-section-block">
+          <h4>3. Fast Setup: Using an AI Agent to Generate &amp; Upload Your Data</h4>
+          <p style="margin: 0 0 0.5rem 0;">
+            <strong>Important: This application does not run on AI, and makes no calls or ever sends any data to an AI.</strong> If you choose to use an external AI assistant (such as ChatGPT, Claude, or Gemini) to convert your forms into JSON, <strong>redact your SSN, EIN, full legal name, street address, and account numbers</strong> before pasting anything into an AI chat.
+          </p>
+          <p style="margin: 0 0 0.35rem 0;"><strong>Documents &amp; details to attach or paste as comments to your AI:</strong></p>
+          <ul style="margin: 0 0 0.6rem 0; padding-left: 1.25rem; line-height: 1.55;">
+            <li>Filing status, tax year, and primary state of residence</li>
+            <li>W-2 Boxes 1–6 and Boxes 15–20 (state/local wages &amp; withholding)</li>
+            <li>1099 forms (<code>1099-INT</code>, <code>1099-DIV</code>, <code>1099-B</code> capital gains, <code>1099-NEC</code>, <code>1099-R</code>, <code>SSA-1099</code>, <code>K-1</code>, <code>W-2G</code>)</li>
+            <li>Rental income, operating expenses, depreciation, and property state (Schedule E)</li>
+            <li>Adjustments (HSA, IRA, student loan interest, Solo 401k, SE health), credits/1040-ES payments, and Schedule A itemized expenses</li>
+          </ul>
+          <p style="margin: 0 0 0.25rem 0;"><strong>Prompt to copy and give to your AI agent:</strong></p>
+          <pre class="howto-prompt-box" id="howto-ai-import-prompt">Convert my redacted tax documents/notes below into a single valid JSON object matching this exact schema for ActuallyFreeTaxes.com (output ONLY raw JSON, no commentary):
+
+{
+  "year": 2024,
+  "filingStatus": "single",
+  "residentState": "NY",
+  "w2s": [
+    { "employer": "Company Name", "ein": "", "box1": 0, "box2": 0, "box3": 0, "box4": 0, "box5": 0, "box6": 0, "states": [{ "state": "NY", "stateId": "", "stateWages": 0, "stateTaxWithheld": 0, "localWages": 0, "localTaxWithheld": 0, "localityName": "" }] }
+  ],
+  "otherIncome": {
+    "interest": 0,
+    "sources": [
+      { "type": "1099-DIV", "payer": "Brokerage", "amount": 0, "qualifiedDividends": 0, "accruedInterestPaid": 0, "taxExemptInterest": 0, "qbiEligible": false, "earlyDistributionPenalty": false, "federalTaxWithheld": 0, "state": "NY" }
+    ],
+    "capitalGains": { "shortTerm": 0, "longTerm": 0, "collectiblesGain": 0, "unrecaptured1250Gain": 0 },
+    "scheduleCExpenses": 0,
+    "scheduleERental": { "grossRents": 0, "expenses": 0, "depreciation": 0, "propertyState": "" }
+  },
+  "adjustments": { "studentLoan": 0, "ira": 0, "hsa": 0, "educatorExpenses": 0, "seRetirement": 0, "seHealthInsurance": 0, "alimonyPaid": 0 },
+  "dependents": { "childrenCount": 0, "otherDependentsCount": 0, "age65OrBlindCount": 0, "childCareExpenses": 0, "educationExpensesAotc": 0, "educationExpensesLlc": 0, "foreignTaxCredit": 0, "cleanEnergyCredit": 0, "estimatedTaxPayments": 0 },
+  "itemizedDeductions": { "medicalExpenses": 0, "realEstateTax": 0, "mortgageInterest": 0, "charity": 0, "gamblingLosses": 0 },
+  "deductionMethod": "auto"
+}</pre>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem;">
+            <button type="button" class="storage-btn" id="btn-copy-howto-import-prompt">Copy Import Prompt</button>
+            <span id="howto-import-copy-status" style="font-size: 0.85rem; color: #15803d;"></span>
+          </div>
+          <p style="margin: 0;">
+            <strong>How to load it:</strong> Copy the JSON returned by your AI, click <strong>Paste / Copy JSON</strong> in the Drafts bar at the top of the page, paste the JSON into the text box, and click <strong>Apply JSON to Return</strong>. <strong>Always manually check every loaded input and calculated result in the app to verify it matches your source documents.</strong>
+          </p>
+        </div>
+
+        <div class="howto-section-block">
+          <h4>4. Using an AI Agent to Double-Check Your Return</h4>
+          <p style="margin: 0 0 0.35rem 0;">
+            Once your numbers are loaded, you can ask an AI agent to sanity-check your return for omissions or mismatches. <strong>Documents &amp; context to attach (redacted):</strong>
+          </p>
+          <ul style="margin: 0 0 0.6rem 0; padding-left: 1.25rem; line-height: 1.55;">
+            <li>Your current return JSON (click <strong>Paste / Copy JSON</strong> → <strong>Copy JSON</strong>)</li>
+            <li>Redacted summaries of your W-2s, 1099s, Form 1098 (mortgage/property tax), and Schedule E rental records</li>
+            <li>Additional context in the prompt: tax year, filing status, states lived/worked in during the year, number of dependents, and any unusual life events (job switch, home purchase, move, retirement distribution)</li>
+          </ul>
+          <p style="margin: 0 0 0.25rem 0;"><strong>Prompt to copy and give to your AI agent:</strong></p>
+          <pre class="howto-prompt-box" id="howto-ai-verify-prompt">Please review my redacted tax return JSON and source document summaries below for potential errors, missing forms, or missed deductions/credits.
+
+Additional Context:
+- Tax Year: [e.g., 2024]
+- Filing Status: [e.g., Single / Married Filing Jointly]
+- States lived/worked in &amp; dates if moved: [e.g., Lived &amp; worked in NYC all year; own rental condo in DC]
+- Dependents / special situations: [e.g., None / Switched employers mid-year]
+
+Check specifically for:
+1. Whether every W-2, 1099, and withholding amount matches my source documents.
+2. Whether any state/local taxes, credits (OSTC, Child Tax Credit, EITC, AOTC), or caps (SALT $10k, SS wage cap, -$3k capital loss limit) look misapplied.
+3. Any potential red flags or follow-up questions I should verify against IRS/state instructions.
+
+[Paste your copied JSON and redacted document summaries here]</pre>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem;">
+            <button type="button" class="storage-btn" id="btn-copy-howto-verify-prompt">Copy Verification Prompt</button>
+            <span id="howto-verify-copy-status" style="font-size: 0.85rem; color: #15803d;"></span>
+          </div>
+          <p style="margin: 0; font-size: 0.88rem; color: #475569;">
+            <strong>Disclaimer:</strong> AI models can misread forms or hallucinate tax rules. <strong>AI is never a complete substitute for an expert tax professional</strong> — if your return is complex or you are uncertain about any part of your return, we strongly recommend consulting a licensed CPA, Enrolled Agent, or Tax Attorney.
+          </p>
+        </div>
+      </div>
+
+      <div class="tos-modal-footer">
+        <button type="button" class="btn btn-primary" id="btn-close-howto-footer">Close</button>
       </div>
     </div>
   </div>

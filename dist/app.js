@@ -321,6 +321,8 @@ class TaxApp {
         this.collapseState = this.loadCollapseState();
         this.uiPrefs = this.loadUiPrefs();
         this.draftsStore = this.loadDraftsStore();
+        this.welcomeTimerId = null;
+        this.welcomeSecondsLeft = 5;
         this.init();
     }
     init() {
@@ -403,13 +405,114 @@ class TaxApp {
             }
             else {
                 this.isTosAccepted = false;
-                // Automatically present the legal advisory & TOS on first open
-                this.openTosModal();
+                this.openWelcomeModal();
             }
         }
         catch (e) {
             console.warn("Could not check TOS status in localStorage:", e);
         }
+    }
+    openWelcomeModal() {
+        const overlay = document.getElementById('welcome-modal-overlay');
+        const checkbox = document.getElementById('welcome-agree-checkbox');
+        const closeBtn = document.getElementById('btn-close-welcome-modal');
+        const gotItBtn = document.getElementById('btn-welcome-got-it');
+        if (!overlay)
+            return;
+        this.welcomeSecondsLeft = 5;
+        if (this.welcomeTimerId !== null) {
+            window.clearInterval(this.welcomeTimerId);
+            this.welcomeTimerId = null;
+        }
+        const syncButtons = () => {
+            const agreed = Boolean(checkbox?.checked);
+            if (closeBtn)
+                closeBtn.disabled = !agreed;
+            if (gotItBtn) {
+                gotItBtn.disabled = !(agreed && this.welcomeSecondsLeft <= 0);
+                gotItBtn.textContent = this.welcomeSecondsLeft > 0
+                    ? `Got It (${this.welcomeSecondsLeft}s)`
+                    : 'Got It';
+            }
+        };
+        if (checkbox && !checkbox.dataset.bound) {
+            checkbox.dataset.bound = 'true';
+            checkbox.addEventListener('change', syncButtons);
+        }
+        syncButtons();
+        this.welcomeTimerId = window.setInterval(() => {
+            this.welcomeSecondsLeft = Math.max(0, this.welcomeSecondsLeft - 1);
+            syncButtons();
+            if (this.welcomeSecondsLeft <= 0 && this.welcomeTimerId !== null) {
+                window.clearInterval(this.welcomeTimerId);
+                this.welcomeTimerId = null;
+            }
+        }, 1000);
+        overlay.classList.add('open');
+    }
+    closeWelcomeModal(recordAcceptance = true) {
+        const checkbox = document.getElementById('welcome-agree-checkbox');
+        if (recordAcceptance && checkbox && !checkbox.checked) {
+            return;
+        }
+        if (this.welcomeTimerId !== null) {
+            window.clearInterval(this.welcomeTimerId);
+            this.welcomeTimerId = null;
+        }
+        if (recordAcceptance && typeof localStorage !== 'undefined') {
+            try {
+                localStorage.setItem(STORAGE_KEY_TOS, 'true');
+            }
+            catch (e) {
+                console.warn("Could not record TOS acceptance:", e);
+            }
+            this.isTosAccepted = true;
+        }
+        const overlay = document.getElementById('welcome-modal-overlay');
+        if (overlay)
+            overlay.classList.remove('open');
+    }
+    openAboutModal(scrollToId) {
+        const overlay = document.getElementById('about-modal-overlay');
+        if (overlay) {
+            overlay.classList.add('open');
+            if (scrollToId) {
+                window.setTimeout(() => {
+                    const target = document.getElementById(scrollToId);
+                    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+            }
+        }
+    }
+    closeAboutModal() {
+        const overlay = document.getElementById('about-modal-overlay');
+        if (overlay)
+            overlay.classList.remove('open');
+    }
+    openHowToModal() {
+        const overlay = document.getElementById('howto-modal-overlay');
+        if (overlay)
+            overlay.classList.add('open');
+    }
+    closeHowToModal() {
+        const overlay = document.getElementById('howto-modal-overlay');
+        if (overlay)
+            overlay.classList.remove('open');
+    }
+    copyPreText(preId, statusId) {
+        const pre = document.getElementById(preId);
+        const status = document.getElementById(statusId);
+        if (!pre)
+            return;
+        navigator.clipboard?.writeText(pre.textContent || '').then(() => {
+            if (status) {
+                status.textContent = 'Copied to clipboard!';
+                window.setTimeout(() => { status.textContent = ''; }, 3000);
+            }
+        }).catch(() => {
+            if (status)
+                status.textContent = 'Select and copy the prompt manually.';
+        });
     }
     openTosModal() {
         const overlay = document.getElementById('tos-modal-overlay');
@@ -1287,6 +1390,60 @@ class TaxApp {
                 btn.addEventListener('click', () => this.openTosModal());
             }
         });
+        // Welcome, About & How To Use modal bindings
+        const btnCloseWelcome = document.getElementById('btn-close-welcome-modal');
+        if (btnCloseWelcome)
+            btnCloseWelcome.addEventListener('click', () => this.closeWelcomeModal(true));
+        const btnWelcomeGotIt = document.getElementById('btn-welcome-got-it');
+        if (btnWelcomeGotIt)
+            btnWelcomeGotIt.addEventListener('click', () => this.closeWelcomeModal(true));
+        const linkWelcomeAbout = document.getElementById('link-welcome-about');
+        if (linkWelcomeAbout)
+            linkWelcomeAbout.addEventListener('click', () => this.openAboutModal());
+        const linkWelcomePrivacy = document.getElementById('link-welcome-privacy');
+        if (linkWelcomePrivacy)
+            linkWelcomePrivacy.addEventListener('click', () => this.openAboutModal('about-privacy-section'));
+        const linkWelcomeHowTo = document.getElementById('link-welcome-howto');
+        if (linkWelcomeHowTo)
+            linkWelcomeHowTo.addEventListener('click', () => this.openHowToModal());
+        const btnHeaderAbout = document.getElementById('btn-header-about');
+        if (btnHeaderAbout)
+            btnHeaderAbout.addEventListener('click', () => this.openAboutModal());
+        ['btn-close-about-modal', 'btn-close-about-footer'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn)
+                btn.addEventListener('click', () => this.closeAboutModal());
+        });
+        const aboutOverlay = document.getElementById('about-modal-overlay');
+        if (aboutOverlay) {
+            aboutOverlay.addEventListener('click', (e) => {
+                if (e.target === aboutOverlay)
+                    this.closeAboutModal();
+            });
+        }
+        const btnHeaderHowTo = document.getElementById('btn-header-howto');
+        if (btnHeaderHowTo)
+            btnHeaderHowTo.addEventListener('click', () => this.openHowToModal());
+        ['btn-close-howto-modal', 'btn-close-howto-footer'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn)
+                btn.addEventListener('click', () => this.closeHowToModal());
+        });
+        const howToOverlay = document.getElementById('howto-modal-overlay');
+        if (howToOverlay) {
+            howToOverlay.addEventListener('click', (e) => {
+                if (e.target === howToOverlay)
+                    this.closeHowToModal();
+            });
+        }
+        const btnCopyHowToImport = document.getElementById('btn-copy-howto-import-prompt');
+        if (btnCopyHowToImport) {
+            btnCopyHowToImport.addEventListener('click', () => this.copyPreText('howto-ai-import-prompt', 'howto-import-copy-status'));
+        }
+        const btnCopyHowToVerify = document.getElementById('btn-copy-howto-verify-prompt');
+        if (btnCopyHowToVerify) {
+            btnCopyHowToVerify.addEventListener('click', () => this.copyPreText('howto-ai-verify-prompt', 'howto-verify-copy-status'));
+        }
         // Local Storage toolbar bindings
         ['btn-clear-draft', 'btn-footer-clear'].forEach(id => {
             const btn = document.getElementById(id);
