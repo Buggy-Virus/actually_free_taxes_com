@@ -411,7 +411,11 @@ class TaxApp {
     if (typeof window !== 'undefined' && window.location) {
       const urlParams = new URLSearchParams(window.location.search);
       const modalParam = urlParams.get('modal');
-      if (modalParam) {
+      if (modalParam === 'about') {
+        this.openAboutModal();
+      } else if (modalParam === 'howto') {
+        this.openHowToModal();
+      } else if (modalParam) {
         this.openGuidanceModal(modalParam);
       }
       const expandParam = urlParams.get('expand');
