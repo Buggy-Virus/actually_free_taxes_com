@@ -2452,6 +2452,9 @@ export function calculateStateReturnsAndUnifiedSummary(
       localTaxWithheld: resLocalTax,
       netOutcome: Math.abs(waNetDiff),
       isRefund: waNetDiff >= 0,
+      isFlat: true,
+      flatRate: 0.07,
+      baseStdDeduction: waLtcgThreshold,
       sourceFields: ['calc-capital-gains'],
       generalFormula: `WA Capital Gains Excise Tax = max(0, Net Long-Term Capital Gain − ${formatCurrency(waLtcgThreshold)}) × 7%`,
       pluggedFormula: `Taxable LTCG = ${formatCurrency(netLtcg)} − ${formatCurrency(waLtcgThreshold)} = ${formatCurrency(waTaxableLtcg)} × 7% = ${formatCurrencyExact(waExciseTax)}`
@@ -2482,11 +2485,17 @@ export function calculateStateReturnsAndUnifiedSummary(
       localTaxWithheld: resLocalTax,
       netOutcome: Math.abs(nhNetDiff),
       isRefund: nhNetDiff >= 0,
+      isFlat: true,
+      flatRate: 0.03,
+      baseStdDeduction: nhExemption,
       sourceFields: resRaw.sourceFieldIds,
       generalFormula: `NH Form DP-10 = max(0, Interest & Dividends − ${formatCurrency(nhExemption)}) × 3.0%`,
       pluggedFormula: `Taxable I&D = ${formatCurrency(totalDivAndIntForStates)} − ${formatCurrency(nhExemption)} = ${formatCurrency(nhTaxableID)} × 3.0% = ${formatCurrencyExact(nhIdTax)}`
     };
   } else if (!residentRule.hasIncomeTax) {
+    const waWftc = (residentState === 'WA' && federalEitc > 0)
+      ? Math.min(1290, 325 + (Number(state.dependents?.childrenCount) || 0) * 325)
+      : 0;
     residentReturn = {
       result: 0,
       state: residentState,
@@ -2505,8 +2514,9 @@ export function calculateStateReturnsAndUnifiedSummary(
       localTaxLiability: 0,
       stateWithholding: resWithholding,
       localTaxWithheld: resLocalTax,
-      netOutcome: resWithholding,
+      netOutcome: resWithholding + waWftc,
       isRefund: true,
+      stateExemptionCredit: waWftc,
       sourceFields: resRaw.sourceFieldIds,
       generalFormula: `${residentRule.name} imposes 0% personal income tax on wage compensation`,
       pluggedFormula: `Tax = $0 (No ${residentRule.name} State Return Required)`
@@ -2790,6 +2800,8 @@ export function calculateStateReturnsAndUnifiedSummary(
       stateExemptionCredit = Math.max(0, Math.round((utBase - utPhase) * 100) / 100);
     } else if (residentState === 'MA' && totalDependents > 0) {
       stateExemptionCredit = totalDependents * 440;
+    } else if (residentState === 'NY' && numChildrenDep > 0 && resAdjustedIncome <= (isMfj ? 110000 : 75000)) {
+      stateExemptionCredit = numChildrenDep * 330;
     } else if (residentState === 'MN' && numChildrenDep > 0 && resAdjustedIncome <= 35000) {
       stateExemptionCredit = numChildrenDep * 1750;
     } else if (residentState === 'NM' && numChildrenDep > 0 && resAdjustedIncome <= 75000) {
