@@ -2621,6 +2621,12 @@ export function calculateStateReturnsAndUnifiedSummary(
         case 'mo-529-deduction': return Math.min(isMfj ? 16000 : 8000, amt);
         case 'ne-529-deduction': return Math.min(effectiveStatus === 'married_separate' ? 5000 : 10000, amt);
         case 'nj-529-deduction': return residentTotalWages <= 200000 ? Math.min(10000, amt) : 0;
+        case 'nj-child-credit': return residentTotalWages <= 80000 ? Math.min(1000 * Math.max(1, Number(state.dependents?.childrenCount) || 0), amt) : 0;
+        case 'nj-medical-2pct': return Math.max(0, Math.round((amt - residentTotalWages * 0.02) * 100) / 100);
+        case 'ga-child-care-credit': return Math.round(amt * 0.30 * 100) / 100;
+        case 'ok-child-care-credit': return Math.round(amt * 0.20 * 100) / 100;
+        case 'mt-elderly-homeowner-credit': return Math.min(1150, amt);
+        case 'or-529-credit': return Math.min(isMfj ? 340 : 170, amt);
         case 'ca-renters-credit': return Math.min(isMfj ? 120 : 60, amt);
         case 'sc-two-wage-earner-credit': return Math.min(350, amt);
         default: return amt;
