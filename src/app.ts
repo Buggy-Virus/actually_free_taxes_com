@@ -25,7 +25,7 @@ import {
   PanelSectionCategory,
   StatePanelItem
 } from './types.js';
-import { calculateTaxes, buildCalculationBlocks, formatCurrency, formatCurrencyExact } from './tax-engine.js';
+import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlock, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
 import { renderRatingPill, renderRatingCardHtml, getFieldRating, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
 import { PANEL_CATALOG, PanelCatalogEntry, getPanelCatalogEntry } from './panel-catalog.js';
@@ -272,6 +272,7 @@ class TaxApp {
   private uiPrefs: UiPrefs = this.loadUiPrefs();
   private draftsStore: SavedDraftsStore = this.loadDraftsStore();
   private currentCalcBlocks: CalcBlockDefinition[] = [];
+  private currentStateCalcBlocks: CalcBlockDefinition[] = [];
 
   private loadUiPrefs(): UiPrefs {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -3676,126 +3677,66 @@ class TaxApp {
       });
     }
 
-    // Schedule A Itemized Card -> Deduction Card
-    connections.push({
-      id: 'conn-itemized-deduction-choice',
-      sourceId: 'calc-itemized-deductions',
-      targetId: 'calc-standard-deduction',
-      category: 'itemized',
-      label: 'Optimal Deduction to Return'
-    });
+    // 6-12. Derive calculation-to-calculation and contributor-to-calculation arrows directly from active CalcBlocks
+    const inferCategory = (sourceId: string, targetId: string): ConnectionDef['category'] => {
+      if (sourceId.includes('box2') || sourceId.includes('withhold')) return 'withholding';
+      if (sourceId.includes('box4') || sourceId.includes('ss')) return 'ss';
+      if (sourceId.includes('box6') || sourceId.includes('medicare')) return 'medicare';
+      if (sourceId.includes('credit')) return 'credits';
+      if (sourceId.includes('itemized') || sourceId.includes('salt') || sourceId.includes('mortgage') || sourceId.includes('charity')) return 'itemized';
+      if (sourceId.includes('filing-status') || sourceId.includes('deduction')) return 'status';
+      if (sourceId.includes('capital') || sourceId.includes('stcg') || sourceId.includes('ltcg')) return 'capital';
+      if (targetId === 'calc-tax-before-credits' || targetId === 'calc-other-taxes' || targetId === 'calc-final-verdict') return 'tax';
+      return 'wages';
+    };
 
-    // 6. Filing Status -> Standard Deduction
-    connections.push({
-      id: 'conn-status-deduction',
-      sourceId: 'select-filing-status',
-      targetId: 'calc-standard-deduction',
-      category: 'status',
-      label: 'Status sets Standard Deduction'
-    });
+    const showEmpty = Boolean(this.uiPrefs.showEmptyCalcBlocks);
+    this.currentCalcBlocks
+      .filter(b => b.hasImpact || showEmpty)
+      .forEach(block => {
+        (block.sourceIds || []).forEach(srcId => {
+          connections.push({
+            id: `conn-block-${srcId}-to-${block.id}`,
+            sourceId: srcId,
+            targetId: block.id,
+            category: inferCategory(srcId, block.id),
+            label: `${srcId} to ${block.title}`
+          });
+        });
 
-    // 7. AGI & Deduction -> Taxable Income
-    connections.push({
-      id: 'conn-agi-taxable',
-      sourceId: 'calc-agi',
-      targetId: 'calc-taxable-income',
-      category: 'wages',
-      label: 'AGI to Taxable Income'
-    });
-    connections.push({
-      id: 'conn-deduction-taxable',
-      sourceId: 'calc-standard-deduction',
-      targetId: 'calc-taxable-income',
-      category: 'status',
-      label: 'Deduction to Taxable Income'
-    });
-
-    // 8. Taxable Income -> Tentative Tax (Brackets)
-    connections.push({
-      id: 'conn-taxable-tentative',
-      sourceId: 'calc-taxable-income',
-      targetId: 'calc-tax-before-credits',
-      category: 'tax',
-      label: 'Taxable Income to Tax Brackets'
-    });
-
-    // 9. Credits & Other Taxes -> Total Tax Liability
-    connections.push({
-      id: 'conn-tentative-totaltax',
-      sourceId: 'calc-tax-before-credits',
-      targetId: 'calc-total-tax-liability',
-      category: 'tax',
-      label: 'Tentative Tax to Liability'
-    });
-    connections.push({
-      id: 'conn-credits-totaltax',
-      sourceId: 'calc-total-credits',
-      targetId: 'calc-total-tax-liability',
-      category: 'credits',
-      label: 'Credits reduce Liability'
-    });
-    if (taxData?.otherTaxesCalc && taxData.otherTaxesCalc.result > 0) {
-      connections.push({
-        id: 'conn-othertaxes-totaltax',
-        sourceId: 'calc-other-taxes',
-        targetId: 'calc-total-tax-liability',
-        category: 'tax',
-        label: 'NIIT & Additional Medicare Tax to Liability'
+        Object.values(block.variables || {}).forEach(variable => {
+          (variable.contributors || []).forEach(contrib => {
+            if (contrib.isSetUp && contrib.targetElementId && contrib.targetElementId !== block.id) {
+              connections.push({
+                id: `conn-var-${contrib.targetElementId}-to-${block.id}`,
+                sourceId: contrib.targetElementId,
+                targetId: block.id,
+                category: inferCategory(contrib.targetElementId, block.id),
+                label: contrib.label
+              });
+            }
+          });
+        });
       });
-    }
 
-    // 10. W2 Box 2 (Withholding) & Excess SS Tax Credit -> Total Withholding
+    // W-2 Box 2 (Federal Withholding) -> Federal Bottom Line (calc-final-verdict)
     this.state.w2s.forEach(w => {
       connections.push({
-        id: `conn-w2-${w.id}-box2-withheld`,
+        id: `conn-w2-${w.id}-box2-verdict`,
         sourceId: `w2-${w.id}-box2`,
-        targetId: 'calc-total-withholding',
+        targetId: 'calc-final-verdict',
         category: 'withholding',
-        label: `W-2 #${w.id + 1} Box 2 Withheld`
+        label: `W-2 #${w.id + 1} Box 2 Withheld to Federal Bottom Line`
       });
     });
-    if (taxData?.ficaCalc && taxData.ficaCalc.excessSSTaxCredit > 0) {
-      connections.push({
-        id: 'conn-excess-ss-withheld',
-        sourceId: 'calc-fica-breakdown',
-        targetId: 'calc-total-withholding',
-        category: 'withholding',
-        label: 'Excess Social Security Tax Credit (Schedule 3 Line 11)'
-      });
-    }
 
-    // 11. Final comparison: Total Withholding & Total Tax -> Final Tax Summary
+    // Federal Bottom Line -> Unified Multi-Jurisdiction Final Summary
     connections.push({
-      id: 'conn-withheld-unified',
-      sourceId: 'calc-total-withholding',
-      targetId: 'calc-unified-summary',
-      category: 'withholding',
-      label: 'Federal Withholding to Final Summary'
-    });
-    connections.push({
-      id: 'conn-tax-unified',
-      sourceId: 'calc-total-tax-liability',
+      id: 'conn-verdict-unified',
+      sourceId: 'calc-final-verdict',
       targetId: 'calc-unified-summary',
       category: 'tax',
-      label: 'Federal Tax Liability to Final Summary'
-    });
-
-    // 12. FICA Connections
-    this.state.w2s.forEach(w => {
-      connections.push({
-        id: `conn-w2-${w.id}-box4-fica`,
-        sourceId: `w2-${w.id}-box4`,
-        targetId: 'calc-fica-breakdown',
-        category: 'ss',
-        label: `W-2 #${w.id + 1} SS Tax to FICA`
-      });
-      connections.push({
-        id: `conn-w2-${w.id}-box6-fica`,
-        sourceId: `w2-${w.id}-box6`,
-        targetId: 'calc-fica-breakdown',
-        category: 'medicare',
-        label: `W-2 #${w.id + 1} Medicare Tax to FICA`
-      });
+      label: 'Federal Bottom Line to Final Summary'
     });
 
     // 13. State Tax Withholding & Wage Connections
@@ -3859,7 +3800,13 @@ class TaxApp {
       });
     });
 
-    return connections;
+    const seenPairs = new Set<string>();
+    return connections.filter(conn => {
+      const key = `${conn.sourceId}-->${conn.targetId}`;
+      if (seenPairs.has(key)) return false;
+      seenPairs.add(key);
+      return true;
+    });
   }
 
   private recalculateAndRender(): void {
@@ -4809,6 +4756,7 @@ class TaxApp {
     const container = document.getElementById('state-sections-container');
     if (!container) return;
     container.innerHTML = '';
+    this.currentStateCalcBlocks = [];
 
     const activeStates = this.getActiveStateCodes();
     const statePanels = (this.state.statePanels ??= []);
@@ -4880,46 +4828,26 @@ class TaxApp {
         `;
       });
 
-      const stateCalcHtml = sr ? `
-        <section class="panel-section state-subsection" id="state-${code.toLowerCase()}-calculations">
-          <div class="section-header-bar">
-            <h2>${stateName} Calculations</h2>
-          </div>
-          <div class="calc-card calc-clickable state-return-card output-panel" id="calc-state-${code.toLowerCase()}-card">
-            <div class="calc-card-header">
-              <div>
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
-                  <span class="step-indicator">${sr.stateName} • ${sr.residentStatus === 'resident' ? 'Resident Return' : 'Nonresident Return'}</span>
-                  ${sr.creditForOtherStates > 0 ? `<span class="state-status-badge badge-shield" id="calc-state-${code.toLowerCase()}-ostc">OSTC Credit Applied (-${formatCurrency(sr.creditForOtherStates)})</span>` : ''}
-                  ${sr.reciprocityExemption ? `<span class="state-status-badge badge-reciprocal">Reciprocal Exemption</span>` : ''}
-                  ${!sr.hasIncomeTax ? `<span class="state-status-badge badge-no-tax">0% Wage Tax State</span>` : ''}
-                </div>
-                <h3 class="calc-card-title">${sr.formName}</h3>
-              </div>
-              <span class="irs-line-tag">${sr.isRefund ? `Refund +${formatCurrencyExact(sr.netOutcome)}` : `Owed -${formatCurrencyExact(sr.netOutcome)}`}</span>
+      let stateCalcHtml = '';
+      if (sr) {
+        const stateBlock = buildStateCalcBlock(sr, stateReturns);
+        this.currentStateCalcBlocks.push(stateBlock);
+        const extraBadges = [
+          sr.creditForOtherStates > 0 ? `<span class="state-status-badge badge-shield" id="calc-state-${code.toLowerCase()}-ostc">OSTC Credit Applied (-${formatCurrency(sr.creditForOtherStates)})</span>` : '',
+          sr.reciprocityExemption ? `<span class="state-status-badge badge-reciprocal">Reciprocal Exemption</span>` : '',
+          !sr.hasIncomeTax ? `<span class="state-status-badge badge-no-tax">0% Wage Tax State</span>` : ''
+        ].filter(Boolean).join('');
+        const headerRight = `<span class="irs-line-tag">${sr.isRefund ? `Refund +${formatCurrencyExact(sr.netOutcome)}` : `Owed -${formatCurrencyExact(sr.netOutcome)}`}</span>`;
+
+        stateCalcHtml = `
+          <section class="panel-section state-subsection" id="state-${code.toLowerCase()}-calculations">
+            <div class="section-header-bar">
+              <h2>${stateName} Calculations</h2>
             </div>
-            <div class="unified-formula-box">
-              <div class="unified-formula-section">
-                <div class="unified-formula-label-col"><span class="formula-badge general">General Formula</span></div>
-                <div class="unified-formula-lines-col">
-                  <div class="unified-formula-line">
-                    <span class="unified-formula-eq">${sr.generalFormula}</span>
-                    <span class="irs-line-tag">${sr.formName}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="unified-formula-section">
-                <div class="unified-formula-label-col"><span class="formula-badge plugged">With Your Numbers</span></div>
-                <div class="unified-formula-lines-col">
-                  <div class="unified-formula-line plugged-highlight">
-                    <span class="unified-formula-eq">${sr.pluggedFormula}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      ` : '';
+            ${this.renderCalcCardHtml(stateBlock, 'state-return-card', extraBadges, headerRight)}
+          </section>
+        `;
+      }
 
       block.innerHTML = `
         <div class="state-group-header">
@@ -5005,9 +4933,22 @@ class TaxApp {
     });
 
     container.querySelectorAll<HTMLElement>('.calc-clickable').forEach(card => {
-      card.addEventListener('click', () => {
+      card.addEventListener('click', (e: Event) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('.formula-var')) return;
         const curr = this.arrowEngine?.getSelectedNode();
         this.arrowEngine?.setSelectedNode(curr === card.id ? null : card.id);
+      });
+    });
+
+    container.querySelectorAll<HTMLElement>('.formula-var').forEach(varEl => {
+      varEl.addEventListener('click', (e: Event) => {
+        e.stopPropagation();
+        const blockId = varEl.dataset.blockId;
+        const varId = varEl.dataset.varId;
+        if (blockId && varId) {
+          this.openVariableBreakdownPopover(blockId, varId, varEl);
+        }
       });
     });
   }
@@ -5046,54 +4987,10 @@ class TaxApp {
       return;
     }
 
-    const selectedId = this.arrowEngine?.getSelectedNode() || null;
-
     visibleBlocks.forEach(block => {
-      const card = document.createElement('div');
-      card.className = `calc-card calc-clickable ${block.isOutput ? 'output-panel' : ''} ${selectedId === block.id ? 'calc-selected' : ''}`;
-      card.id = block.id;
-
-      const generalLinesHtml = block.lines.map(line => `
-        <div class="unified-formula-line" id="${line.id}-gen">
-          <span class="unified-formula-eq">${this.renderTokensHtml(line.generalTokens.map(tk => tk.type === 'var' ? { ...tk, valueFormatted: tk.label } : tk), block.id)}</span>
-          ${line.formLineLabel
-            ? `<span class="irs-line-tag">${line.formLineLabel}</span>`
-            : `<span class="irs-line-tag intermediate-tag">Intermediate</span>`}
-        </div>
-      `).join('');
-
-      const pluggedLinesHtml = block.lines.map(line => `
-        <div class="unified-formula-line plugged-highlight" id="${line.id}">
-          <span class="unified-formula-eq">${this.renderTokensHtml(line.pluggedTokens, block.id)}</span>
-        </div>
-      `).join('');
-
-      card.innerHTML = `
-        <div class="calc-card-header">
-          <div>
-            <div class="step-indicator">${block.stepLabel}</div>
-            <h3 class="calc-card-title">${block.title}</h3>
-          </div>
-        </div>
-        <div class="unified-formula-box">
-          <div class="unified-formula-section">
-            <div class="unified-formula-label-col">
-              <span class="formula-badge general">General Formula</span>
-            </div>
-            <div class="unified-formula-lines-col">
-              ${generalLinesHtml}
-            </div>
-          </div>
-          <div class="unified-formula-section">
-            <div class="unified-formula-label-col">
-              <span class="formula-badge plugged">With Your Numbers</span>
-            </div>
-            <div class="unified-formula-lines-col">
-              ${pluggedLinesHtml}
-            </div>
-          </div>
-        </div>
-      `;
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = this.renderCalcCardHtml(block);
+      const card = wrapper.firstElementChild as HTMLElement;
 
       // Click on calculation box selects it & highlights arrows leading to/from it
       card.addEventListener('click', (e: Event) => {
@@ -5119,8 +5016,65 @@ class TaxApp {
     });
   }
 
+  private renderCalcCardHtml(
+    block: CalcBlockDefinition,
+    extraClass = '',
+    extraBadgesHtml = '',
+    headerRightHtml = ''
+  ): string {
+    const selectedId = this.arrowEngine?.getSelectedNode() || null;
+    const generalLinesHtml = block.lines.map(line => `
+      <div class="unified-formula-line" id="${line.id}-gen">
+        <span class="unified-formula-eq">${this.renderTokensHtml(line.generalTokens.map(tk => tk.type === 'var' ? { ...tk, valueFormatted: tk.label } : tk), block.id)}</span>
+        ${line.formLineLabel
+          ? `<span class="irs-line-tag">${line.formLineLabel}</span>`
+          : `<span class="irs-line-tag intermediate-tag">Intermediate</span>`}
+      </div>
+    `).join('');
+
+    const pluggedLinesHtml = block.lines.map(line => `
+      <div class="unified-formula-line plugged-highlight" id="${line.id}">
+        <span class="unified-formula-eq">${this.renderTokensHtml(line.pluggedTokens, block.id)}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="calc-card calc-clickable ${extraClass} ${block.isOutput ? 'output-panel' : ''} ${selectedId === block.id ? 'calc-selected' : ''}" id="${block.id}">
+        <div class="calc-card-header">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
+              <span class="step-indicator">${block.stepLabel}</span>
+              ${extraBadgesHtml}
+            </div>
+            <h3 class="calc-card-title">${block.title}</h3>
+          </div>
+          ${headerRightHtml}
+        </div>
+        <div class="unified-formula-box">
+          <div class="unified-formula-section">
+            <div class="unified-formula-label-col">
+              <span class="formula-badge general">General Formula</span>
+            </div>
+            <div class="unified-formula-lines-col">
+              ${generalLinesHtml}
+            </div>
+          </div>
+          <div class="unified-formula-section">
+            <div class="unified-formula-label-col">
+              <span class="formula-badge plugged">With Your Numbers</span>
+            </div>
+            <div class="unified-formula-lines-col">
+              ${pluggedLinesHtml}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private openVariableBreakdownPopover(blockId: string, varId: string, anchorEl: HTMLElement): void {
-    const block = this.currentCalcBlocks.find(b => b.id === blockId);
+    const block = this.currentCalcBlocks.find(b => b.id === blockId)
+      || this.currentStateCalcBlocks.find(b => b.id === blockId);
     const breakdown: CalcVariableBreakdown | undefined = block?.variables[varId];
     const popover = document.getElementById('var-breakdown-popover');
     const titleEl = document.getElementById('var-popover-title');

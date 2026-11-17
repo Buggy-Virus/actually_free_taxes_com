@@ -3668,3 +3668,196 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
   return blocks;
 }
 
+export function buildStateCalcBlock(sr: StateReturnCalculation, allStateReturns: StateReturnCalculation[]): CalcBlockDefinition {
+  const t = (text: string): FormulaToken => ({ type: 'text', text });
+  const v = (varId: string, label: string, amount: number, isEmpty: boolean, exact = true): FormulaToken => ({
+    type: 'var',
+    varId,
+    label,
+    valueFormatted: exact ? formatCurrencyExact(amount) : formatCurrency(amount),
+    isEmpty
+  });
+  const makeVar = (
+    varId: string,
+    label: string,
+    totalValue: number,
+    contributors: CalcVariableContributor[],
+    exact = true
+  ): CalcVariableBreakdown => {
+    const hasAnySetup = contributors.some(c => c.isSetUp && c.amount !== 0);
+    return {
+      varId,
+      label,
+      totalValue,
+      totalFormatted: exact ? formatCurrencyExact(totalValue) : formatCurrency(totalValue),
+      isEmpty: !hasAnySetup && totalValue === 0,
+      contributors
+    };
+  };
+
+  const stateKey = sr.state.toLowerCase();
+  const blockId = `calc-state-${stateKey}-card`;
+
+  const vars: Record<string, CalcVariableBreakdown> = {
+    state_wages: makeVar('state_wages', `${sr.state} Sourced Income`, sr.stateWages, [
+      { label: `${sr.state} Wages & Sourced Income`, sign: '+', amount: sr.stateWages, amountFormatted: formatCurrencyExact(sr.stateWages), isSetUp: sr.stateWages > 0, targetElementId: `state-group-${stateKey}` }
+    ]),
+    state_ded: makeVar('state_ded', `${sr.state} Deduction`, sr.stateStandardDeduction, [
+      { label: `${sr.state} Standard / Itemized Deduction`, sign: '+', amount: sr.stateStandardDeduction, amountFormatted: formatCurrencyExact(sr.stateStandardDeduction), isSetUp: sr.stateStandardDeduction > 0, targetElementId: `state-${stateKey}-itemized` }
+    ]),
+    ostc_credit: makeVar(
+      'ostc_credit',
+      'Other State Tax Credit (OSTC)',
+      sr.creditForOtherStates,
+      sr.creditedStates.map(c => ({
+        label: `Credit for ${c.fromState} Tax (min(${formatCurrencyExact(c.sourceTaxPaid)}, ${formatCurrencyExact(c.homeAttributableTax)}))`,
+        sign: '+',
+        amount: c.creditAllowed,
+        amountFormatted: formatCurrencyExact(c.creditAllowed),
+        isSetUp: c.creditAllowed > 0,
+        targetElementId: `calc-state-${c.fromState.toLowerCase()}-card`
+      })),
+      true
+    ),
+    state_withholding: makeVar('state_withholding', `${sr.state} Tax Withheld`, sr.stateWithholding, [
+      { label: `${sr.state} State & Local Withholding`, sign: '+', amount: sr.stateWithholding, amountFormatted: formatCurrencyExact(sr.stateWithholding), isSetUp: sr.stateWithholding > 0, targetElementId: `state-group-${stateKey}` }
+    ])
+  };
+
+  const lines: CalcLineItem[] = [];
+
+  if (!sr.hasIncomeTax) {
+    lines.push({
+      id: `line-state-${stateKey}-notax`,
+      label: `${sr.state} Individual Income Tax`,
+      formLineLabel: sr.formName,
+      generalTokens: [t(`${sr.state} Tax = $0.00 (No Individual Wage Income Tax)`)],
+      pluggedTokens: [t(`${sr.state} Tax = $0.00 (0% Wage Tax State)`)],
+      resultFormatted: '$0.00'
+    });
+  } else if (sr.reciprocityExemption) {
+    lines.push({
+      id: `line-state-${stateKey}-reciprocity`,
+      label: `${sr.state} Nonresident Tax`,
+      formLineLabel: sr.formName,
+      generalTokens: [t(`Nonresident Tax = $0.00 (Reciprocal Agreement Exemption)`)],
+      pluggedTokens: [t(`Nonresident Tax = $0.00 (Reciprocal Exemption; Withholding Refund: +${formatCurrencyExact(sr.netOutcome)})`)],
+      resultFormatted: `+${formatCurrencyExact(sr.netOutcome)}`
+    });
+  } else {
+    // 1. State Taxable Income
+    lines.push({
+      id: `line-state-${stateKey}-taxable`,
+      label: `${sr.state} Taxable Income`,
+      formLineLabel: null,
+      generalTokens: [
+        t(`${sr.state} Taxable Income = max(0, `),
+        v('state_wages', `${sr.state} Income`, sr.stateWages, vars.state_wages.isEmpty),
+        t(' − '),
+        v('state_ded', `${sr.state} Deduction`, sr.stateStandardDeduction, vars.state_ded.isEmpty),
+        t(')')
+      ],
+      pluggedTokens: [
+        t(`${sr.state} Taxable Income = max(0, `),
+        v('state_wages', formatCurrencyExact(sr.stateWages), sr.stateWages, vars.state_wages.isEmpty),
+        t(' − '),
+        v('state_ded', formatCurrencyExact(sr.stateStandardDeduction), sr.stateStandardDeduction, vars.state_ded.isEmpty),
+        t(`) = ${formatCurrencyExact(sr.stateTaxableIncome)}`)
+      ],
+      resultFormatted: formatCurrencyExact(sr.stateTaxableIncome)
+    });
+
+    // 2. Tentative State Tax (Before Credits)
+    lines.push({
+      id: `line-state-${stateKey}-tentative`,
+      label: `Tentative ${sr.state} State Tax`,
+      formLineLabel: null,
+      generalTokens: [t(`Tentative ${sr.state} Tax = ${sr.state} Taxable Income × ${sr.state} Tax Brackets`)],
+      pluggedTokens: [t(`Tentative ${sr.state} Tax = ${formatCurrencyExact(sr.stateTaxableIncome)} × ${sr.state} Rates = ${formatCurrencyExact(sr.stateTaxBeforeCredit)}`)],
+      resultFormatted: formatCurrencyExact(sr.stateTaxBeforeCredit)
+    });
+
+    // 3. Intermediate OSTC lines (one per credited state)
+    sr.creditedStates.forEach(c => {
+      const nrWages = allStateReturns.find(r => r.state === c.fromState)?.stateWages ?? 0;
+      lines.push({
+        id: `line-state-${stateKey}-ostc-${c.fromState.toLowerCase()}`,
+        label: `OSTC Credit (${c.fromState} → ${sr.state})`,
+        formLineLabel: null,
+        generalTokens: [
+          t(`OSTC (${c.fromState}) = min(${c.fromState} Tax Paid, ${sr.state} Tax × (${c.fromState} Wages ÷ Total Wages))`)
+        ],
+        pluggedTokens: [
+          t(`OSTC (${c.fromState}) = min(${formatCurrencyExact(c.sourceTaxPaid)}, ${formatCurrencyExact(sr.stateTaxBeforeCredit)} × (${formatCurrencyExact(nrWages)} ÷ ${formatCurrencyExact(sr.stateWages)}) = ${formatCurrencyExact(c.homeAttributableTax)}) = `),
+          v('ostc_credit', formatCurrencyExact(c.creditAllowed), c.creditAllowed, false, true)
+        ],
+        resultFormatted: formatCurrencyExact(c.creditAllowed)
+      });
+    });
+
+    // 4. Local / Municipal Tax if applicable
+    if (sr.localTaxLiability > 0) {
+      lines.push({
+        id: `line-state-${stateKey}-local`,
+        label: `${sr.stateName} Local / Municipal Tax`,
+        formLineLabel: null,
+        generalTokens: [t(`Local Tax = ${sr.state} Taxable Income × Local Rate`)],
+        pluggedTokens: [t(`Local Tax = ${formatCurrencyExact(sr.localTaxLiability)}`)],
+        resultFormatted: formatCurrencyExact(sr.localTaxLiability)
+      });
+    }
+
+    // 5. Total State (& Local) Tax Liability
+    const hasOstc = sr.creditForOtherStates > 0;
+    const hasLocal = sr.localTaxLiability > 0;
+    lines.push({
+      id: `line-state-${stateKey}-liability`,
+      label: `Total ${sr.state} Tax Liability`,
+      formLineLabel: null,
+      generalTokens: [
+        t(`Total ${sr.state} Tax = max(0, Tentative Tax`),
+        ...(hasOstc ? [t(' − '), v('ostc_credit', 'OSTC Credit', sr.creditForOtherStates, false, true)] : []),
+        t(')'),
+        ...(hasLocal ? [t(' + Local Tax')] : [])
+      ],
+      pluggedTokens: [
+        t(`Total ${sr.state} Tax = ${formatCurrencyExact(sr.stateTaxBeforeCredit)}`),
+        ...(hasOstc ? [t(' − '), v('ostc_credit', formatCurrencyExact(sr.creditForOtherStates), sr.creditForOtherStates, false, true)] : []),
+        ...(hasLocal ? [t(` + ${formatCurrencyExact(sr.localTaxLiability)}`)] : []),
+        t(` = ${formatCurrencyExact(sr.stateTaxLiability)}`)
+      ],
+      resultFormatted: formatCurrencyExact(sr.stateTaxLiability)
+    });
+
+    // 6. Final Net Outcome (Refund / Owed)
+    lines.push({
+      id: `line-state-${stateKey}-outcome`,
+      label: sr.isRefund ? `${sr.state} Refund` : `${sr.state} Balance Owed`,
+      formLineLabel: sr.formName,
+      generalTokens: [
+        t('Net Outcome = '),
+        v('state_withholding', `${sr.state} Withholding`, sr.stateWithholding, vars.state_withholding.isEmpty),
+        t(` − Total ${sr.state} Tax`)
+      ],
+      pluggedTokens: [
+        t('Net Outcome = '),
+        v('state_withholding', formatCurrencyExact(sr.stateWithholding), sr.stateWithholding, vars.state_withholding.isEmpty),
+        t(` − ${formatCurrencyExact(sr.stateTaxLiability)} = ${sr.isRefund ? '+' : '-'}${formatCurrencyExact(sr.netOutcome)}`)
+      ],
+      resultFormatted: `${sr.isRefund ? '+' : '-'}${formatCurrencyExact(sr.netOutcome)}`
+    });
+  }
+
+  return {
+    id: blockId,
+    stepLabel: `${sr.stateName} • ${sr.residentStatus === 'resident' ? 'Resident Return' : 'Nonresident Return'}`,
+    title: sr.formName,
+    hasImpact: true,
+    isOutput: true,
+    lines,
+    variables: vars,
+    sourceIds: sr.creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-card`)
+  };
+}
+
+
