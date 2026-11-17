@@ -2054,8 +2054,18 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             continue;
         }
         // Standard Non-Resident Calculation
-        const stdDed = rule.standardDeduction[effectiveStatus] || 0;
-        const taxable = Math.max(0, stateWages - stdDed);
+        const spList = (state.statePanels || []).filter(p => p.state.toUpperCase() === code);
+        const spOther = spList.filter(p => p.section === 'other-income').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+            + (Number(state.stateSpecific?.[code]?.otherIncome) || 0);
+        const spAdj = spList.filter(p => p.section === 'adjustments').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+            + (Number(state.stateSpecific?.[code]?.adjustments) || 0);
+        const spCred = spList.filter(p => p.section === 'credits').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+            + (Number(state.stateSpecific?.[code]?.credits) || 0);
+        const spItem = spList.filter(p => p.section === 'itemized').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+            + (Number(state.stateSpecific?.[code]?.itemizedDeductions) || 0);
+        const stdDed = (rule.standardDeduction[effectiveStatus] || 0) + spItem;
+        const adjStateWages = Math.max(0, stateWages + spOther - spAdj);
+        const taxable = Math.max(0, adjStateWages - stdDed);
         let tax = 0;
         if (rule.isFlat) {
             tax = taxable * (rule.flatRate || 0);
@@ -2064,7 +2074,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             const bList = rule.brackets?.[effectiveStatus] || rule.brackets?.['single'] || [];
             tax = computeStateTaxFromBrackets(taxable, bList);
         }
-        const stateTaxLiability = Math.round(tax * 100) / 100;
+        const stateTaxLiability = Math.max(0, Math.round((tax - spCred) * 100) / 100);
         const netDiff = withholding - stateTaxLiability;
         const isRefund = netDiff >= 0;
         const netOutcome = Math.abs(netDiff);
@@ -2231,8 +2241,18 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             stateItemizedDed = itemizedCalc.allowableMedical + propTax + itemizedCalc.mortgage + itemizedCalc.charity;
         }
         const useStateItemized = state.deductionMethod !== 'standard' && stateItemizedDed > baseStdDed;
-        const resStdDed = useStateItemized ? stateItemizedDed : baseStdDed;
-        const resTaxable = Math.max(0, residentTotalWages - resStdDed);
+        const resSpList = (state.statePanels || []).filter(p => p.state.toUpperCase() === residentState);
+        const resSpOther = resSpList.filter(p => p.section === 'other-income').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+            + (Number(state.stateSpecific?.[residentState]?.otherIncome) || 0);
+        const resSpAdj = resSpList.filter(p => p.section === 'adjustments').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+            + (Number(state.stateSpecific?.[residentState]?.adjustments) || 0);
+        const resSpCred = resSpList.filter(p => p.section === 'credits').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+            + (Number(state.stateSpecific?.[residentState]?.credits) || 0);
+        const resSpItem = resSpList.filter(p => p.section === 'itemized').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+            + (Number(state.stateSpecific?.[residentState]?.itemizedDeductions) || 0);
+        const resStdDed = (useStateItemized ? stateItemizedDed : baseStdDed) + resSpItem;
+        const resAdjustedIncome = Math.max(0, residentTotalWages + resSpOther - resSpAdj);
+        const resTaxable = Math.max(0, resAdjustedIncome - resStdDed);
         let resTentativeTax = 0;
         if (residentRule.isFlat) {
             resTentativeTax = resTaxable * (residentRule.flatRate || 0);
@@ -2292,7 +2312,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 }
             }
         }
-        const netStateOnlyLiability = Math.max(0, Math.round((resTentativeTax - totalOtherStateCredit) * 100) / 100);
+        const netStateOnlyLiability = Math.max(0, Math.round((resTentativeTax - totalOtherStateCredit - resSpCred) * 100) / 100);
         const finalResLiability = Math.round((netStateOnlyLiability + localTaxLiability) * 100) / 100;
         const totalResWithholding = localTaxLiability > 0 ? (resWithholding + resLocalTax) : resWithholding;
         const resNetDiff = Math.round((totalResWithholding - finalResLiability) * 100) / 100;
@@ -2498,6 +2518,21 @@ export function buildCalculationBlocks(state, summary) {
     const hasAnyOtherTaxes = summary.otherTaxesCalc.totalOtherTaxes > 0 || summary.ficaCalc.excessSSTaxCredit > 0;
     const hasAnyOverallImpact = hasAnyW2Activity || hasAnyOtherIncome || hasAnyAdjustments || hasAnyCreditsInput || (Number(state.dependents?.estimatedTaxPayments) || 0) > 0;
     const blocks = [];
+    const sumPluggedTokens = (prefix, varId, contribs, total, isEmpty, exact = false) => {
+        const active = contribs.filter(c => c.isSetUp && c.amount !== 0);
+        const totalStr = exact ? formatCurrencyExact(total) : formatCurrency(total);
+        if (active.length <= 1) {
+            return [t(prefix), v(varId, totalStr, total, isEmpty, exact)];
+        }
+        const tokens = [t(prefix)];
+        active.forEach((c, i) => {
+            if (i > 0)
+                tokens.push(t(' + '));
+            tokens.push(v(varId, c.amountFormatted, c.amount, false, exact));
+        });
+        tokens.push(t(` = ${totalStr}`));
+        return tokens;
+    };
     // BLOCK 1: W-2 Wage & Payroll Summary (Clustered: Box 1 Wages + FICA Payroll)
     {
         const w2WageContribs = w2s.map((w, idx) => ({
@@ -2543,7 +2578,7 @@ export function buildCalculationBlocks(state, summary) {
                 label: 'Total W-2 Wages',
                 formLineLabel: 'Form 1040 Line 1a',
                 generalTokens: [t('Total W-2 Wages = '), v('w2_wages', '∑ W-2 Box 1', totalW2Wages, vars.w2_wages.isEmpty)],
-                pluggedTokens: [t('Total W-2 Wages = '), v('w2_wages', formatCurrency(totalW2Wages), totalW2Wages, vars.w2_wages.isEmpty)],
+                pluggedTokens: sumPluggedTokens('Total W-2 Wages = ', 'w2_wages', w2WageContribs, totalW2Wages, vars.w2_wages.isEmpty),
                 resultFormatted: formatCurrency(totalW2Wages)
             },
             {
@@ -2551,7 +2586,7 @@ export function buildCalculationBlocks(state, summary) {
                 label: 'W-2 Federal Tax Withheld',
                 formLineLabel: 'Form 1040 Line 25a',
                 generalTokens: [t('W-2 Withholding = '), v('w2_withholding', '∑ W-2 Box 2', totalW2FedWh, vars.w2_withholding.isEmpty, true)],
-                pluggedTokens: [t('W-2 Withholding = '), v('w2_withholding', formatCurrencyExact(totalW2FedWh), totalW2FedWh, vars.w2_withholding.isEmpty, true)],
+                pluggedTokens: sumPluggedTokens('W-2 Withholding = ', 'w2_withholding', w2FedWhContribs, totalW2FedWh, vars.w2_withholding.isEmpty, true),
                 resultFormatted: formatCurrencyExact(totalW2FedWh)
             },
             {
@@ -2879,7 +2914,7 @@ export function buildCalculationBlocks(state, summary) {
                 label: 'Total Adjustments (Above-the-Line)',
                 formLineLabel: 'Form 1040 Line 10',
                 generalTokens: [t('Adjustments = '), v('adjustments_total', '∑ Schedule 1 Adjustments', summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true)],
-                pluggedTokens: [t('Adjustments = '), v('adjustments_total', formatCurrencyExact(summary.adjustmentsCalc.result), summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true)],
+                pluggedTokens: sumPluggedTokens('Adjustments = ', 'adjustments_total', adjContribs, summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true),
                 resultFormatted: formatCurrencyExact(summary.adjustmentsCalc.result)
             },
             {

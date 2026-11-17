@@ -49,14 +49,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* SVG Connection Overlays: unhighlighted behind panels (z-index: 1), highlighted on top of everything (z-index: 500) */
+/* SVG Connection Overlays: unhighlighted above panel bg / below inputs (z-index: 3), highlighted on top of everything except header (z-index: 500) */
 #arrow-canvas {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   pointer-events: none;
-  z-index: 1;
+  z-index: 3;
 }
 
 #arrow-canvas-highlight {
@@ -106,11 +106,11 @@ body {
   border-color: #2563eb !important;
 }
 
-/* Sticky Header Bar */
+/* Sticky Header Bar (above highlighted dependency arrows at z-index 500) */
 .sticky-header {
   position: sticky;
   top: 0;
-  z-index: 40;
+  z-index: 600;
   background: #ffffff;
   border-bottom: 1px solid var(--border-color);
   padding: 0.65rem 1.5rem;
@@ -226,18 +226,18 @@ body {
 /* App Layout with Left Table of Contents */
 .app-layout {
   display: flex;
-  max-width: 1540px;
+  max-width: 1640px;
   margin: 1.25rem auto 4rem;
-  padding: 0 3.5rem 0 1.5rem;
-  gap: 3rem;
+  padding: 0 3.5rem 0 0.75rem;
+  gap: 3.75rem;
   position: relative;
-  z-index: 10;
+  z-index: 2;
   align-items: flex-start;
 }
 
 /* Sticky TOC Sidebar */
 .toc-sidebar {
-  width: 270px;
+  width: 225px;
   flex-shrink: 0;
   position: sticky;
   top: 70px;
@@ -246,7 +246,7 @@ body {
   background: #ffffff;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  padding: 1rem;
+  padding: 0.9rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -1368,9 +1368,10 @@ select.w2-input {
 
 .guidance-card-header {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
+  padding-right: 2.75rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid #cbd5e1;
 }
@@ -3023,10 +3024,22 @@ input[type="number"] {
   justify-content: center;
 }
 
+.panel-inputs {
+  position: relative;
+  z-index: 4;
+}
+
 .panel-multi-inputs {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.65rem;
+  align-items: end;
+}
+
+.panel-multi-inputs > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 .panel-input-label {
@@ -3170,7 +3183,12 @@ input[type="number"] {
   font-weight: 800;
   color: #0f172a;
   flex-shrink: 0;
-  min-width: 140px;
+  width: 175px;
+  min-width: 175px;
+  max-width: 175px;
+  white-space: normal;
+  word-wrap: break-word;
+  line-height: 1.25;
 }
 
 .scorecard-row-desc {
@@ -3477,4 +3495,198 @@ input[type="number"] {
   font-family: var(--font-mono);
   font-weight: 700;
 }
+
+/* Ensure W-2 overlay boxes and inputs sit above unhighlighted arrows (z-index 3) */
+.w2-overlay-box {
+  z-index: 4;
+}
+
+.w2-literal-card.panel-selected,
+.tax-panel.panel-selected {
+  border: 2px solid #2563eb !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16);
+}
+
+/* Complete W-2 Box Alignment (e, f, 12a-12d, 13, 14a/14b) */
+.w2-overlay-box.box-e {
+  justify-content: flex-start;
+  padding-top: 16px;
+}
+
+.w2-overlay-box.box-f {
+  left: 16.5%;
+  width: 38.1%;
+  top: 62.36%;
+  height: 10.11%;
+  justify-content: center;
+  padding: 2px 4px;
+}
+
+.w2-overlay-box.box-f .w2-overlay-textarea {
+  height: 100%;
+  font-size: 0.74rem;
+  line-height: 1.15;
+}
+
+.w2-overlay-box.box-12 {
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.box-12-rows {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.box-12-row {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  padding: 1px 3px 2px 20px;
+  gap: 6px;
+}
+
+.box-12-code {
+  width: 24% !important;
+  text-transform: uppercase;
+  text-align: center;
+  font-weight: 800;
+  height: 18px !important;
+  font-size: 0.74rem !important;
+}
+
+.box-12-amt-wrap {
+  flex: 1;
+  margin-left: 4px;
+}
+
+.box-12-amt-wrap .w2-overlay-input {
+  height: 18px !important;
+  font-size: 0.74rem !important;
+}
+
+.w2-overlay-box.box-13 {
+  justify-content: flex-end;
+  padding: 1px 4px 3px 4px;
+}
+
+.box-13-checks {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  width: 100%;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.box-13-check-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  cursor: pointer;
+}
+
+.box-13-check-label input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.w2-overlay-box.box-14 {
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.box-14-rows {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.box-14-row-a {
+  height: 50%;
+  display: flex;
+  align-items: flex-end;
+  padding: 2px 4px 3px 4px;
+}
+
+.box-14-row-b {
+  height: 50%;
+  display: flex;
+  align-items: flex-end;
+  padding: 2px 4px 3px 4px;
+  gap: 8px;
+}
+
+.box-14-row-b .w2-overlay-input {
+  flex: 1;
+}
+
+/* Unified Single-Box Multi-Line Calculation Formula Layout */
+.unified-formula-box {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.unified-formula-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.unified-formula-section + .unified-formula-section {
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 0.65rem;
+}
+
+.unified-formula-label-col {
+  width: 145px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.unified-formula-lines-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.unified-formula-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  flex-wrap: wrap;
+}
+
+.unified-formula-eq {
+  flex: 1;
+  min-width: 240px;
+}
+
+@media (max-width: 720px) {
+  .unified-formula-section {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .unified-formula-label-col {
+    width: auto;
+  }
+}
+
 

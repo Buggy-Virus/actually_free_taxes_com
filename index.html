@@ -24,6 +24,25 @@
         </div>
 
         <nav class="menu-bar" aria-label="Application Menu">
+          <!-- Drafts Dropdown Bar (first, right after title; displays active draft name) -->
+          <div class="menu-dropdown" data-menu="drafts">
+            <button type="button" class="menu-bar-btn menu-drafts-bar-btn" id="menu-drafts-btn" aria-haspopup="true" aria-expanded="false" title="Switch or manage saved drafts">
+              <span class="draft-pulse-dot" id="storage-dot"></span>
+              <span id="active-draft-label">Draft 1</span>
+              <span class="menu-caret">▾</span>
+            </button>
+            <div class="menu-dropdown-panel menu-wide" role="menu">
+              <div class="menu-section-label">Switch Draft</div>
+              <div id="menu-drafts-list"></div>
+              <div class="menu-divider"></div>
+              <button type="button" class="menu-item" id="btn-new-draft" role="menuitem">+ New Blank Draft</button>
+              <button type="button" class="menu-item" id="btn-duplicate-draft" role="menuitem">Duplicate Current Draft</button>
+              <button type="button" class="menu-item" id="btn-rename-draft" role="menuitem">Rename Active Draft</button>
+              <div class="menu-divider"></div>
+              <button type="button" class="menu-item menu-item-danger" id="btn-delete-draft" role="menuitem">Delete Active Draft</button>
+            </div>
+          </div>
+
           <!-- Data Menu -->
           <div class="menu-dropdown" data-menu="data">
             <button type="button" class="menu-bar-btn" aria-haspopup="true" aria-expanded="false">
@@ -102,32 +121,13 @@
               <button type="button" class="menu-item" data-preset="blank" role="menuitem">Blank Slate</button>
             </div>
           </div>
-
-          <!-- Drafts Dropdown Bar (displays active draft name) -->
-          <div class="menu-dropdown" data-menu="drafts">
-            <button type="button" class="menu-bar-btn menu-drafts-bar-btn" id="menu-drafts-btn" aria-haspopup="true" aria-expanded="false" title="Switch or manage saved drafts">
-              <span class="draft-pulse-dot" id="storage-dot"></span>
-              <span id="active-draft-label">Draft 1</span>
-              <span class="menu-caret">▾</span>
-            </button>
-            <div class="menu-dropdown-panel menu-wide" role="menu">
-              <div class="menu-section-label">Switch Draft</div>
-              <div id="menu-drafts-list"></div>
-              <div class="menu-divider"></div>
-              <button type="button" class="menu-item" id="btn-new-draft" role="menuitem">+ New Blank Draft</button>
-              <button type="button" class="menu-item" id="btn-duplicate-draft" role="menuitem">Duplicate Current Draft</button>
-              <button type="button" class="menu-item" id="btn-rename-draft" role="menuitem">Rename Active Draft</button>
-              <div class="menu-divider"></div>
-              <button type="button" class="menu-item menu-item-danger" id="btn-delete-draft" role="menuitem">Delete Active Draft</button>
-            </div>
-          </div>
         </nav>
       </div>
 
       <!-- Right-Aligned Info Links -->
       <div class="header-controls">
         <button type="button" class="btn" id="btn-header-about" title="About ActuallyFreeTaxes.com">About</button>
-        <button type="button" class="btn" id="btn-header-howto" title="How To Use &amp; AI Walkthrough">How To Use</button>
+        <button type="button" class="btn" id="btn-header-howto" title="Help &amp; Walkthrough">Help</button>
         <button type="button" class="btn" id="btn-header-tos" title="View Terms of Service and Disclaimers">Terms &amp; Advisory</button>
       </div>
     </div>
@@ -157,7 +157,7 @@
 
       <div class="toc-group">
         <div class="toc-group-label">
-          <span>Federal Return</span>
+          <span>Federal Section</span>
         </div>
         <a href="#section-federal-other-income" class="toc-link" data-toc-target="section-federal-other-income">
           <span>Other Income</span>
@@ -171,6 +171,10 @@
         <a href="#section-federal-itemized" class="toc-link" data-toc-target="section-federal-itemized">
           <span>Itemized Deductions</span>
         </a>
+        <a href="#section-federal-calculations" class="toc-link" data-toc-target="section-federal-calculations">
+          <span>Federal Calculations</span>
+        </a>
+        <div id="toc-calc-list" class="toc-group"></div>
       </div>
 
       <div class="toc-group">
@@ -181,19 +185,9 @@
       </div>
 
       <div class="toc-group">
-        <div class="toc-group-label">
-          <span>Calculations</span>
-        </div>
-        <div id="toc-calc-list" class="toc-group"></div>
-        <a href="#section-state-returns" class="toc-link" data-toc-target="section-state-returns">
-          <span>State Tax Returns</span>
-        </a>
         <a href="#calc-unified-summary" class="toc-link" data-toc-target="calc-unified-summary">
           <span>Final Tax Summary</span>
         </a>
-      </div>
-
-      <div class="toc-group">
         <a href="#section-filing-options" class="toc-link" data-toc-target="section-filing-options">
           <span>Filing &amp; Print Options</span>
         </a>
@@ -362,13 +356,13 @@
       </button>
     </section>
 
-    <!-- 3. FEDERAL SECTIONS -->
+    <!-- 3. FEDERAL SECTION -->
     <section id="section-federal-other-income" class="federal-panel-section">
       <div class="section-header-bar">
         <h2>Federal: Other Income</h2>
         <div class="add-panel-dropdown-wrap" data-panel-dropdown="other-income">
           <button type="button" class="btn btn-primary add-panel-dropdown-btn" aria-haspopup="true" aria-expanded="false">
-            + Add Other Income ?
+            + Add Other Income ▾
           </button>
           <div class="add-panel-dropdown-menu" role="menu"></div>
         </div>
@@ -381,7 +375,7 @@
         <h2>Federal: Adjustments</h2>
         <div class="add-panel-dropdown-wrap" data-panel-dropdown="adjustments">
           <button type="button" class="btn btn-primary add-panel-dropdown-btn" aria-haspopup="true" aria-expanded="false">
-            + Add Adjustment ?
+            + Add Adjustment ▾
           </button>
           <div class="add-panel-dropdown-menu" role="menu"></div>
         </div>
@@ -394,7 +388,7 @@
         <h2>Federal: Credits</h2>
         <div class="add-panel-dropdown-wrap" data-panel-dropdown="credits">
           <button type="button" class="btn btn-primary add-panel-dropdown-btn" aria-haspopup="true" aria-expanded="false">
-            + Add Credit ?
+            + Add Credit ▾
           </button>
           <div class="add-panel-dropdown-menu" role="menu"></div>
         </div>
@@ -413,7 +407,7 @@
           </select>
           <div class="add-panel-dropdown-wrap" data-panel-dropdown="itemized">
             <button type="button" class="btn btn-primary add-panel-dropdown-btn" aria-haspopup="true" aria-expanded="false">
-              + Add Itemized Deduction ?
+              + Add Itemized Deduction ▾
             </button>
             <div class="add-panel-dropdown-menu" role="menu"></div>
           </div>
@@ -422,22 +416,15 @@
       <div id="grid-federal-itemized" class="panels-grid"></div>
     </section>
 
-    <!-- 4. STATE SECTIONS (Grouped by State) -->
-    <section id="section-state-inputs">
-      <div id="state-sections-container"></div>
-    </section>
-
-    <!-- 5. CALCULATIONS -->
+    <!-- Federal Calculations (inside Federal Section) -->
     <section class="step-container" id="section-federal-calculations">
       <div class="section-header-bar">
-        <h2>Calculations (Form 1040)</h2>
-        <span class="calc-hint-pill">Click any calculation box to trace arrows ? Click any variable to view &amp; jump to inputs</span>
+        <h2>Federal Calculations (Form 1040)</h2>
+        <span class="calc-hint-pill">Click any box to trace arrows • Click any variable to view &amp; jump to inputs</span>
       </div>
 
-      <!-- Dynamically populated clustered calculation blocks (impact-only by default) -->
       <div id="calc-blocks-container"></div>
 
-      <!-- Progressive Tax Bracket Breakdown (shown when taxable income > 0) -->
       <div class="calc-card" id="calc-tax-brackets-card" style="display: none;">
         <div class="calc-card-header">
           <div>
@@ -463,21 +450,15 @@
       </div>
     </section>
 
-    <!-- SECTION 5: STATE TAX CALCULATIONS -->
-    <section id="section-state-returns">
-      <div class="section-header-bar">
-        <h2>5. State Tax Calculations</h2>
-        <button type="button" class="btn-minimize-section" data-section-toggle="section-state-returns" aria-expanded="true">Minimize ▴</button>
-      </div>
-      <div id="container-state-returns">
-        <!-- Populated dynamically by app.ts for each resident and nonresident state -->
-      </div>
+    <!-- 4. STATE SECTIONS (Each state has Other Income, Adjustments, Credits, Itemized Deductions, & State Calculations) -->
+    <section id="section-state-inputs">
+      <div id="state-sections-container"></div>
     </section>
 
-    <!-- SECTION 6: FINAL TAX SUMMARY -->
+    <!-- 5. FINAL TAX SUMMARY -->
     <section id="section-final-summary">
       <div class="section-header-bar">
-        <h2>6. Final Tax Summary (Federal &amp; State)</h2>
+        <h2>Final Tax Summary (Federal &amp; State)</h2>
       </div>
 
       <div class="calc-card unified-summary-card output-panel" id="calc-unified-summary">

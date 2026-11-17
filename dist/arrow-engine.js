@@ -8,6 +8,7 @@ export class ArrowEngine {
         this.activeSourceId = null;
         this.activeTargetId = null;
         this.selectedNodeId = null;
+        this.selectedSourceIds = new Set();
         this.displayMode = 'always';
         this.animationFrame = null;
         this.colors = {
@@ -99,8 +100,9 @@ export class ArrowEngine {
         this.activeTargetId = targetId;
         this.scheduleRedraw();
     }
-    setSelectedNode(nodeId) {
+    setSelectedNode(nodeId, sourceIds) {
         this.selectedNodeId = nodeId;
+        this.selectedSourceIds = new Set(sourceIds || []);
         this.scheduleRedraw();
     }
     getSelectedNode() {
@@ -137,6 +139,9 @@ export class ArrowEngine {
     }
     isConnectionHighlighted(conn) {
         if (this.selectedNodeId && (conn.sourceId === this.selectedNodeId || conn.targetId === this.selectedNodeId)) {
+            return true;
+        }
+        if (this.selectedSourceIds.size > 0 && (this.selectedSourceIds.has(conn.sourceId) || this.selectedSourceIds.has(conn.targetId))) {
             return true;
         }
         if (this.activeSourceId && (conn.sourceId === this.activeSourceId || conn.targetId === this.activeSourceId)) {
@@ -235,33 +240,78 @@ export class ArrowEngine {
         const baseRightGutter = docMainRight + 18;
         const laneSpacing = 11;
         const targetPortCount = {};
-        const anyActive = Boolean(this.activeSourceId || this.activeTargetId || this.selectedNodeId);
+        const anyActive = Boolean(this.activeSourceId || this.activeTargetId || this.selectedNodeId || this.selectedSourceIds.size > 0);
+        // Group prepared connections by horizontal row & side so inline inputs (like State W-2 bottom row)
+        // step down cleanly instead of overlapping horizontally.
+        const computeRowDropOffsets = (conns, side) => {
+            const offsets = new Map();
+            const rowGroups = [];
+            conns.forEach(p => {
+                const sY = p.sourceRect.top + docScrollY + (p.sourceRect.height / 2);
+                let group = rowGroups.find(g => Math.abs((g[0].sourceRect.top + docScrollY + g[0].sourceRect.height / 2) - sY) < 28);
+                if (!group) {
+                    group = [];
+                    rowGroups.push(group);
+                }
+                group.push(p);
+            });
+            rowGroups.forEach(group => {
+                if (group.length <= 1) {
+                    group.forEach(p => offsets.set(p, 0));
+                    return;
+                }
+                // Outermost first: for 'left' side, smallest left X is outermost; for 'right' side, largest right X is outermost
+                const sorted = [...group].sort((a, b) => side === 'left'
+                    ? a.sourceRect.left - b.sourceRect.left
+                    : b.sourceRect.right - a.sourceRect.right);
+                sorted.forEach((p, idx) => {
+                    offsets.set(p, idx * 10);
+                });
+            });
+            return offsets;
+        };
+        const leftRowOffsets = computeRowDropOffsets(leftConns, 'left');
+        const rightRowOffsets = computeRowDropOffsets(rightConns, 'right');
         const renderArrow = (p, laneIndex) => {
             const { conn, targetEl, sourceRect, targetRect, side, isHighlighted, colorCategory, strokeColor } = p;
             const targetKey = `${conn.targetId}-${side}`;
             const portIndex = targetPortCount[targetKey] || 0;
             targetPortCount[targetKey] = portIndex + 1;
+            const dropOffset = (side === 'left' ? leftRowOffsets.get(p) : rightRowOffsets.get(p)) || 0;
             let sX;
-            const sY = sourceRect.top + docScrollY + (sourceRect.height / 2);
+            const sY = dropOffset > 0
+                ? sourceRect.bottom + docScrollY - 2
+                : sourceRect.top + docScrollY + (sourceRect.height / 2);
+            const exitY = dropOffset > 0
+                ? sourceRect.bottom + docScrollY + dropOffset + 6
+                : sY;
             let tX;
             const tY = targetRect.top + docScrollY + Math.min(26 + (portIndex * 14), Math.max(15, targetRect.height - 12));
             let laneX;
             if (side === 'left') {
-                sX = sourceRect.left + docScrollX - 2;
+                sX = dropOffset > 0 ? (sourceRect.left + docScrollX + sourceRect.width / 2) : (sourceRect.left + docScrollX - 2);
                 tX = targetRect.left + docScrollX - 2;
                 laneX = baseLeftGutter - (laneIndex * laneSpacing);
             }
             else {
-                sX = sourceRect.right + docScrollX + 2;
+                sX = dropOffset > 0 ? (sourceRect.left + docScrollX + sourceRect.width / 2) : (sourceRect.right + docScrollX + 2);
                 tX = targetRect.right + docScrollX + 2;
                 laneX = baseRightGutter + (laneIndex * laneSpacing);
             }
-            const dy = tY - sY;
+            const dy = tY - exitY;
             const dirY = dy >= 0 ? 1 : -1;
             const absDy = Math.abs(dy);
             const R = Math.min(14, Math.max(3, (absDy - 4) / 2));
             let pathData;
-            if (absDy < 8) {
+            if (dropOffset > 0) {
+                if (side === 'left') {
+                    pathData = `M ${sX} ${sY} L ${sX} ${exitY} L ${laneX + R} ${exitY} Q ${laneX} ${exitY}, ${laneX} ${exitY + dirY * R} L ${laneX} ${tY - dirY * R} Q ${laneX} ${tY}, ${laneX + R} ${tY} L ${tX} ${tY}`;
+                }
+                else {
+                    pathData = `M ${sX} ${sY} L ${sX} ${exitY} L ${laneX - R} ${exitY} Q ${laneX} ${exitY}, ${laneX} ${exitY + dirY * R} L ${laneX} ${tY - dirY * R} Q ${laneX} ${tY}, ${laneX - R} ${tY} L ${tX} ${tY}`;
+                }
+            }
+            else if (absDy < 8) {
                 pathData = `M ${sX} ${sY} L ${tX} ${tY}`;
             }
             else if (side === 'left') {
@@ -313,7 +363,7 @@ export class ArrowEngine {
                 path.setAttribute('stroke-dasharray', isHighlighted ? '8 4' : '6 4');
             }
             g.appendChild(path);
-            // Wide transparent hit area
+            // Wide transparent hit area (click to jump to target; no hover hijacking)
             const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             hitArea.setAttribute('d', pathData);
             hitArea.setAttribute('fill', 'none');
@@ -321,20 +371,13 @@ export class ArrowEngine {
             hitArea.setAttribute('stroke-width', '16');
             hitArea.style.cursor = 'pointer';
             hitArea.style.pointerEvents = 'stroke';
-            hitArea.addEventListener('mouseenter', () => {
-                this.setActiveSource(conn.sourceId);
-                this.setActiveTarget(conn.targetId);
-            });
-            hitArea.addEventListener('mouseleave', () => {
-                this.clearActive();
-            });
             hitArea.addEventListener('click', () => {
                 targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 targetEl.classList.add('flash-highlight');
                 setTimeout(() => targetEl.classList.remove('flash-highlight'), 1200);
             });
             g.appendChild(hitArea);
-            // Highlighted arrows go on top of everything; unhighlighted go behind panels
+            // Highlighted arrows go on top of everything; unhighlighted go behind inputs
             if (isHighlighted) {
                 this.highlightSvg.appendChild(g);
             }
@@ -361,6 +404,7 @@ export class ArrowEngine {
                 selEl.classList.add('calc-selected');
             activeIds.add(this.selectedNodeId);
         }
+        this.selectedSourceIds.forEach(id => activeIds.add(id));
         activeIds.forEach(id => {
             this.connections.filter(c => c.sourceId === id).forEach(c => {
                 const srcEl = document.getElementById(c.sourceId);

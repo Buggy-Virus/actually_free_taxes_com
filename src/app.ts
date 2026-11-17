@@ -22,12 +22,14 @@ import {
   CalcVariableBreakdown,
   CalcVariableContributor,
   FormulaToken,
-  PanelSectionCategory
+  PanelSectionCategory,
+  StatePanelItem
 } from './types.js';
 import { calculateTaxes, buildCalculationBlocks, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
 import { renderRatingPill, renderRatingCardHtml, getFieldRating, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
 import { PANEL_CATALOG, PanelCatalogEntry, getPanelCatalogEntry } from './panel-catalog.js';
+import { getStateCatalogForSection, getStateCatalogEntry } from './state-panel-catalog.js';
 
 export const US_STATES = [
   { code: 'AL', name: 'Alabama', noIncomeTax: false },
@@ -1432,10 +1434,6 @@ class TaxApp {
           setter(Number((e.target as HTMLInputElement).value) || 0);
           this.recalculateAndRender();
         });
-        el.addEventListener('focus', () => this.arrowEngine?.setActiveSource(id));
-        el.addEventListener('blur', () => this.arrowEngine?.clearActive());
-        el.addEventListener('mouseenter', () => this.arrowEngine?.setActiveSource(id));
-        el.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
       }
     };
 
@@ -2177,8 +2175,10 @@ class TaxApp {
     cardMap.forEach(id => {
       const el = document.getElementById(id);
       if (el) {
-        el.addEventListener('mouseenter', () => this.arrowEngine?.setActiveTarget(id));
-        el.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
+        el.addEventListener('click', () => {
+          const curr = this.arrowEngine?.getSelectedNode();
+          this.arrowEngine?.setSelectedNode(curr === id ? null : id);
+        });
       }
     });
   }
@@ -3063,9 +3063,9 @@ class TaxApp {
                 <input type="text" class="w2-overlay-input" placeholder="Employee Name" value="${w2.employeeName || ''}" data-w2-field="employeeName" data-w2-id="${w2.id}">
               </div>
 
-              <!-- Box f: Employee's address and ZIP code -->
+              <!-- Box f: Employee's address and ZIP code (multi-line to right of label) -->
               <div class="w2-overlay-box box-f">
-                <input type="text" class="w2-overlay-input" placeholder="Employee Address, City, State ZIP" value="${w2.employeeAddress || ''}" data-w2-field="employeeAddress" data-w2-id="${w2.id}">
+                <textarea class="w2-overlay-textarea" placeholder="Employee Address&#10;City, State ZIP" data-w2-field="employeeAddress" data-w2-id="${w2.id}">${w2.employeeAddress || ''}</textarea>
               </div>
 
               <!-- Box 1: Wages, tips, other compensation -->
@@ -3148,26 +3148,75 @@ class TaxApp {
                 </div>
               </div>
 
-              <!-- Box 12: Code & Amount -->
+              <!-- Box 12a-12d: Code & Amount -->
               <div class="w2-overlay-box box-12" id="w2-${w2.id}-box12-container">
-                <div style="display: flex; gap: 3px; align-items: center; width: 100%;">
-                  <input type="text" class="w2-overlay-input" style="width: 38px; text-transform: uppercase; text-align: center; font-weight: 800;" value="${w2.box12Code || ''}" placeholder="Code" data-w2-id="${w2.id}" data-w2-field="box12Code">
-                  <div class="w2-overlay-input-wrap" style="flex: 1;">
-                    <span class="w2-overlay-curr">$</span>
-                    <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12-amt" value="${w2.box12Amount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12Amount">
+                <div class="box-12-rows">
+                  <div class="box-12-row">
+                    <input type="text" class="w2-overlay-input box-12-code" value="${w2.box12aCode ?? w2.box12Code ?? ''}" placeholder="12a" data-w2-id="${w2.id}" data-w2-field="box12aCode">
+                    <div class="w2-overlay-input-wrap box-12-amt-wrap">
+                      <span class="w2-overlay-curr">$</span>
+                      <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12a-amt" value="${w2.box12aAmount ?? w2.box12Amount ?? ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12aAmount">
+                    </div>
+                  </div>
+                  <div class="box-12-row">
+                    <input type="text" class="w2-overlay-input box-12-code" value="${w2.box12bCode || ''}" placeholder="12b" data-w2-id="${w2.id}" data-w2-field="box12bCode">
+                    <div class="w2-overlay-input-wrap box-12-amt-wrap">
+                      <span class="w2-overlay-curr">$</span>
+                      <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12b-amt" value="${w2.box12bAmount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12bAmount">
+                    </div>
+                  </div>
+                  <div class="box-12-row">
+                    <input type="text" class="w2-overlay-input box-12-code" value="${w2.box12cCode || ''}" placeholder="12c" data-w2-id="${w2.id}" data-w2-field="box12cCode">
+                    <div class="w2-overlay-input-wrap box-12-amt-wrap">
+                      <span class="w2-overlay-curr">$</span>
+                      <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12c-amt" value="${w2.box12cAmount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12cAmount">
+                    </div>
+                  </div>
+                  <div class="box-12-row">
+                    <input type="text" class="w2-overlay-input box-12-code" value="${w2.box12dCode || ''}" placeholder="12d" data-w2-id="${w2.id}" data-w2-field="box12dCode">
+                    <div class="w2-overlay-input-wrap box-12-amt-wrap">
+                      <span class="w2-overlay-curr">$</span>
+                      <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12d-amt" value="${w2.box12dAmount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12dAmount">
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <!-- Box 14: Other -->
+              <!-- Box 13: Statutory employee, Retirement plan, Third-party sick pay -->
+              <div class="w2-overlay-box box-13">
+                <div class="box-13-checks">
+                  <label class="box-13-check-label" title="Statutory employee">
+                    <input type="checkbox" data-w2-field="box13Statutory" data-w2-id="${w2.id}" ${w2.box13Statutory ? 'checked' : ''}>
+                  </label>
+                  <label class="box-13-check-label" title="Retirement plan">
+                    <input type="checkbox" data-w2-field="box13Retirement" data-w2-id="${w2.id}" ${w2.box13Retirement ? 'checked' : ''}>
+                  </label>
+                  <label class="box-13-check-label" title="Third-party sick pay">
+                    <input type="checkbox" data-w2-field="box13ThirdPartySick" data-w2-id="${w2.id}" ${w2.box13ThirdPartySick ? 'checked' : ''}>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Box 14: Other (14a + 14b split) -->
               <div class="w2-overlay-box box-14">
-                <input type="text" class="w2-overlay-input" placeholder="Other (e.g. CA SDI)" value="${w2.box14 || ''}" data-w2-field="box14" data-w2-id="${w2.id}">
+                <div class="box-14-rows">
+                  <div class="box-14-row-a">
+                    <input type="text" class="w2-overlay-input" placeholder="14 Other (e.g. CA SDI)" value="${w2.box14 || ''}" data-w2-field="box14" data-w2-id="${w2.id}">
+                  </div>
+                  <div class="box-14-row-b">
+                    <input type="text" class="w2-overlay-input" placeholder="14b Left" value="${w2.box14bLeft || ''}" data-w2-field="box14bLeft" data-w2-id="${w2.id}">
+                    <input type="text" class="w2-overlay-input" placeholder="14b Right" value="${w2.box14bRight || ''}" data-w2-field="box14bRight" data-w2-id="${w2.id}">
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Option to add a State W-2 below the Federal W-2 -->
+        <!-- State W-2 PDF Overlays -->
+        ${stateW2CardsHtml}
+
+        <!-- Option to add a State W-2 always below the last State W-2 for this employer -->
         <div class="w2-add-state-bar">
           <button type="button" class="btn btn-outline" data-add-state="${w2.id}">
             + Add State W-2
@@ -3176,9 +3225,6 @@ class TaxApp {
             ${w2.states.length} State W-2${w2.states.length === 1 ? '' : 's'} attached for this employer
           </span>
         </div>
-
-        <!-- State W-2 PDF Overlays -->
-        ${stateW2CardsHtml}
       `;
 
       container.appendChild(group);
@@ -3189,6 +3235,26 @@ class TaxApp {
 
   private bindW2Events(): void {
     this.state.w2s.forEach(w2 => {
+      // Click W-2 card to select & highlight its dependency arrows
+      const fedCard = document.querySelector<HTMLElement>(`#w2-card-${w2.id} > .w2-literal-card`);
+      if (fedCard) {
+        fedCard.addEventListener('click', (e: Event) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('button')) return;
+          const fedIds = [`w2-${w2.id}-box1`, `w2-${w2.id}-box2`, `w2-${w2.id}-box3`, `w2-${w2.id}-box4`, `w2-${w2.id}-box5`, `w2-${w2.id}-box6`];
+          const curr = this.arrowEngine?.getSelectedNode();
+          if (curr === `w2-fed-${w2.id}` && !target.closest('input, select, textarea')) {
+            this.arrowEngine?.setSelectedNode(null);
+          } else {
+            this.arrowEngine?.setSelectedNode(`w2-fed-${w2.id}`, fedIds);
+          }
+          document.querySelectorAll('.panel-selected').forEach(el => el.classList.remove('panel-selected'));
+          if (this.arrowEngine?.getSelectedNode() === `w2-fed-${w2.id}`) {
+            fedCard.classList.add('panel-selected');
+          }
+        });
+      }
+
       const bindTextProp = (field: keyof W2Data) => {
         document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[data-w2-field="${String(field)}"][data-w2-id="${w2.id}"]`).forEach(el => {
           el.addEventListener('input', (e: Event) => {
@@ -3203,7 +3269,25 @@ class TaxApp {
       bindTextProp('controlNumber');
       bindTextProp('employeeName');
       bindTextProp('employeeAddress');
+      bindTextProp('box12aCode');
+      bindTextProp('box12bCode');
+      bindTextProp('box12cCode');
+      bindTextProp('box12dCode');
       bindTextProp('box14');
+      bindTextProp('box14bLeft');
+      bindTextProp('box14bRight');
+
+      const bindCheckProp = (field: keyof W2Data) => {
+        document.querySelectorAll<HTMLInputElement>(`input[type="checkbox"][data-w2-field="${String(field)}"][data-w2-id="${w2.id}"]`).forEach(el => {
+          el.addEventListener('change', () => {
+            (w2 as any)[field] = el.checked;
+            this.saveDraft();
+          });
+        });
+      };
+      bindCheckProp('box13Statutory');
+      bindCheckProp('box13Retirement');
+      bindCheckProp('box13ThirdPartySick');
 
       const bindNumProp = (field: keyof W2Data) => {
         document.querySelectorAll<HTMLInputElement>(`[data-w2-field="${String(field)}"][data-w2-id="${w2.id}"]`).forEach(el => {
@@ -3217,6 +3301,10 @@ class TaxApp {
       bindNumProp('box8');
       bindNumProp('box10');
       bindNumProp('box11');
+      bindNumProp('box12aAmount');
+      bindNumProp('box12bAmount');
+      bindNumProp('box12cAmount');
+      bindNumProp('box12dAmount');
 
       // Federal Box 1 - 6
       const bindW2Field = (boxNum: number, propName: keyof W2Data, autoFillFICA = false) => {
@@ -3252,11 +3340,6 @@ class TaxApp {
 
           this.recalculateAndRender();
         });
-
-        inputEl.addEventListener('focus', () => this.arrowEngine?.setActiveSource(inputId));
-        inputEl.addEventListener('blur', () => this.arrowEngine?.clearActive());
-        inputEl.addEventListener('mouseenter', () => this.arrowEngine?.setActiveSource(inputId));
-        inputEl.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
       };
 
       bindW2Field(1, 'box1', true);
@@ -3268,6 +3351,26 @@ class TaxApp {
 
       // State Boxes 15-20 fields
       w2.states.forEach(st => {
+        const stateCard = document.getElementById(`w2-${w2.id}-state-card-${st.id}`);
+        if (stateCard) {
+          stateCard.addEventListener('click', (e: Event) => {
+            const target = e.target as HTMLElement;
+            if (target.closest('button')) return;
+            const stIds = [`w2-${w2.id}-state-${st.id}-box16`, `w2-${w2.id}-state-${st.id}-box17`];
+            const cardKey = `w2-${w2.id}-state-card-${st.id}`;
+            const curr = this.arrowEngine?.getSelectedNode();
+            if (curr === cardKey && !target.closest('input, select')) {
+              this.arrowEngine?.setSelectedNode(null);
+            } else {
+              this.arrowEngine?.setSelectedNode(cardKey, stIds);
+            }
+            document.querySelectorAll('.panel-selected').forEach(el => el.classList.remove('panel-selected'));
+            if (this.arrowEngine?.getSelectedNode() === cardKey) {
+              stateCard.classList.add('panel-selected');
+            }
+          });
+        }
+
         const rowSelector = `[data-w2-id="${w2.id}"][data-state-id="${st.id}"]`;
 
         const stateSelect = document.querySelector<HTMLSelectElement>(`select${rowSelector}[data-state-field="state"]`);
@@ -3280,7 +3383,6 @@ class TaxApp {
               const taxInp = document.getElementById(`w2-${w2.id}-state-${st.id}-box17`) as HTMLInputElement | null;
               if (taxInp) taxInp.value = '0';
             }
-            this.renderStateSections();
             this.recalculateAndRender();
           });
         }
@@ -3299,8 +3401,6 @@ class TaxApp {
             st.stateWages = Number((e.target as HTMLInputElement).value) || 0;
             this.recalculateAndRender();
           });
-          wagesInp.addEventListener('focus', () => this.arrowEngine?.setActiveSource(`w2-${w2.id}-state-${st.id}-box16`));
-          wagesInp.addEventListener('blur', () => this.arrowEngine?.clearActive());
         }
 
         const taxInp = document.getElementById(`w2-${w2.id}-state-${st.id}-box17`) as HTMLInputElement | null;
@@ -3309,10 +3409,6 @@ class TaxApp {
             st.stateTaxWithheld = Number((e.target as HTMLInputElement).value) || 0;
             this.recalculateAndRender();
           });
-          taxInp.addEventListener('focus', () => this.arrowEngine?.setActiveSource(`w2-${w2.id}-state-${st.id}-box17`));
-          taxInp.addEventListener('blur', () => this.arrowEngine?.clearActive());
-          taxInp.addEventListener('mouseenter', () => this.arrowEngine?.setActiveSource(`w2-${w2.id}-state-${st.id}-box17`));
-          taxInp.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
         }
 
         const localWagesInp = document.querySelector<HTMLInputElement>(`input${rowSelector}[data-state-field="localWages"]`);
@@ -3778,8 +3874,8 @@ class TaxApp {
       bracketsCard.style.display = showBrackets ? '' : 'none';
     }
 
-    // Render Dynamic State Return Cards & Final Tax Summary Table
-    this.renderStateReturns(taxData);
+    // Render Dynamic State Sections (with State Calculations) & Final Tax Summary Table
+    this.renderStateSections(taxData);
     this.renderUnifiedSummary(taxData);
 
     const connections = this.buildConnections(taxData);
@@ -4533,11 +4629,29 @@ class TaxApp {
         setter(Number(el.value) || 0);
         this.recalculateAndRender();
       });
-      el.addEventListener('focus', () => this.arrowEngine?.setActiveSource(id));
-      el.addEventListener('blur', () => this.arrowEngine?.clearActive());
-      el.addEventListener('mouseenter', () => this.arrowEngine?.setActiveSource(id));
-      el.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
     };
+
+    // Click any input panel (.tax-panel) to select it and highlight its dependency lines
+    document.querySelectorAll<HTMLElement>('.tax-panel').forEach(panel => {
+      if (panel.dataset.selectBound) return;
+      panel.dataset.selectBound = 'true';
+      panel.addEventListener('click', (e: Event) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button, .field-rating-pill')) return;
+        const panelId = panel.id || `panel-${Math.random()}`;
+        const inputIds = Array.from(panel.querySelectorAll<HTMLElement>('input[id], select[id]')).map(el => el.id);
+        const curr = this.arrowEngine?.getSelectedNode();
+        if (curr === panelId && !target.closest('input, select, textarea')) {
+          this.arrowEngine?.setSelectedNode(null);
+        } else {
+          this.arrowEngine?.setSelectedNode(panelId, inputIds);
+        }
+        document.querySelectorAll('.panel-selected').forEach(el => el.classList.remove('panel-selected'));
+        if (this.arrowEngine?.getSelectedNode() === panelId) {
+          panel.classList.add('panel-selected');
+        }
+      });
+    });
 
     const getCap = () => (this.state.otherIncome.capitalGains ??= { shortTerm: 0, longTerm: 0 });
     const getSchedE = () => (this.state.otherIncome.scheduleERental ??= { grossRents: 0, expenses: 0, depreciation: 0, propertyState: '' });
@@ -4685,103 +4799,209 @@ class TaxApp {
     return Array.from(codes);
   }
 
-  private renderStateSections(): void {
+  private renderStateSections(taxData?: TaxCalculationSummary): void {
     const container = document.getElementById('state-sections-container');
     if (!container) return;
     container.innerHTML = '';
 
     const activeStates = this.getActiveStateCodes();
-    const stateMap = (this.state.stateSpecific ??= {});
+    const statePanels = (this.state.statePanels ??= []);
+    const stateReturns = taxData?.stateReturnsCalc || [];
+
+    const subsections: Array<{ cat: PanelSectionCategory; title: string; addLabel: string }> = [
+      { cat: 'other-income', title: 'Other Income', addLabel: '+ Add Other Income ▾' },
+      { cat: 'adjustments', title: 'Adjustments', addLabel: '+ Add Adjustment ▾' },
+      { cat: 'credits', title: 'Credits', addLabel: '+ Add Credit ▾' },
+      { cat: 'itemized', title: 'Itemized Deductions', addLabel: '+ Add Itemized Deduction ▾' }
+    ];
 
     activeStates.forEach(code => {
       const stObj = US_STATES.find(s => s.code === code);
       const stateName = stObj ? stObj.name : code;
       const isResident = code === (this.state.residentState || 'CA').toUpperCase();
-      const data = (stateMap[code] ??= {});
+      const sr = stateReturns.find(r => r.state.toUpperCase() === code);
 
       const block = document.createElement('div');
       block.className = 'state-group-block';
       block.id = `state-group-${code.toLowerCase()}`;
 
+      let subsectionsHtml = '';
+      subsections.forEach(sub => {
+        const items = statePanels.filter(p => p.state.toUpperCase() === code && p.section === sub.cat);
+        const cardsHtml = items.length > 0
+          ? items.map(item => {
+              const entry = getStateCatalogEntry(item.itemKey);
+              if (!entry) return '';
+              return `
+                <div class="tax-panel panel-size-${entry.size} input-panel" id="state-panel-${item.id}">
+                  <div class="panel-top-row">
+                    <h3 class="panel-title">${entry.title}</h3>
+                    <div class="panel-top-actions">
+                      ${renderRatingPill(entry.ratingKey, true)}
+                      <button type="button" class="btn-close-panel" data-remove-state-panel="${item.id}" title="Remove panel" aria-label="Remove ${entry.title}">✕</button>
+                    </div>
+                  </div>
+                  <div class="panel-official-title">${entry.officialTitle}</div>
+                  <div class="panel-inputs">
+                    <div class="w2-input-wrapper">
+                      <span class="currency-symbol">$</span>
+                      <input type="number" step="any" class="w2-input state-panel-amount-input" id="input-state-panel-${item.id}" data-state-panel-id="${item.id}" value="${item.amount || 0}" placeholder="0">
+                    </div>
+                  </div>
+                  <div class="panel-short-desc">${entry.shortExplanation}</div>
+                  <button type="button" class="btn-more-info" data-rating-field="${entry.ratingKey}">
+                    <span>More Info</span>
+                    <span class="more-info-icon">ⓘ</span>
+                  </button>
+                </div>
+              `;
+            }).join('')
+          : `<div style="grid-column: 1 / -1; padding: 0.65rem 0.9rem; border: 1px dashed #cbd5e1; border-radius: 8px; color: #64748b; font-size: 0.83rem; background: #f8fafc;">No ${stateName} ${sub.title.toLowerCase()} added. Use the dropdown to add items that apply to you.</div>`;
+
+        subsectionsHtml += `
+          <div class="state-subsection" style="margin-bottom: 1.15rem;">
+            <div class="section-header-bar" style="margin-bottom: 0.6rem;">
+              <h3 style="font-size: 1rem; font-weight: 800; color: #1e293b; margin: 0;">${stateName} ${sub.title}</h3>
+              <div class="add-panel-dropdown-wrap" data-state-dropdown="${code}:${sub.cat}">
+                <button type="button" class="btn btn-primary add-panel-dropdown-btn" aria-haspopup="true" aria-expanded="false">
+                  ${sub.addLabel}
+                </button>
+                <div class="add-panel-dropdown-menu" role="menu"></div>
+              </div>
+            </div>
+            <div class="panels-grid">${cardsHtml}</div>
+          </div>
+        `;
+      });
+
+      const stateCalcHtml = sr ? `
+        <div class="state-subsection" style="margin-top: 1.25rem;">
+          <div class="section-header-bar" style="margin-bottom: 0.6rem;">
+            <h3 style="font-size: 1rem; font-weight: 800; color: #4c1d95; margin: 0;">${stateName} Calculations</h3>
+          </div>
+          <div class="calc-card calc-clickable state-return-card output-panel" id="calc-state-${code.toLowerCase()}-card">
+            <div class="calc-card-header">
+              <div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
+                  <span class="step-indicator">${sr.stateName} • ${sr.residentStatus === 'resident' ? 'Resident Return' : 'Nonresident Return'}</span>
+                  ${sr.creditForOtherStates > 0 ? `<span class="state-status-badge badge-shield" id="calc-state-${code.toLowerCase()}-ostc">OSTC Credit Applied (-${formatCurrency(sr.creditForOtherStates)})</span>` : ''}
+                  ${sr.reciprocityExemption ? `<span class="state-status-badge badge-reciprocal">Reciprocal Exemption</span>` : ''}
+                  ${!sr.hasIncomeTax ? `<span class="state-status-badge badge-no-tax">0% Wage Tax State</span>` : ''}
+                </div>
+                <h3 class="calc-card-title">${sr.formName}</h3>
+              </div>
+              <span class="irs-line-tag">${sr.isRefund ? `Refund +${formatCurrencyExact(sr.netOutcome)}` : `Owed -${formatCurrencyExact(sr.netOutcome)}`}</span>
+            </div>
+            <div class="unified-formula-box">
+              <div class="unified-formula-section">
+                <div class="unified-formula-label-col"><span class="formula-badge general">General Formula</span></div>
+                <div class="unified-formula-lines-col">
+                  <div class="unified-formula-line">
+                    <span class="unified-formula-eq">${sr.generalFormula}</span>
+                    <span class="irs-line-tag">${sr.formName}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="unified-formula-section">
+                <div class="unified-formula-label-col"><span class="formula-badge plugged">With Your Numbers</span></div>
+                <div class="unified-formula-lines-col">
+                  <div class="unified-formula-line plugged-highlight">
+                    <span class="unified-formula-eq">${sr.pluggedFormula}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ` : '';
+
       block.innerHTML = `
         <div class="state-group-header">
-          <h3>State: ${stateName} (${code}) ${isResident ? '• Primary Resident' : '• Nonresident'}</h3>
-          <span class="irs-line-tag" style="background: #f3e8ff; color: #6b21a8; border-color: #d8b4fe;">${code} State Inputs</span>
+          <h2 style="font-size: 1.2rem; font-weight: 900; color: #4c1d95; margin: 0;">${stateName} (${code}) ${isResident ? '• Primary Resident' : '• Nonresident'}</h2>
+          <span class="irs-line-tag" style="background: #f3e8ff; color: #6b21a8; border-color: #d8b4fe;">${code} State Section</span>
         </div>
-        <div class="panels-grid">
-          <div class="tax-panel panel-size-sm input-panel">
-            <div class="panel-top-row">
-              <h3 class="panel-title">${code} Other Income</h3>
-              <div class="panel-top-actions">${renderRatingPill('w2-box16', true)}</div>
-            </div>
-            <div class="panel-official-title">${stateName} • State-Only Additions</div>
-            <div class="panel-inputs">
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input state-spec-input" data-state-code="${code}" data-state-prop="otherIncome" value="${data.otherIncome || 0}" placeholder="0">
-              </div>
-            </div>
-            <div class="panel-short-desc">Income taxable in ${code} not already included on Federal Form 1040.</div>
-          </div>
-
-          <div class="tax-panel panel-size-sm input-panel">
-            <div class="panel-top-row">
-              <h3 class="panel-title">${code} Adjustments</h3>
-              <div class="panel-top-actions">${renderRatingPill('adj-hsa', true)}</div>
-            </div>
-            <div class="panel-official-title">${stateName} • State Subtractions</div>
-            <div class="panel-inputs">
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input state-spec-input" data-state-code="${code}" data-state-prop="adjustments" value="${data.adjustments || 0}" placeholder="0">
-              </div>
-            </div>
-            <div class="panel-short-desc">State-specific subtractions (e.g., 529 plan or US Treasury interest).</div>
-          </div>
-
-          <div class="tax-panel panel-size-sm input-panel">
-            <div class="panel-top-row">
-              <h3 class="panel-title">${code} Credits</h3>
-              <div class="panel-top-actions">${renderRatingPill('credits-children', true)}</div>
-            </div>
-            <div class="panel-official-title">${stateName} • State Tax Credits</div>
-            <div class="panel-inputs">
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input state-spec-input" data-state-code="${code}" data-state-prop="credits" value="${data.credits || 0}" placeholder="0">
-              </div>
-            </div>
-            <div class="panel-short-desc">Direct ${code} state credits (renter's credit, state EITC, etc.).</div>
-          </div>
-
-          <div class="tax-panel panel-size-sm input-panel">
-            <div class="panel-top-row">
-              <h3 class="panel-title">${code} Itemized Deductions</h3>
-              <div class="panel-top-actions">${renderRatingPill('itemized-charity', true)}</div>
-            </div>
-            <div class="panel-official-title">${stateName} • State Itemized Overrides</div>
-            <div class="panel-inputs">
-              <div class="w2-input-wrapper">
-                <span class="currency-symbol">$</span>
-                <input type="number" step="any" class="w2-input state-spec-input" data-state-code="${code}" data-state-prop="itemizedDeductions" value="${data.itemizedDeductions || 0}" placeholder="0">
-              </div>
-            </div>
-            <div class="panel-short-desc">State-specific itemized deductions if different from Federal Schedule A.</div>
-          </div>
-        </div>
+        ${subsectionsHtml}
+        ${stateCalcHtml}
       `;
 
       container.appendChild(block);
+
+      // Populate state dropdown menus
+      block.querySelectorAll<HTMLElement>('.add-panel-dropdown-wrap[data-state-dropdown]').forEach(wrap => {
+        const [stCode, sec] = (wrap.dataset.stateDropdown || '').split(':') as [string, PanelSectionCategory];
+        const btn = wrap.querySelector<HTMLButtonElement>('.add-panel-dropdown-btn');
+        const menu = wrap.querySelector<HTMLElement>('.add-panel-dropdown-menu');
+        if (btn && !btn.dataset.bound) {
+          btn.dataset.bound = 'true';
+          btn.addEventListener('click', (e: Event) => {
+            e.stopPropagation();
+            const wasOpen = wrap.classList.contains('open');
+            document.querySelectorAll('.menu-dropdown.open, .add-panel-dropdown-wrap.open').forEach(el => el.classList.remove('open'));
+            if (!wasOpen) wrap.classList.add('open');
+          });
+        }
+        if (menu) {
+          menu.innerHTML = '';
+          getStateCatalogForSection(stCode, sec).forEach(entry => {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'add-panel-option-row';
+            row.innerHTML = `
+              <div>
+                <span class="add-panel-option-name">${entry.title}</span>
+                <span class="add-panel-option-sub">${entry.officialTitle}</span>
+              </div>
+              ${renderRatingCircles(entry.ratingKey)}
+            `;
+            row.addEventListener('click', () => {
+              wrap.classList.remove('open');
+              const newId = Date.now() + Math.floor(Math.random() * 1000);
+              statePanels.push({
+                id: newId,
+                state: stCode,
+                section: sec,
+                itemKey: entry.key,
+                amount: 0
+              });
+              this.recalculateAndRender();
+            });
+            menu.appendChild(row);
+          });
+        }
+      });
     });
 
-    container.querySelectorAll<HTMLInputElement>('.state-spec-input').forEach(inp => {
+    // Bind state panel inputs, close buttons, More Info buttons, and click-to-select
+    container.querySelectorAll<HTMLInputElement>('.state-panel-amount-input').forEach(inp => {
       inp.addEventListener('input', () => {
-        const code = inp.dataset.stateCode!;
-        const prop = inp.dataset.stateProp as keyof NonNullable<TaxAppState['stateSpecific']>[string];
-        const sMap = (this.state.stateSpecific ??= {});
-        const entry = (sMap[code] ??= {});
-        entry[prop] = Number(inp.value) || 0;
+        const id = parseInt(inp.dataset.statePanelId || '', 10);
+        const item = statePanels.find(p => p.id === id);
+        if (item) {
+          item.amount = Number(inp.value) || 0;
+          this.recalculateAndRender();
+        }
+      });
+    });
+
+    container.querySelectorAll<HTMLElement>('[data-remove-state-panel]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = parseInt(btn.dataset.removeStatePanel || '', 10);
+        this.state.statePanels = statePanels.filter(p => p.id !== id);
         this.recalculateAndRender();
+      });
+    });
+
+    container.querySelectorAll<HTMLElement>('.btn-more-info[data-rating-field]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.ratingField;
+        if (key) this.openGuidanceModal(key);
+      });
+    });
+
+    container.querySelectorAll<HTMLElement>('.calc-clickable').forEach(card => {
+      card.addEventListener('click', () => {
+        const curr = this.arrowEngine?.getSelectedNode();
+        this.arrowEngine?.setSelectedNode(curr === card.id ? null : card.id);
       });
     });
   }
@@ -4827,24 +5047,18 @@ class TaxApp {
       card.className = `calc-card calc-clickable ${block.isOutput ? 'output-panel' : ''} ${selectedId === block.id ? 'calc-selected' : ''}`;
       card.id = block.id;
 
-      const linesHtml = block.lines.map(line => `
-        <div class="calc-line-item ${line.isIntermediate ? 'is-intermediate' : ''}" id="${line.id}">
-          <div class="calc-line-top">
-            <span class="calc-line-name">${line.label}</span>
-            ${line.formLineLabel
-              ? `<span class="irs-line-tag">${line.formLineLabel}</span>`
-              : `<span class="irs-line-tag intermediate-tag">Intermediate</span>`}
-          </div>
-          <div class="formula-box" style="margin-top: 0.25rem;">
-            <div class="formula-row">
-              <span class="formula-badge general">General Formula</span>
-              <span class="formula-math formula-general">${this.renderTokensHtml(line.generalTokens.map(tk => tk.type === 'var' ? { ...tk, valueFormatted: tk.label } : tk), block.id)}</span>
-            </div>
-            <div class="formula-row">
-              <span class="formula-badge plugged">With Your Numbers</span>
-              <span class="formula-math plugged-highlight formula-plugged">${this.renderTokensHtml(line.pluggedTokens, block.id)}</span>
-            </div>
-          </div>
+      const generalLinesHtml = block.lines.map(line => `
+        <div class="unified-formula-line" id="${line.id}-gen">
+          <span class="unified-formula-eq">${this.renderTokensHtml(line.generalTokens.map(tk => tk.type === 'var' ? { ...tk, valueFormatted: tk.label } : tk), block.id)}</span>
+          ${line.formLineLabel
+            ? `<span class="irs-line-tag">${line.formLineLabel}</span>`
+            : `<span class="irs-line-tag intermediate-tag">Intermediate</span>`}
+        </div>
+      `).join('');
+
+      const pluggedLinesHtml = block.lines.map(line => `
+        <div class="unified-formula-line plugged-highlight" id="${line.id}">
+          <span class="unified-formula-eq">${this.renderTokensHtml(line.pluggedTokens, block.id)}</span>
         </div>
       `).join('');
 
@@ -4855,7 +5069,24 @@ class TaxApp {
             <h3 class="calc-card-title">${block.title}</h3>
           </div>
         </div>
-        <div class="calc-lines-list">${linesHtml}</div>
+        <div class="unified-formula-box">
+          <div class="unified-formula-section">
+            <div class="unified-formula-label-col">
+              <span class="formula-badge general">General Formula</span>
+            </div>
+            <div class="unified-formula-lines-col">
+              ${generalLinesHtml}
+            </div>
+          </div>
+          <div class="unified-formula-section">
+            <div class="unified-formula-label-col">
+              <span class="formula-badge plugged">With Your Numbers</span>
+            </div>
+            <div class="unified-formula-lines-col">
+              ${pluggedLinesHtml}
+            </div>
+          </div>
+        </div>
       `;
 
       // Click on calculation box selects it & highlights arrows leading to/from it

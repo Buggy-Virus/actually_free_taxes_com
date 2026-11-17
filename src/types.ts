@@ -42,7 +42,20 @@ export interface W2Data {
   box11?: number; // Nonqualified plans
   box12Code?: string;
   box12Amount?: number;
-  box14?: string; // Other
+  box12aCode?: string;
+  box12aAmount?: number;
+  box12bCode?: string;
+  box12bAmount?: number;
+  box12cCode?: string;
+  box12cAmount?: number;
+  box12dCode?: string;
+  box12dAmount?: number;
+  box13Statutory?: boolean;
+  box13Retirement?: boolean;
+  box13ThirdPartySick?: boolean;
+  box14?: string; // Other 14a
+  box14bLeft?: string;
+  box14bRight?: string;
   states: StateTaxLine[];
 }
 
@@ -132,6 +145,14 @@ export interface StateSpecificInputs {
   itemizedDeductions?: number;
 }
 
+export interface StatePanelItem {
+  id: number;
+  state: string;
+  section: PanelSectionCategory;
+  itemKey: string;
+  amount: number;
+}
+
 export interface TaxAppState {
   year: TaxYear;
   filingStatus: FilingStatus;
@@ -143,6 +164,7 @@ export interface TaxAppState {
   itemizedDeductions?: ItemizedDeductionsInput;
   deductionMethod?: DeductionMethod;
   stateSpecific?: Record<string, StateSpecificInputs>;
+  statePanels?: StatePanelItem[];
   showAllArrows: boolean;
 }
 
