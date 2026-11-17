@@ -3298,21 +3298,16 @@ input[type="number"] {
 
 /* State Sections */
 .state-group-block {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-top: 4px solid #8b5cf6;
-  border-radius: 10px;
-  padding: 1rem 1.25rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 2rem;
 }
 
 .state-group-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.85rem;
+  margin-bottom: 1rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 2px solid #cbd5e1;
 }
 
 .state-group-header h3 {
@@ -3651,9 +3646,13 @@ input[type="number"] {
 }
 
 .unified-formula-label-col {
-  width: 145px;
+  width: 185px;
   flex-shrink: 0;
   padding-top: 2px;
+}
+
+.unified-formula-label-col .formula-badge {
+  white-space: nowrap;
 }
 
 .unified-formula-lines-col {

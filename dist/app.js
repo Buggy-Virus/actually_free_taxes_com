@@ -3909,30 +3909,35 @@ class TaxApp {
         const stateListContainer = document.getElementById('toc-state-list');
         if (stateListContainer) {
             stateListContainer.innerHTML = '';
+            const stateSubsections = [
+                { cat: 'other-income', title: 'Other Income' },
+                { cat: 'adjustments', title: 'Adjustments' },
+                { cat: 'credits', title: 'Credits' },
+                { cat: 'itemized', title: 'Itemized Deductions' },
+                { cat: 'calculations', title: 'Calculations' }
+            ];
             this.getActiveStateCodes().forEach(code => {
                 const stObj = US_STATES.find(s => s.code === code);
-                const link = document.createElement('a');
-                link.className = 'toc-link';
-                link.href = `#state-group-${code.toLowerCase()}`;
-                link.dataset.tocTarget = `state-group-${code.toLowerCase()}`;
-                link.innerHTML = `<span>${stObj ? stObj.name : code}</span><span class="toc-badge">${code}</span>`;
-                stateListContainer.appendChild(link);
-            });
-        }
-        // Dynamic Visible Calculation Blocks in Table of Contents
-        const calcListContainer = document.getElementById('toc-calc-list');
-        if (calcListContainer) {
-            calcListContainer.innerHTML = '';
-            const showEmpty = Boolean(this.uiPrefs.showEmptyCalcBlocks);
-            this.currentCalcBlocks
-                .filter(b => b.hasImpact || showEmpty)
-                .forEach(block => {
-                const link = document.createElement('a');
-                link.className = 'toc-link';
-                link.href = `#${block.id}`;
-                link.dataset.tocTarget = block.id;
-                link.innerHTML = `<span>${block.title}</span>`;
-                calcListContainer.appendChild(link);
+                const stateName = stObj ? stObj.name : code;
+                const headerLink = document.createElement('a');
+                headerLink.className = 'toc-link';
+                headerLink.style.fontWeight = '700';
+                headerLink.style.marginTop = '0.35rem';
+                headerLink.href = `#state-group-${code.toLowerCase()}`;
+                headerLink.dataset.tocTarget = `state-group-${code.toLowerCase()}`;
+                headerLink.innerHTML = `<span>${stateName}</span><span class="toc-badge">${code}</span>`;
+                stateListContainer.appendChild(headerLink);
+                stateSubsections.forEach(sub => {
+                    const targetId = `state-${code.toLowerCase()}-${sub.cat}`;
+                    const subLink = document.createElement('a');
+                    subLink.className = 'toc-link';
+                    subLink.style.paddingLeft = '1.25rem';
+                    subLink.style.fontSize = '0.8rem';
+                    subLink.href = `#${targetId}`;
+                    subLink.dataset.tocTarget = targetId;
+                    subLink.innerHTML = `<span>${stateName} ${sub.title}</span>`;
+                    stateListContainer.appendChild(subLink);
+                });
             });
         }
         this.bindTocScrollspy();
@@ -4696,9 +4701,9 @@ class TaxApp {
                     }).join('')
                     : `<div style="grid-column: 1 / -1; padding: 0.65rem 0.9rem; border: 1px dashed #cbd5e1; border-radius: 8px; color: #64748b; font-size: 0.83rem; background: #f8fafc;">No ${stateName} ${sub.title.toLowerCase()} added. Use the dropdown to add items that apply to you.</div>`;
                 subsectionsHtml += `
-          <div class="state-subsection" style="margin-bottom: 1.15rem;">
-            <div class="section-header-bar" style="margin-bottom: 0.6rem;">
-              <h3 style="font-size: 1rem; font-weight: 800; color: #1e293b; margin: 0;">${stateName} ${sub.title}</h3>
+          <section class="panel-section state-subsection" id="state-${code.toLowerCase()}-${sub.cat}">
+            <div class="section-header-bar">
+              <h2>${stateName} ${sub.title}</h2>
               <div class="add-panel-dropdown-wrap" data-state-dropdown="${code}:${sub.cat}">
                 <button type="button" class="btn btn-primary add-panel-dropdown-btn" aria-haspopup="true" aria-expanded="false">
                   ${sub.addLabel}
@@ -4707,13 +4712,13 @@ class TaxApp {
               </div>
             </div>
             <div class="panels-grid">${cardsHtml}</div>
-          </div>
+          </section>
         `;
             });
             const stateCalcHtml = sr ? `
-        <div class="state-subsection" style="margin-top: 1.25rem;">
-          <div class="section-header-bar" style="margin-bottom: 0.6rem;">
-            <h3 style="font-size: 1rem; font-weight: 800; color: #4c1d95; margin: 0;">${stateName} Calculations</h3>
+        <section class="panel-section state-subsection" id="state-${code.toLowerCase()}-calculations">
+          <div class="section-header-bar">
+            <h2>${stateName} Calculations</h2>
           </div>
           <div class="calc-card calc-clickable state-return-card output-panel" id="calc-state-${code.toLowerCase()}-card">
             <div class="calc-card-header">
@@ -4748,7 +4753,7 @@ class TaxApp {
               </div>
             </div>
           </div>
-        </div>
+        </section>
       ` : '';
             block.innerHTML = `
         <div class="state-group-header">
