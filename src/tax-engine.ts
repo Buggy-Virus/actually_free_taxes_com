@@ -2526,6 +2526,7 @@ export function calculateStateReturnsAndUnifiedSummary(
       else if (residentState === 'NM' || residentState === 'ND') stateLtcgExclusion = Math.round(netLtcg * 0.40 * 100) / 100;
       else if (residentState === 'WI') stateLtcgExclusion = Math.round(netLtcg * 0.30 * 100) / 100;
       else if (residentState === 'AR') stateLtcgExclusion = Math.round(netLtcg * 0.50 * 100) / 100;
+      else if (residentState === 'AZ') stateLtcgExclusion = Math.round(netLtcg * 0.25 * 100) / 100;
       else if (residentState === 'VT') stateLtcgExclusion = Math.min(5000, Math.round(netLtcg * 0.40 * 100) / 100);
     }
     // 4. State Deduction for Federal Income Tax Paid (AL 100%, OR up to $8,250, MO up to $5,000/$10,000):
@@ -2537,15 +2538,21 @@ export function calculateStateReturnsAndUnifiedSummary(
     // 5. NJ Property Tax Deduction (up to $15,000 of realEstateTax on Form NJ-1040):
     const njPropertyTaxDed = residentState === 'NJ' ? Math.min(15000, Number(state.itemizedDeductions?.realEstateTax) || 0) : 0;
 
+    // 6. CO State Income Tax SALT Add-Back when Federal Schedule A itemized:
+    const coSaltAddBack = (residentState === 'CO' && itemizedCalc?.chosenMethod === 'itemized')
+      ? Math.max(0, Math.round((itemizedCalc.allowableSalt - (Number(state.itemizedDeductions?.realEstateTax) || 0)) * 100) / 100)
+      : 0;
+
     const modifications: StateModificationItem[] = [];
     if (hsaAddBack > 0) modifications.push({ label: `${residentState} HSA Add-Back`, amount: hsaAddBack, sourceId: `auto-state-${residentState.toLowerCase()}-hsa-addback` });
     if (paAddBack > 0) modifications.push({ label: 'PA Non-Conformity Add-Back (IRA/HSA/Student Loan/Cap Loss)', amount: paAddBack, sourceId: `auto-state-${residentState.toLowerCase()}-pa-addback` });
+    if (coSaltAddBack > 0) modifications.push({ label: 'CO State SALT Add-Back (Form DR 0104)', amount: coSaltAddBack, sourceId: 'auto-state-co-salt-addback' });
     if (stateLtcgExclusion > 0) modifications.push({ label: `${residentState} LTCG Exclusion`, amount: -stateLtcgExclusion, sourceId: `auto-state-${residentState.toLowerCase()}-ltcg-excl` });
     if (fedTaxSubtraction > 0) modifications.push({ label: `${residentState} Federal Tax Paid Deduction`, amount: -fedTaxSubtraction, sourceId: `auto-state-${residentState.toLowerCase()}-fed-tax-ded` });
     if (njPropertyTaxDed > 0) modifications.push({ label: 'NJ Property Tax Deduction (Cap $15,000)', amount: -njPropertyTaxDed, sourceId: `auto-state-${residentState.toLowerCase()}-prop-tax-ded` });
 
     const preModResidentWages = residentTotalWages;
-    residentTotalWages = Math.max(0, residentTotalWages + hsaAddBack + paAddBack - stateLtcgExclusion - fedTaxSubtraction - njPropertyTaxDed);
+    residentTotalWages = Math.max(0, residentTotalWages + hsaAddBack + paAddBack + coSaltAddBack - stateLtcgExclusion - fedTaxSubtraction - njPropertyTaxDed);
 
     let baseStdDed = residentRule.standardDeduction[effectiveStatus] || 0;
     if (residentState === 'MD') {
@@ -2556,6 +2563,10 @@ export function calculateStateReturnsAndUnifiedSummary(
       baseStdDed = effectiveStatus === 'married_joint' ? 25000 : 12500;
     } else if (residentState === 'DE' && (Number(state.dependents?.age65OrBlindCount) || 0) > 0) {
       baseStdDed += Math.min(2, Number(state.dependents?.age65OrBlindCount) || 0) * 2500;
+    } else if (residentState === 'WI') {
+      const wiPhaseStart = effectiveStatus === 'married_joint' ? 26360 : 18220;
+      const wiPhaseRate = effectiveStatus === 'married_joint' ? 0.19778 : 0.12;
+      baseStdDed = Math.max(0, Math.round(baseStdDed - Math.max(0, residentTotalWages - wiPhaseStart) * wiPhaseRate));
     }
 
     // Support State Itemized Deductions (e.g., NY Form IT-196, CA Schedule CA uncapped property tax, DC, MD, VA)
