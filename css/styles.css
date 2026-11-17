@@ -251,6 +251,7 @@ body {
   flex-direction: column;
   gap: 0.75rem;
   scrollbar-width: thin;
+  z-index: 20;
 }
 
 .toc-header {
