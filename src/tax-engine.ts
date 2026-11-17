@@ -2554,6 +2554,8 @@ export function calculateStateReturnsAndUnifiedSummary(
       baseStdDed = Math.min(mdMax, Math.max(mdMin, Math.round(residentTotalWages * 0.15)));
     } else if (residentState === 'LA' && year >= 2025) {
       baseStdDed = effectiveStatus === 'married_joint' ? 25000 : 12500;
+    } else if (residentState === 'DE' && (Number(state.dependents?.age65OrBlindCount) || 0) > 0) {
+      baseStdDed += Math.min(2, Number(state.dependents?.age65OrBlindCount) || 0) * 2500;
     }
 
     // Support State Itemized Deductions (e.g., NY Form IT-196, CA Schedule CA uncapped property tax, DC, MD, VA)
@@ -2612,6 +2614,11 @@ export function calculateStateReturnsAndUnifiedSummary(
     const resSpItem = resSpList.filter(p => p.section === 'itemized').reduce((s, p) => s + evalStatePanelAmt(p), 0)
       + (Number(state.stateSpecific?.[residentState]?.itemizedDeductions) || 0);
 
+    const STATE_PERSONAL_EXEMPTION: Record<string, number> = {
+      AL: 1500, CT: 15000, HI: 1144, IL: 2775, IN: 1000, KS: 9160,
+      MD: 3200, ME: 5000, MI: 5600, MS: 6000, NJ: 1000, OH: 2400,
+      OK: 1000, RI: 4900, VA: 930, VT: 5100, WI: 700, WV: 2000
+    };
     const STATE_DEPENDENT_EXEMPTION: Record<string, number> = {
       NY: 1000, NJ: 1500, IL: 2775, MA: 1000, MI: 5600, MD: 3200, GA: 4000,
       IN: 1500, MN: 5050, SC: 4610, VA: 930, WV: 2000, OH: 2400, OK: 1000,
@@ -2619,9 +2626,18 @@ export function calculateStateReturnsAndUnifiedSummary(
     };
     const numChildrenDep = Number(state.dependents?.childrenCount) || 0;
     const totalDependents = numChildrenDep + (Number(state.dependents?.otherDependentsCount) || 0);
-    let stateExemptionAmount = totalDependents > 0 && STATE_DEPENDENT_EXEMPTION[residentState]
+    let personalExemp = STATE_PERSONAL_EXEMPTION[residentState] ? (isMfj ? 2 : 1) * STATE_PERSONAL_EXEMPTION[residentState] : 0;
+    if (residentState === 'CT') {
+      const ctBase = isMfj ? 24000 : 15000;
+      const ctThresh = isMfj ? 48000 : 30000;
+      personalExemp = Math.max(0, ctBase - Math.max(0, residentTotalWages - ctThresh));
+    } else if (residentState === 'IL' && residentTotalWages > (isMfj ? 500000 : 250000)) {
+      personalExemp = 0;
+    }
+    const depExemp = totalDependents > 0 && STATE_DEPENDENT_EXEMPTION[residentState]
       ? totalDependents * STATE_DEPENDENT_EXEMPTION[residentState]
       : 0;
+    let stateExemptionAmount = personalExemp + depExemp;
     if (residentState === 'NC' && numChildrenDep > 0) {
       const ncPerChild = residentTotalWages <= (isMfj ? 40000 : 20000) ? 3000 : (residentTotalWages <= (isMfj ? 100000 : 50000) ? 1500 : 500);
       stateExemptionAmount += numChildrenDep * ncPerChild;
@@ -4259,11 +4275,13 @@ export function buildStateCalcBlocks(sr: StateReturnCalculation, allStateReturns
     p1Lines.push(...compileFormulaToLines(dedNode, vars));
   }
 
+  const hasExempDed = (sr.stateExemptionAmount ?? 0) > 0;
   const taxableNode = opNode(`line-state-${stateKey}-taxable`, `${sr.state} Taxable Income`, 'max', [
     constNode(`st-zero-${stateKey}`, '$0', 0),
-    opNode(`st-taxable-diff-${stateKey}`, `${sr.state} Income − Deduction`, 'sub', [
+    opNode(`st-taxable-diff-${stateKey}`, `${sr.state} Income − Deduction${hasExempDed ? ' − Exemptions' : ''}`, 'sub', [
       inputNode(`st-inc-${stateKey}`, `state-group-${stateKey}`, `${sr.state} Income`, sr.stateWages + (sr.statePanelOtherIncome ?? 0) - (sr.statePanelAdjustments ?? 0), { varId: 'state_wages' }),
-      inputNode(`st-ded-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Deduction`, sr.stateStandardDeduction, { varId: 'state_ded' })
+      inputNode(`st-ded-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Deduction`, sr.stateStandardDeduction, { varId: 'state_ded' }),
+      ...(hasExempDed ? [inputNode(`st-exemp-${stateKey}`, `auto-state-${stateKey}-dep-exemption`, `${sr.state} Exemptions`, sr.stateExemptionAmount ?? 0)] : [])
     ])
   ], { value: sr.stateTaxableIncome, formLineLabel: `${sr.formName} Taxable` });
   p1Lines.push(...compileFormulaToLines(taxableNode, vars));
@@ -4278,6 +4296,7 @@ export function buildStateCalcBlocks(sr: StateReturnCalculation, allStateReturns
     sourceIds: Array.from(new Set([
       ...(sr.baseStdDeduction ? [`auto-state-${stateKey}-std-ded`] : []),
       ...(sr.stateItemizedUsed ? [`auto-state-${stateKey}-itemized`] : []),
+      ...(hasExempDed ? [`auto-state-${stateKey}-dep-exemption`] : []),
       `state-group-${stateKey}`
     ]))
   });
