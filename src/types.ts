@@ -342,6 +342,14 @@ export interface StateReturnCalculation extends CalculationResult {
   surchargeLabel?: string;
   stateCreditAmount?: number;
   stateCreditLabel?: string;
+  d30Details?: {
+    grossReceipts: number;
+    netRental: number;
+    salaryAllowance: number;
+    specificExemption: number;
+    rawUbtTax: number;
+    minTaxApplied: boolean;
+  };
 }
 
 export interface UnifiedTaxJurisdictionLine {

@@ -26,7 +26,7 @@ import {
   StatePanelItem,
   AutoPanelItem
 } from './types.js';
-import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlock, buildAutoPanels, formatCurrency, formatCurrencyExact } from './tax-engine.js';
+import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlocks, buildAutoPanels, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
 import { renderRatingPill, renderRatingCardHtml, getFieldRating, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
 import { PANEL_CATALOG, PanelCatalogEntry, getPanelCatalogEntry } from './panel-catalog.js';
@@ -4907,8 +4907,8 @@ class TaxApp {
 
       let stateCalcHtml = '';
       if (sr) {
-        const stateBlock = buildStateCalcBlock(sr, stateReturns);
-        this.currentStateCalcBlocks.push(stateBlock);
+        const stateBlocks = buildStateCalcBlocks(sr, stateReturns);
+        this.currentStateCalcBlocks.push(...stateBlocks);
         const extraBadges = [
           sr.creditForOtherStates > 0 ? `<span class="state-status-badge badge-shield" id="calc-state-${code.toLowerCase()}-ostc">OSTC Credit Applied (-${formatCurrency(sr.creditForOtherStates)})</span>` : '',
           sr.reciprocityExemption ? `<span class="state-status-badge badge-reciprocal">Reciprocal Exemption</span>` : '',
@@ -4916,12 +4916,22 @@ class TaxApp {
         ].filter(Boolean).join('');
         const headerRight = `<span class="irs-line-tag">${sr.isRefund ? `Refund +${formatCurrencyExact(sr.netOutcome)}` : `Owed -${formatCurrencyExact(sr.netOutcome)}`}</span>`;
 
+        const cardsHtml = stateBlocks.map((sb, idx) => {
+          const isFinal = idx === stateBlocks.length - 1;
+          return this.renderCalcCardHtml(
+            sb,
+            'state-return-card',
+            isFinal ? extraBadges : '',
+            isFinal ? headerRight : ''
+          );
+        }).join('');
+
         stateCalcHtml = `
           <section class="panel-section state-subsection" id="state-${code.toLowerCase()}-calculations">
             <div class="section-header-bar">
               <h2>${stateName} Calculations</h2>
             </div>
-            ${this.renderCalcCardHtml(stateBlock, 'state-return-card', extraBadges, headerRight)}
+            <div class="calc-blocks-stack">${cardsHtml}</div>
           </section>
         `;
       }

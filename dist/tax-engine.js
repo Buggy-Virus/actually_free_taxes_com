@@ -2055,6 +2055,16 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 localTaxWithheld: localTax,
                 netOutcome,
                 isRefund,
+                isFlat: true,
+                flatRate: 0.0825,
+                d30Details: {
+                    grossReceipts: dcGrossReceipts,
+                    netRental: dcNetRental,
+                    salaryAllowance,
+                    specificExemption,
+                    rawUbtTax,
+                    minTaxApplied: dcGrossReceipts > 12000 && rawUbtTax < 250
+                },
                 sourceFields: raw.sourceFieldIds,
                 generalFormula: 'DC Form D-30 UBT = max($250 Min, (Net Rental Income − 30% Salary Allowance − $5,000 Exemption) × 8.25%)',
                 pluggedFormula: `DC Taxable UBT = ${formatCurrency(dcNetRental)} − ${formatCurrency(salaryAllowance)} (30% Allowance) − $5,000 (Exemption) = ${formatCurrency(dcTaxableUbt)} × 8.25% = ${formatCurrencyExact(dcLiability)}`
@@ -3622,15 +3632,7 @@ export function buildCalculationBlocks(state, summary) {
     }
     return blocks;
 }
-export function buildStateCalcBlock(sr, allStateReturns) {
-    const t = (text) => ({ type: 'text', text });
-    const v = (varId, label, amount, isEmpty, exact = true) => ({
-        type: 'var',
-        varId,
-        label,
-        valueFormatted: exact ? formatCurrencyExact(amount) : formatCurrency(amount),
-        isEmpty
-    });
+export function buildStateCalcBlocks(sr, allStateReturns) {
     const makeVar = (varId, label, totalValue, contributors, exact = true) => {
         const hasAnySetup = contributors.some(c => c.isSetUp && c.amount !== 0);
         return {
@@ -3643,7 +3645,10 @@ export function buildStateCalcBlock(sr, allStateReturns) {
         };
     };
     const stateKey = sr.state.toLowerCase();
-    const blockId = `calc-state-${stateKey}-card`;
+    const cardId = `calc-state-${stateKey}-card`;
+    const taxableId = `calc-state-${stateKey}-taxable`;
+    const tentativeId = `calc-state-${stateKey}-tentative`;
+    const localId = `calc-state-${stateKey}-local`;
     const vars = {
         state_wages: makeVar('state_wages', `${sr.state} Sourced Income`, sr.stateWages, [
             { label: `${sr.state} Wages & Sourced Income`, sign: '+', amount: sr.stateWages, amountFormatted: formatCurrencyExact(sr.stateWages), isSetUp: sr.stateWages > 0, targetElementId: `state-group-${stateKey}` }
@@ -3665,67 +3670,189 @@ export function buildStateCalcBlock(sr, allStateReturns) {
             { label: `${sr.state} State & Local Withholding`, sign: '+', amount: sr.stateWithholding, amountFormatted: formatCurrencyExact(sr.stateWithholding), isSetUp: sr.stateWithholding > 0, targetElementId: `state-group-${stateKey}` }
         ])
     };
-    const lines = [];
     if (!sr.hasIncomeTax) {
-        lines.push({
-            id: `line-state-${stateKey}-notax`,
-            label: `${sr.state} Individual Income Tax`,
-            formLineLabel: sr.formName,
-            generalTokens: [t(`${sr.state} Tax = $0.00 (No Individual Wage Income Tax)`)],
-            pluggedTokens: [t(`${sr.state} Tax = $0.00 (0% Wage Tax State)`)],
-            resultFormatted: '$0.00'
-        });
+        const noTaxNode = opNode(`line-state-${stateKey}-notax`, `${sr.state} Tax`, 'mul', [
+            inputNode(`st-w-${stateKey}`, `state-group-${stateKey}`, `${sr.state} Wages`, sr.stateWages),
+            constNode(`st-zero-rate-${stateKey}`, '0% Wage Tax', 0, 'percent')
+        ], { value: 0, formLineLabel: sr.formName });
+        return [{
+                id: cardId,
+                stepLabel: `${sr.stateName} • ${sr.residentStatus === 'resident' ? 'Resident Return' : 'Nonresident Return'}`,
+                title: sr.formName,
+                hasImpact: true,
+                isOutput: true,
+                lines: compileFormulaToLines(noTaxNode, vars),
+                variables: vars,
+                sourceIds: [`state-group-${stateKey}`]
+            }];
     }
-    else if (sr.reciprocityExemption) {
-        lines.push({
-            id: `line-state-${stateKey}-reciprocity`,
-            label: `${sr.state} Nonresident Tax`,
-            formLineLabel: sr.formName,
-            generalTokens: [t(`Nonresident Tax = $0.00 (Reciprocal Agreement Exemption)`)],
-            pluggedTokens: [t(`Nonresident Tax = $0.00 (Reciprocal Exemption; Withholding Refund: +${formatCurrencyExact(sr.netOutcome)})`)],
-            resultFormatted: `+${formatCurrencyExact(sr.netOutcome)}`
-        });
+    if (sr.reciprocityExemption) {
+        const recipNode = opNode(`line-state-${stateKey}-reciprocity`, 'Nonresident Refund (Reciprocal)', 'sub', [
+            inputNode(`st-wh-${stateKey}`, `state-group-${stateKey}`, `${sr.state} Withholding`, sr.stateWithholding, { varId: 'state_withholding' }),
+            constNode(`st-recip-zero-${stateKey}`, 'Reciprocal Exempt Tax', 0)
+        ], { value: sr.netOutcome, formLineLabel: sr.formName });
+        return [{
+                id: cardId,
+                stepLabel: `${sr.stateName} • Nonresident Return`,
+                title: `${sr.formName} (Reciprocal Exemption)`,
+                hasImpact: true,
+                isOutput: true,
+                lines: compileFormulaToLines(recipNode, vars),
+                variables: vars,
+                sourceIds: [`state-group-${stateKey}`]
+            }];
+    }
+    // Special Case: DC Form D-30 Unincorporated Business Franchise Tax
+    if (sr.d30Details) {
+        const d30 = sr.d30Details;
+        const netRentalNode = inputNode('dc-d30-net-rental', 'calc-schedule-e', 'DC Net Rental Income', d30.netRental);
+        const salaryAllowNode = opNode('line-dc-d30-salary', '30% Salary Allowance', 'mul', [
+            netRentalNode,
+            constNode('dc-d30-sal-pct', '30% Allowance', 0.30, 'percent')
+        ], { value: d30.salaryAllowance, expandIntermediate: true });
+        const dedTotalNode = opNode('line-dc-d30-ded', 'D-30 Total Deductions', 'add', [
+            salaryAllowNode,
+            constNode('dc-d30-exemp', 'Specific Exemption', d30.specificExemption)
+        ], { expandIntermediate: true });
+        const taxableUbtNode = opNode('line-dc-d30-taxable', 'DC Taxable UBT', 'max', [
+            constNode('dc-d30-zero', '$0', 0),
+            opNode('dc-d30-diff', 'Net Rental − Deductions', 'sub', [netRentalNode, dedTotalNode])
+        ], { value: sr.stateTaxableIncome, formLineLabel: 'Form D-30 Line 35' });
+        const panel1 = {
+            id: taxableId,
+            stepLabel: `${sr.stateName} • Deductions & Taxable UBT`,
+            title: 'DC Form D-30 Deductions & Taxable Income',
+            hasImpact: true,
+            lines: compileFormulaToLines(taxableUbtNode, vars),
+            variables: vars,
+            sourceIds: ['calc-schedule-e']
+        };
+        const rawUbtTaxNode = opNode('line-dc-d30-raw-tax', 'Raw UBT Tax', 'mul', [
+            inputNode('dc-d30-taxable-ref', taxableId, 'DC Taxable UBT', sr.stateTaxableIncome),
+            constNode('dc-d30-rate', '8.25% UBT Rate', 0.0825, 'percent')
+        ], { value: d30.rawUbtTax, expandIntermediate: true });
+        const finalUbtNode = d30.grossReceipts > 12000
+            ? opNode('line-dc-d30-liability', 'DC UBT Tax Liability', 'max', [
+                constNode('dc-d30-min', 'Minimum Tax', 250),
+                rawUbtTaxNode
+            ], { value: sr.stateTaxLiability, expandIntermediate: true })
+            : opNode('line-dc-d30-liability', 'DC UBT Tax Liability (Gross ≤ $12k)', 'mul', [
+                rawUbtTaxNode,
+                constNode('dc-d30-exempt-mult', 'Exempt Under $12k', 0, 'number')
+            ], { value: 0, expandIntermediate: true });
+        const dcOutcomeNode = opNode('line-dc-d30-outcome', 'Net Outcome', 'sub', [
+            inputNode('dc-d30-wh', `state-group-${stateKey}`, 'DC Withholding', sr.stateWithholding, { varId: 'state_withholding' }),
+            finalUbtNode
+        ], { value: sr.stateWithholding - sr.stateTaxLiability, formLineLabel: sr.formName });
+        const panel2 = {
+            id: cardId,
+            stepLabel: `${sr.stateName} • UBT Tax & Net Outcome`,
+            title: sr.formName,
+            hasImpact: true,
+            isOutput: true,
+            lines: compileFormulaToLines(dcOutcomeNode, vars),
+            variables: vars,
+            sourceIds: [taxableId]
+        };
+        return [panel1, panel2];
+    }
+    const blocks = [];
+    // PANEL 1: State Deductions & Taxable Income
+    const p1Lines = [];
+    (sr.modifications || []).forEach((mod, mIdx) => {
+        const modNode = opNode(`line-state-${stateKey}-mod-${mIdx}`, mod.label, 'add', [
+            inputNode(`st-mod-val-${stateKey}-${mIdx}`, mod.sourceId || `state-group-${stateKey}`, mod.label, mod.amount)
+        ], { value: mod.amount });
+        p1Lines.push(...compileFormulaToLines(modNode, vars));
+    });
+    const baseDed = sr.baseStdDeduction ?? sr.stateStandardDeduction;
+    if ((sr.stateItemizedAmount ?? 0) > 0 || (sr.statePanelItemized ?? 0) > 0) {
+        const dedNode = opNode(`line-state-${stateKey}-ded-calc`, `${sr.state} Deduction`, 'add', [
+            (sr.stateItemizedAmount ?? 0) > 0
+                ? opNode(`line-state-${stateKey}-ded-choice`, `max(${sr.state} Standard, ${sr.state} Itemized)`, 'max', [
+                    inputNode(`st-std-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Standard`, baseDed),
+                    inputNode(`st-itm-${stateKey}`, `auto-state-${stateKey}-itemized`, `${sr.state} Itemized`, sr.stateItemizedAmount ?? 0)
+                ])
+                : inputNode(`st-std-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Standard`, baseDed),
+            ...((sr.statePanelItemized ?? 0) > 0 ? [inputNode(`st-sp-itm-${stateKey}`, `state-${stateKey}-itemized`, `${sr.state} Extra Itemized`, sr.statePanelItemized ?? 0)] : [])
+        ], { value: sr.stateStandardDeduction, formLineLabel: null });
+        p1Lines.push(...compileFormulaToLines(dedNode, vars));
+    }
+    const taxableNode = opNode(`line-state-${stateKey}-taxable`, `${sr.state} Taxable Income`, 'max', [
+        constNode(`st-zero-${stateKey}`, '$0', 0),
+        opNode(`st-taxable-diff-${stateKey}`, `${sr.state} Income − Deduction`, 'sub', [
+            inputNode(`st-inc-${stateKey}`, `state-group-${stateKey}`, `${sr.state} Income`, sr.stateWages + (sr.statePanelOtherIncome ?? 0) - (sr.statePanelAdjustments ?? 0), { varId: 'state_wages' }),
+            inputNode(`st-ded-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Deduction`, sr.stateStandardDeduction, { varId: 'state_ded' })
+        ])
+    ], { value: sr.stateTaxableIncome, formLineLabel: `${sr.formName} Taxable` });
+    p1Lines.push(...compileFormulaToLines(taxableNode, vars));
+    blocks.push({
+        id: taxableId,
+        stepLabel: `${sr.stateName} • Step 1: Deductions & Taxable Income`,
+        title: `${sr.state} Deductions & Taxable Income`,
+        hasImpact: true,
+        lines: p1Lines,
+        variables: vars,
+        sourceIds: Array.from(new Set([
+            ...(sr.baseStdDeduction ? [`auto-state-${stateKey}-std-ded`] : []),
+            ...(sr.stateItemizedUsed ? [`auto-state-${stateKey}-itemized`] : []),
+            `state-group-${stateKey}`
+        ]))
+    });
+    // PANEL 2: State Tax Brackets & Tentative Tax
+    const p2Lines = [];
+    const incRef = inputNode(`st-taxable-ref-${stateKey}`, taxableId, `${sr.state} Taxable Income`, sr.stateTaxableIncome);
+    if (!sr.isFlat && sr.brackets && sr.brackets.length > 0 && sr.stateTaxableIncome > 0) {
+        const slices = sr.brackets.map(b => ({
+            index: b.bracketIndex,
+            rate: b.rate,
+            ratePercent: b.ratePercent,
+            range: b.range,
+            bracketWidth: b.bracketWidth ?? Infinity,
+            taxableAmount: b.taxableAmount,
+            taxAmount: b.taxAmount,
+            remainingBefore: b.remainingBefore ?? 0,
+            remainingAfter: b.remainingAfter ?? 0
+        }));
+        const bNode = bracketsNode(`line-state-${stateKey}-tentative`, `Tentative ${sr.state} Tax`, incRef, slices, Math.round((sr.stateTaxBeforeCredit - (sr.surchargeAmount ?? 0) + (sr.stateCreditAmount ?? 0)) * 100) / 100, { formLineLabel: `${sr.state} Tentative Tax` });
+        p2Lines.push(...compileFormulaToLines(bNode, vars));
     }
     else {
-        // 1. State Income Modifications (if any)
-        (sr.modifications || []).forEach((mod, mIdx) => {
-            const sign = mod.amount >= 0 ? '+' : '−';
-            lines.push({
-                id: `line-state-${stateKey}-mod-${mIdx}`,
-                label: mod.label,
-                formLineLabel: null,
-                generalTokens: [t(`${mod.label} = ${sign}${mod.amount >= 0 ? 'Add-Back' : 'Subtraction'} to ${sr.state} Income`)],
-                pluggedTokens: [t(`${mod.label} = ${sign}${formatCurrencyExact(Math.abs(mod.amount))}`)],
-                resultFormatted: formatCurrencyExact(mod.amount)
-            });
-        });
-        // 2. State Deduction Selection (when State Itemized vs Standard comparison applies or extra panels exist)
-        const baseDed = sr.baseStdDeduction ?? sr.stateStandardDeduction;
-        if ((sr.stateItemizedAmount ?? 0) > 0 || (sr.statePanelItemized ?? 0) > 0) {
-            const dedNode = opNode(`line-state-${stateKey}-ded-calc`, `${sr.state} Deduction`, 'add', [
-                (sr.stateItemizedAmount ?? 0) > 0
-                    ? opNode(`line-state-${stateKey}-ded-choice`, `max(${sr.state} Standard, ${sr.state} Itemized)`, 'max', [
-                        inputNode(`st-std-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Standard`, baseDed),
-                        inputNode(`st-itm-${stateKey}`, `auto-state-${stateKey}-itemized`, `${sr.state} Itemized`, sr.stateItemizedAmount ?? 0)
-                    ])
-                    : inputNode(`st-std-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Standard`, baseDed),
-                ...((sr.statePanelItemized ?? 0) > 0 ? [inputNode(`st-sp-itm-${stateKey}`, `state-${stateKey}-itemized`, `${sr.state} Extra Itemized`, sr.statePanelItemized ?? 0)] : [])
-            ], { value: sr.stateStandardDeduction, formLineLabel: null });
-            lines.push(...compileFormulaToLines(dedNode, vars));
-        }
-        // 3. State Taxable Income
-        const taxableNode = opNode(`line-state-${stateKey}-taxable`, `${sr.state} Taxable Income`, 'max', [
-            constNode(`st-zero-${stateKey}`, '$0', 0),
-            opNode(`st-taxable-diff-${stateKey}`, `${sr.state} Income − Deduction`, 'sub', [
-                inputNode(`st-inc-${stateKey}`, `state-group-${stateKey}`, `${sr.state} Income`, sr.stateWages + (sr.statePanelOtherIncome ?? 0) - (sr.statePanelAdjustments ?? 0), { varId: 'state_wages' }),
-                inputNode(`st-ded-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Deduction`, sr.stateStandardDeduction, { varId: 'state_ded' })
-            ])
-        ], { value: sr.stateTaxableIncome, formLineLabel: null });
-        lines.push(...compileFormulaToLines(taxableNode, vars));
-        // 4. State Tax Brackets Waterfall OR Flat Rate
-        const incRef = inputNode(`st-taxable-ref-${stateKey}`, blockId, `${sr.state} Taxable Income`, sr.stateTaxableIncome);
-        if (!sr.isFlat && sr.brackets && sr.brackets.length > 0 && sr.stateTaxableIncome > 0) {
-            const slices = sr.brackets.map(b => ({
+        const flatRate = sr.flatRate ?? 0;
+        const flatNode = opNode(`line-state-${stateKey}-tentative`, `Tentative ${sr.state} Tax`, 'mul', [
+            incRef,
+            constNode(`st-flat-${stateKey}`, `${sr.state} Flat Rate`, flatRate, 'percent')
+        ], { value: sr.stateTaxBeforeCredit, formLineLabel: `${sr.state} Tentative Tax` });
+        p2Lines.push(...compileFormulaToLines(flatNode, vars));
+    }
+    if ((sr.surchargeAmount ?? 0) > 0 && sr.surchargeLabel) {
+        const surNode = opNode(`line-state-${stateKey}-surcharge`, sr.surchargeLabel, 'add', [
+            inputNode(`st-sur-val-${stateKey}`, taxableId, sr.surchargeLabel, sr.surchargeAmount ?? 0)
+        ], { value: sr.surchargeAmount ?? 0 });
+        p2Lines.push(...compileFormulaToLines(surNode, vars));
+    }
+    if ((sr.stateCreditAmount ?? 0) > 0 && sr.stateCreditLabel) {
+        const credNode = opNode(`line-state-${stateKey}-builtin-cred`, sr.stateCreditLabel, 'sub', [
+            constNode(`st-cred-zero-${stateKey}`, '$0', 0),
+            inputNode(`st-cred-val-${stateKey}`, `auto-state-${stateKey}-builtin-credit`, sr.stateCreditLabel, sr.stateCreditAmount ?? 0)
+        ], { value: -(sr.stateCreditAmount ?? 0) });
+        p2Lines.push(...compileFormulaToLines(credNode, vars));
+    }
+    blocks.push({
+        id: tentativeId,
+        stepLabel: `${sr.stateName} • Step 2: Tax Brackets`,
+        title: `${sr.state} Tax Brackets & Tentative Tax`,
+        hasImpact: true,
+        lines: p2Lines,
+        variables: vars,
+        sourceIds: [taxableId]
+    });
+    // PANEL 3: Local / Municipal Tax (NYC, Yonkers, MD County, etc.)
+    const hasLocal = sr.localTaxLiability > 0;
+    if (hasLocal) {
+        let p3Lines = [];
+        if (sr.localBrackets && sr.localBrackets.length > 0) {
+            const localSlices = sr.localBrackets.map(b => ({
                 index: b.bracketIndex,
                 rate: b.rate,
                 ratePercent: b.ratePercent,
@@ -3736,140 +3863,108 @@ export function buildStateCalcBlock(sr, allStateReturns) {
                 remainingBefore: b.remainingBefore ?? 0,
                 remainingAfter: b.remainingAfter ?? 0
             }));
-            const bNode = bracketsNode(`line-state-${stateKey}-tentative`, `Tentative ${sr.state} Tax`, incRef, slices, Math.round((sr.stateTaxBeforeCredit - (sr.surchargeAmount ?? 0) + (sr.stateCreditAmount ?? 0)) * 100) / 100, { formLineLabel: null });
-            lines.push(...compileFormulaToLines(bNode, vars));
+            const localNode = bracketsNode(`line-state-${stateKey}-local`, sr.localRuleLabel || `${sr.stateName} Local Tax`, incRef, localSlices, sr.localTaxLiability, { formLineLabel: 'Local Municipal Tax' });
+            p3Lines = compileFormulaToLines(localNode, vars);
+        }
+        else if (sr.state === 'NY' && sr.localRuleLabel?.includes('Yonkers')) {
+            const yonkersNode = opNode(`line-state-${stateKey}-local`, 'Yonkers Resident Surcharge', 'mul', [
+                inputNode(`st-yonk-base-${stateKey}`, tentativeId, `${sr.state} Tentative Tax`, sr.stateTaxBeforeCredit),
+                constNode(`st-yonk-rate-${stateKey}`, '16.75% Yonkers Rate', 0.1675, 'percent')
+            ], { value: sr.localTaxLiability, formLineLabel: 'Yonkers Local Tax' });
+            p3Lines = compileFormulaToLines(yonkersNode, vars);
+        }
+        else if (sr.state === 'MD') {
+            const mdLocalNode = opNode(`line-state-${stateKey}-local`, 'MD County Piggyback Tax', 'mul', [
+                incRef,
+                constNode(`st-md-local-rate-${stateKey}`, '3.20% County Rate', 0.032, 'percent')
+            ], { value: sr.localTaxLiability, formLineLabel: 'MD County Tax' });
+            p3Lines = compileFormulaToLines(mdLocalNode, vars);
         }
         else {
-            const flatRate = sr.flatRate ?? 0;
-            const flatNode = opNode(`line-state-${stateKey}-tentative`, `Tentative ${sr.state} Tax`, 'mul', [
-                incRef,
-                constNode(`st-flat-${stateKey}`, `${sr.state} Flat Rate`, flatRate, 'percent')
-            ], { value: sr.stateTaxBeforeCredit, formLineLabel: null });
-            lines.push(...compileFormulaToLines(flatNode, vars));
+            const box19Node = opNode(`line-state-${stateKey}-local`, sr.localRuleLabel || 'Local Tax', 'add', [
+                inputNode(`st-local-box19-${stateKey}`, `state-group-${stateKey}`, 'W-2 Box 19 Local Tax', sr.localTaxLiability)
+            ], { value: sr.localTaxLiability, formLineLabel: 'Local Tax' });
+            p3Lines = compileFormulaToLines(box19Node, vars);
         }
-        // 5. State Surcharges / Built-in Credits (MA STCG, CA 1% MH, IL 5% Prop)
-        if ((sr.surchargeAmount ?? 0) > 0 && sr.surchargeLabel) {
-            lines.push({
-                id: `line-state-${stateKey}-surcharge`,
-                label: sr.surchargeLabel,
-                formLineLabel: null,
-                generalTokens: [t(`${sr.surchargeLabel} = Additional State Surtax`)],
-                pluggedTokens: [t(`${sr.surchargeLabel} = +${formatCurrencyExact(sr.surchargeAmount ?? 0)}`)],
-                resultFormatted: formatCurrencyExact(sr.surchargeAmount ?? 0)
-            });
-        }
-        if ((sr.stateCreditAmount ?? 0) > 0 && sr.stateCreditLabel) {
-            lines.push({
-                id: `line-state-${stateKey}-builtin-cred`,
-                label: sr.stateCreditLabel,
-                formLineLabel: null,
-                generalTokens: [t(`${sr.stateCreditLabel} = Statutory State Credit`)],
-                pluggedTokens: [t(`${sr.stateCreditLabel} = −${formatCurrencyExact(sr.stateCreditAmount ?? 0)}`)],
-                resultFormatted: formatCurrencyExact(-(sr.stateCreditAmount ?? 0))
-            });
-        }
-        // 6. Intermediate OSTC lines (one per credited state)
-        sr.creditedStates.forEach(c => {
-            const nrWages = allStateReturns.find(r => r.state === c.fromState)?.stateWages ?? 0;
-            lines.push({
-                id: `line-state-${stateKey}-ostc-${c.fromState.toLowerCase()}`,
-                label: `OSTC Credit (${c.fromState} → ${sr.state})`,
-                formLineLabel: null,
-                generalTokens: [
-                    t(`OSTC (${c.fromState}) = min(${c.fromState} Tax Paid, ${sr.state} Tax × (${c.fromState} Wages ÷ Total Wages))`)
-                ],
-                pluggedTokens: [
-                    t(`OSTC (${c.fromState}) = min(${formatCurrencyExact(c.sourceTaxPaid)}, ${formatCurrencyExact(sr.stateTaxBeforeCredit)} × (${formatCurrencyExact(nrWages)} ÷ ${formatCurrencyExact(sr.stateWages)}) = ${formatCurrencyExact(c.homeAttributableTax)}) = `),
-                    v('ostc_credit', formatCurrencyExact(c.creditAllowed), c.creditAllowed, false)
-                ],
-                resultFormatted: formatCurrencyExact(c.creditAllowed)
-            });
-        });
-        // 7. Local / Municipal Tax Breakdown (NYC Brackets / Yonkers / MD County / Box 19)
-        if (sr.localTaxLiability > 0) {
-            if (sr.localBrackets && sr.localBrackets.length > 0) {
-                const localSlices = sr.localBrackets.map(b => ({
-                    index: b.bracketIndex,
-                    rate: b.rate,
-                    ratePercent: b.ratePercent,
-                    range: b.range,
-                    bracketWidth: b.bracketWidth ?? Infinity,
-                    taxableAmount: b.taxableAmount,
-                    taxAmount: b.taxAmount,
-                    remainingBefore: b.remainingBefore ?? 0,
-                    remainingAfter: b.remainingAfter ?? 0
-                }));
-                const localNode = bracketsNode(`line-state-${stateKey}-local`, sr.localRuleLabel || `${sr.stateName} Local Tax`, incRef, localSlices, sr.localTaxLiability, { formLineLabel: null });
-                lines.push(...compileFormulaToLines(localNode, vars));
-            }
-            else {
-                lines.push({
-                    id: `line-state-${stateKey}-local`,
-                    label: sr.localRuleLabel || `${sr.stateName} Local / Municipal Tax`,
-                    formLineLabel: null,
-                    generalTokens: [t(`Local Tax = ${sr.localRuleLabel || `${sr.state} Taxable Income × Local Rate`}`)],
-                    pluggedTokens: [t(`Local Tax = ${formatCurrencyExact(sr.localTaxLiability)}`)],
-                    resultFormatted: formatCurrencyExact(sr.localTaxLiability)
-                });
-            }
-        }
-        // 8. Total State (& Local) Tax Liability
-        const hasOstc = sr.creditForOtherStates > 0;
-        const hasLocal = sr.localTaxLiability > 0;
-        const hasExtraCred = (sr.statePanelCredits ?? 0) > 0;
-        lines.push({
-            id: `line-state-${stateKey}-liability`,
-            label: `Total ${sr.state} Tax Liability`,
-            formLineLabel: null,
-            generalTokens: [
-                t(`Total ${sr.state} Tax = max(0, Tentative Tax`),
-                ...(hasOstc ? [t(' − '), v('ostc_credit', 'OSTC Credit', sr.creditForOtherStates, false)] : []),
-                ...(hasExtraCred ? [t(` − ${sr.state} Credits`)] : []),
-                t(')'),
-                ...(hasLocal ? [t(' + Local Tax')] : [])
-            ],
-            pluggedTokens: [
-                t(`Total ${sr.state} Tax = ${formatCurrencyExact(sr.stateTaxBeforeCredit)}`),
-                ...(hasOstc ? [t(' − '), v('ostc_credit', formatCurrencyExact(sr.creditForOtherStates), sr.creditForOtherStates, false)] : []),
-                ...(hasExtraCred ? [t(` − ${formatCurrencyExact(sr.statePanelCredits ?? 0)}`)] : []),
-                ...(hasLocal ? [t(` + ${formatCurrencyExact(sr.localTaxLiability)}`)] : []),
-                t(` = ${formatCurrencyExact(sr.stateTaxLiability)}`)
-            ],
-            resultFormatted: formatCurrencyExact(sr.stateTaxLiability)
-        });
-        // 9. Final Net Outcome (Refund / Owed)
-        lines.push({
-            id: `line-state-${stateKey}-outcome`,
-            label: sr.isRefund ? `${sr.state} Refund` : `${sr.state} Balance Owed`,
-            formLineLabel: sr.formName,
-            generalTokens: [
-                t('Net Outcome = '),
-                v('state_withholding', `${sr.state} Withholding`, sr.stateWithholding, vars.state_withholding.isEmpty),
-                t(` − Total ${sr.state} Tax`)
-            ],
-            pluggedTokens: [
-                t('Net Outcome = '),
-                v('state_withholding', formatCurrencyExact(sr.stateWithholding), sr.stateWithholding, vars.state_withholding.isEmpty),
-                t(` − ${formatCurrencyExact(sr.stateTaxLiability)} = ${sr.isRefund ? '+' : '-'}${formatCurrencyExact(sr.netOutcome)}`)
-            ],
-            resultFormatted: `${sr.isRefund ? '+' : '-'}${formatCurrencyExact(sr.netOutcome)}`
+        blocks.push({
+            id: localId,
+            stepLabel: `${sr.stateName} • Step 3: Local / Municipal Tax`,
+            title: sr.localRuleLabel || `${sr.stateName} Local Tax`,
+            hasImpact: true,
+            lines: p3Lines,
+            variables: vars,
+            sourceIds: [taxableId]
         });
     }
-    return {
-        id: blockId,
-        stepLabel: `${sr.stateName} • ${sr.residentStatus === 'resident' ? 'Resident Return' : 'Nonresident Return'}`,
-        title: sr.formName,
+    // PANEL 4: Credits (OSTC), Total State Tax & Net Outcome
+    const ostcNodes = sr.creditedStates.map(c => {
+        const nrWages = allStateReturns.find(r => r.state === c.fromState)?.stateWages ?? 0;
+        const nrCardId = `calc-state-${c.fromState.toLowerCase()}-card`;
+        const ratioNode = opNode(`line-ostc-ratio-${stateKey}-${c.fromState.toLowerCase()}`, `${c.fromState} Wage Share`, 'div', [
+            inputNode(`ostc-nr-w-${c.fromState.toLowerCase()}`, nrCardId, `${c.fromState} Income`, nrWages),
+            inputNode(`ostc-tot-w-${stateKey}`, taxableId, `${sr.state} Total Income`, sr.stateWages)
+        ]);
+        const homeAttrNode = opNode(`line-ostc-attr-${stateKey}-${c.fromState.toLowerCase()}`, `${sr.state} Attributable Tax`, 'mul', [
+            inputNode(`ostc-home-tax-${stateKey}`, tentativeId, `${sr.state} Tax`, sr.stateTaxBeforeCredit),
+            ratioNode
+        ], { value: c.homeAttributableTax });
+        return opNode(`line-state-${stateKey}-ostc-${c.fromState.toLowerCase()}`, `OSTC (${c.fromState})`, 'min', [
+            inputNode(`ostc-src-tax-${c.fromState.toLowerCase()}`, nrCardId, `${c.fromState} Tax Paid`, c.sourceTaxPaid),
+            homeAttrNode
+        ], { value: c.creditAllowed, expandIntermediate: true });
+    });
+    const tentativeTaxRef = inputNode(`st-tent-ref-${stateKey}`, tentativeId, `Tentative ${sr.state} Tax`, sr.stateTaxBeforeCredit);
+    const creditsToSubtract = [
+        ...ostcNodes,
+        ...((sr.statePanelCredits ?? 0) > 0 ? [inputNode(`st-sp-cred-${stateKey}`, `state-${stateKey}-credits`, `${sr.state} Credits`, sr.statePanelCredits ?? 0)] : [])
+    ];
+    const netStateOnlyNode = creditsToSubtract.length > 0
+        ? opNode(`st-net-only-${stateKey}`, `Net ${sr.state} State Tax`, 'max', [
+            constNode(`st-net-zero-${stateKey}`, '$0', 0),
+            opNode(`st-net-sub-${stateKey}`, 'Tentative − Credits', 'sub', [
+                tentativeTaxRef,
+                creditsToSubtract.length === 1
+                    ? creditsToSubtract[0]
+                    : opNode(`st-cred-sum-${stateKey}`, 'Total Credits', 'add', creditsToSubtract)
+            ])
+        ])
+        : tentativeTaxRef;
+    const totalStateTaxNode = hasLocal
+        ? opNode(`line-state-${stateKey}-liability`, `Total ${sr.state} Tax`, 'add', [
+            netStateOnlyNode,
+            inputNode(`st-local-ref-${stateKey}`, localId, 'Local Tax', sr.localTaxLiability)
+        ], { value: sr.stateTaxLiability, expandIntermediate: true })
+        : opNode(`line-state-${stateKey}-liability`, `Total ${sr.state} Tax`, 'add', [netStateOnlyNode], {
+            value: sr.stateTaxLiability,
+            expandIntermediate: true
+        });
+    const outcomeNode = opNode(`line-state-${stateKey}-outcome`, 'Net Outcome', 'sub', [
+        inputNode(`st-wh-ref-${stateKey}`, `state-group-${stateKey}`, `${sr.state} Withholding`, sr.stateWithholding, { varId: 'state_withholding' }),
+        totalStateTaxNode
+    ], {
+        value: sr.stateWithholding - sr.stateTaxLiability,
+        formLineLabel: sr.formName
+    });
+    blocks.push({
+        id: cardId,
+        stepLabel: `${sr.stateName} • Step ${hasLocal ? '4' : '3'}: Credits, Total Tax & Net Outcome`,
+        title: `${sr.formName} • Bottom Line`,
         hasImpact: true,
         isOutput: true,
-        lines,
+        lines: compileFormulaToLines(outcomeNode, vars),
         variables: vars,
         sourceIds: Array.from(new Set([
+            tentativeId,
+            ...(hasLocal ? [localId] : []),
             ...sr.creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-card`),
-            ...sr.creditedStates.map(c => `auto-state-${stateKey}-ostc-${c.fromState.toLowerCase()}`),
-            ...(sr.baseStdDeduction ? [`auto-state-${stateKey}-std-ded`] : []),
-            ...(sr.stateItemizedUsed ? [`auto-state-${stateKey}-itemized`] : [])
+            ...sr.creditedStates.map(c => `auto-state-${stateKey}-ostc-${c.fromState.toLowerCase()}`)
         ]))
-    };
+    });
+    return blocks;
+}
+export function buildStateCalcBlock(sr, allStateReturns) {
+    const blocks = buildStateCalcBlocks(sr, allStateReturns);
+    return blocks[blocks.length - 1];
 }
 /**
  * Generates system-derived (read-only) panels for credits, adjustments, and deductions

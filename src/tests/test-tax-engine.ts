@@ -1,4 +1,4 @@
-import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlock, buildAutoPanels, formatCurrency, formatCurrencyExact } from '../tax-engine.js';
+import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlocks, buildAutoPanels, formatCurrency, formatCurrencyExact } from '../tax-engine.js';
 import { TaxAppState } from '../types.js';
 import { getFieldRating, renderRatingPill, renderRatingCardHtml, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from '../field-ratings.js';
 import assert from 'assert';
@@ -1006,10 +1006,32 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   assert(otherTaxesBlock.lines.some(l => l.id === 'line-niit-tax'), 'Form 8960 NIIT intermediate line is expanded');
 
   const nyReturn = summary.stateReturnsCalc.find(r => r.state === 'NY')!;
-  const nyBlock = buildStateCalcBlock(nyReturn, summary.stateReturnsCalc);
-  assert(nyBlock.lines.some(l => l.id.startsWith('line-state-ny-tentative-b')), 'NY state bracket waterfall intermediate lines are generated');
-  assert(nyBlock.lines.some(l => l.id.startsWith('line-state-ny-local-b')), 'NYC local bracket waterfall intermediate lines are generated');
-  assert(nyBlock.lines.some(l => l.id === 'line-state-ny-ostc-nj'), 'NY OSTC credit line for NJ is generated');
+  const nyBlocks = buildStateCalcBlocks(nyReturn, summary.stateReturnsCalc);
+  assert.strictEqual(nyBlocks.length, 4, 'NY + NYC splits into 4 distinct calculation panels');
+  assert.strictEqual(nyBlocks[0].id, 'calc-state-ny-taxable', 'NY Panel 1 is Deductions & Taxable Income');
+  assert.strictEqual(nyBlocks[1].id, 'calc-state-ny-tentative', 'NY Panel 2 is State Brackets & Tentative Tax');
+  assert(nyBlocks[1].lines.some(l => l.id.startsWith('line-state-ny-tentative-b')), 'NY state bracket waterfall intermediate lines are generated');
+  assert.strictEqual(nyBlocks[2].id, 'calc-state-ny-local', 'NY Panel 3 is NYC Local Brackets');
+  assert(nyBlocks[2].lines.some(l => l.id.startsWith('line-state-ny-local-b')), 'NYC local bracket waterfall intermediate lines are generated');
+  assert.strictEqual(nyBlocks[3].id, 'calc-state-ny-card', 'NY Panel 4 is OSTC, Total Tax & Net Outcome');
+  assert(nyBlocks[3].lines.some(l => l.id === 'line-state-ny-ostc-nj'), 'NY OSTC credit FormulaNode line for NJ is generated');
+
+  // Verify DC Form D-30 FormulaNode expansion
+  const dcState: TaxAppState = {
+    ...state,
+    otherIncome: {
+      interest: 0,
+      sources: [],
+      scheduleERental: { grossRents: 28000, expenses: 8200, depreciation: 5000, propertyState: 'DC' }
+    }
+  };
+  const dcSummary = calculateTaxes(dcState);
+  const dcReturn = dcSummary.stateReturnsCalc.find(r => r.state === 'DC')!;
+  const dcBlocks = buildStateCalcBlocks(dcReturn, dcSummary.stateReturnsCalc);
+  assert.strictEqual(dcBlocks.length, 2, 'DC Form D-30 splits into 2 FormulaNode panels');
+  assert(dcBlocks[0].lines.some(l => l.id === 'line-dc-d30-salary'), 'DC D-30 30% Salary Allowance line generated');
+  assert(dcBlocks[0].lines.some(l => l.id === 'line-dc-d30-taxable'), 'DC D-30 Taxable UBT line generated');
+  assert(dcBlocks[1].lines.some(l => l.id === 'line-dc-d30-raw-tax'), 'DC D-30 8.25% Raw UBT Tax line generated');
 
   const autoPanels = buildAutoPanels(state, summary);
   assert(autoPanels.federal.some(p => p.id === 'auto-fed-std-deduction'), 'Federal Standard Deduction auto panel generated');
