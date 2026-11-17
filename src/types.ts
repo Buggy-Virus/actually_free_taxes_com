@@ -182,6 +182,9 @@ export interface BracketDetail {
   taxableAmount: number;
   taxAmount: number;
   formula: string;
+  bracketWidth?: number;
+  remainingBefore?: number;
+  remainingAfter?: number;
 }
 
 export interface CalculationResult {

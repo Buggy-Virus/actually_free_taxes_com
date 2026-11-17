@@ -1437,11 +1437,15 @@ export function calculateTaxes(state) {
     const bracketDetails = [];
     let ordinaryTax = 0;
     const bracketFormulaParts = [];
+    let remainingOrdinary = ordinaryTaxableIncome;
     for (let i = 0; i < brackets.length; i++) {
         const b = brackets[i];
+        const bracketWidth = b.max === Infinity ? Infinity : b.max - b.min;
         if (ordinaryTaxableIncome > b.min) {
             const taxableInBracket = Math.min(ordinaryTaxableIncome, b.max) - b.min;
             const taxFromBracket = taxableInBracket * b.rate;
+            const remBefore = remainingOrdinary;
+            remainingOrdinary = Math.max(0, remainingOrdinary - taxableInBracket);
             ordinaryTax += taxFromBracket;
             const maxLabel = b.max === Infinity ? '+' : ` to ${formatCurrency(b.max)}`;
             bracketDetails.push({
@@ -1451,7 +1455,10 @@ export function calculateTaxes(state) {
                 range: `${formatCurrency(b.min)}${maxLabel}`,
                 taxableAmount: taxableInBracket,
                 taxAmount: taxFromBracket,
-                formula: `${formatCurrency(taxableInBracket)} × ${formatPercent(b.rate)} = ${formatCurrency(taxFromBracket)}`
+                formula: `${formatCurrency(taxableInBracket)} × ${formatPercent(b.rate)} = ${formatCurrency(taxFromBracket)}`,
+                bracketWidth,
+                remainingBefore: remBefore,
+                remainingAfter: remainingOrdinary
             });
             bracketFormulaParts.push(`(${formatCurrency(taxableInBracket)} × ${formatPercent(b.rate)})`);
         }
@@ -1463,7 +1470,10 @@ export function calculateTaxes(state) {
                 range: `${formatCurrency(b.min)}${b.max === Infinity ? '+' : ` to ${formatCurrency(b.max)}`}`,
                 taxableAmount: 0,
                 taxAmount: 0,
-                formula: `$0 × ${formatPercent(b.rate)} = $0`
+                formula: `$0 × ${formatPercent(b.rate)} = $0`,
+                bracketWidth,
+                remainingBefore: 0,
+                remainingAfter: 0
             });
         }
     }
@@ -3146,13 +3156,62 @@ export function buildCalculationBlocks(state, summary) {
                 { label: 'Form 1040 Line 15 Taxable Income', sign: '+', amount: summary.taxableIncomeCalc.result, amountFormatted: formatCurrencyExact(summary.taxableIncomeCalc.result), isSetUp: summary.taxableIncomeCalc.result > 0, targetElementId: 'calc-taxable-income' }
             ], true)
         };
+        const activeBrackets = summary.taxBeforeCreditsCalc.brackets.filter(b => b.taxableAmount > 0);
+        const ordInc = summary.taxBeforeCreditsCalc.ordinaryTaxableIncome;
+        const prefIncome = summary.taxBeforeCreditsCalc.preferentialIncome;
+        const prefTax = summary.taxBeforeCreditsCalc.preferentialTax;
         const lines = [
+            ...activeBrackets.map((b, idx) => {
+                const remBefore = b.remainingBefore ?? 0;
+                const remAfter = b.remainingAfter ?? 0;
+                const remLabel = idx === 0 ? 'Taxable Ordinary Income' : 'Remaining Income';
+                const generalTokens = b.bracketWidth !== undefined && b.bracketWidth !== Infinity
+                    ? [
+                        t(`Bracket ${b.bracketIndex} (${b.ratePercent}, ${b.range}) = min(`),
+                        ...(idx === 0 ? [v('taxable_inc', remLabel, ordInc, vars.taxable_inc.isEmpty, true)] : [t(remLabel)]),
+                        t(`, ${formatCurrency(b.bracketWidth)}) × ${b.ratePercent}`)
+                    ]
+                    : [
+                        t(`Bracket ${b.bracketIndex} (${b.ratePercent}, ${b.range}) = ${remLabel} × ${b.ratePercent}`)
+                    ];
+                return {
+                    id: `line-tax-bracket-${b.bracketIndex}`,
+                    label: `Bracket ${b.bracketIndex} (${b.ratePercent})`,
+                    formLineLabel: null,
+                    generalTokens,
+                    pluggedTokens: [
+                        t(`Bracket ${b.bracketIndex} (${b.ratePercent}): ${formatCurrencyExact(b.taxableAmount)} × ${b.ratePercent} = ${formatCurrencyExact(b.taxAmount)} (Remaining: ${formatCurrencyExact(remBefore)} − ${formatCurrencyExact(b.taxableAmount)} = ${formatCurrencyExact(remAfter)})`)
+                    ],
+                    resultFormatted: formatCurrencyExact(b.taxAmount)
+                };
+            }),
+            ...(prefIncome > 0
+                ? [{
+                        id: 'line-tax-preferential',
+                        label: 'Preferential LTCG & Qualified Dividends Tax',
+                        formLineLabel: null,
+                        generalTokens: [t('Preferential Tax = LTCG & Qualified Dividends × (0% / 15% / 20% / 25% / 28%)')],
+                        pluggedTokens: [t(`Preferential Tax = ${formatCurrencyExact(prefTax)} (on ${formatCurrencyExact(prefIncome)} preferential income)`)],
+                        resultFormatted: formatCurrencyExact(prefTax)
+                    }]
+                : []),
             {
                 id: 'line-tax-before-credits',
                 label: 'Tax from Brackets & Preferential Rates',
                 formLineLabel: 'Form 1040 Line 16',
-                generalTokens: [t('Tentative Tax = ∑(Bracket Slices of '), v('taxable_inc', 'Taxable Income', summary.taxableIncomeCalc.result, vars.taxable_inc.isEmpty, true), t(' × Rate)')],
-                pluggedTokens: [t(`${summary.taxBeforeCreditsCalc.pluggedFormula}`)],
+                generalTokens: [
+                    t('Tentative Tax = '),
+                    ...(activeBrackets.length > 0 ? [t('∑(Bracket Taxes)')] : [t('$0')]),
+                    ...(prefIncome > 0 ? [t(' + Preferential Tax')] : [])
+                ],
+                pluggedTokens: [
+                    t(activeBrackets.length > 0 || prefIncome > 0
+                        ? `Tentative Tax = ${[
+                            ...activeBrackets.map(b => formatCurrencyExact(b.taxAmount)),
+                            ...(prefIncome > 0 ? [formatCurrencyExact(prefTax)] : [])
+                        ].join(' + ')} = ${formatCurrencyExact(summary.taxBeforeCreditsCalc.result)}`
+                        : `Tentative Tax = $0.00`)
+                ],
                 resultFormatted: formatCurrencyExact(summary.taxBeforeCreditsCalc.result)
             }
         ];
@@ -3328,7 +3387,7 @@ export function buildCalculationBlocks(state, summary) {
                 label: summary.finalResultCalc.isRefund ? 'Federal Tax Refund' : 'Federal Tax Balance Owed',
                 formLineLabel: summary.finalResultCalc.isRefund ? 'Form 1040 Line 34 / 35a' : 'Form 1040 Line 37',
                 generalTokens: [t('Net Outcome = Total Payments − Total Tax')],
-                pluggedTokens: [t(`${formatCurrencyExact(summary.withholdingCalc.result)} − ${formatCurrencyExact(summary.totalTaxCalc.result)} = ${summary.finalResultCalc.isRefund ? '+' : '-'}${formatCurrencyExact(summary.finalResultCalc.result)}`)],
+                pluggedTokens: [t(`Net Outcome = ${formatCurrencyExact(summary.withholdingCalc.result)} − ${formatCurrencyExact(summary.totalTaxCalc.result)} = ${summary.finalResultCalc.isRefund ? '+' : '-'}${formatCurrencyExact(summary.finalResultCalc.result)}`)],
                 resultFormatted: `${summary.finalResultCalc.isRefund ? '+' : '-'}${formatCurrencyExact(summary.finalResultCalc.result)}`
             }
         ];
