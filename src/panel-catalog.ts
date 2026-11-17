@@ -393,6 +393,7 @@ export const PANEL_CATALOG: PanelCatalogEntry[] = [
     shortExplanation: 'Gross business/marketplace payments received via Stripe, PayPal, Venmo, or eBay.',
     ratingKey: 'income-1099-nec',
     size: 'sm',
+    sourceType: '1099-K',
     inputIds: []
   },
   {
@@ -403,6 +404,7 @@ export const PANEL_CATALOG: PanelCatalogEntry[] = [
     shortExplanation: 'Net agricultural income subject to Schedule SE self-employment tax and 20% QBI.',
     ratingKey: 'income-1099-nec',
     size: 'sm',
+    sourceType: 'Schedule F',
     inputIds: []
   },
   {

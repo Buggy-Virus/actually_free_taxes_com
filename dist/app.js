@@ -4359,6 +4359,18 @@ class TaxApp {
                 case 'input-itemized-mortgage': return Number(this.state.itemizedDeductions?.mortgageInterest) || 0;
                 case 'input-itemized-charity': return Number(this.state.itemizedDeductions?.charity) || 0;
                 case 'input-itemized-gambling-losses': return Number(this.state.itemizedDeductions?.gamblingLosses) || 0;
+                case 'input-itemized-investment-interest': return Number(this.state.itemizedDeductions?.investmentInterest) || 0;
+                case 'input-itemized-casualty': return Number(this.state.itemizedDeductions?.casualtyLoss) || 0;
+                case 'input-alimony-received': return Number(this.state.otherIncome?.alimonyReceived) || 0;
+                case 'input-foreign-earned-excl': return Number(this.state.otherIncome?.foreignEarnedIncomeExclusion) || 0;
+                case 'input-unreported-tips': return Number(this.state.otherIncome?.unreportedTips) || 0;
+                case 'input-adj-military-moving': return Number(this.state.adjustments?.militaryMoving) || 0;
+                case 'input-adj-early-withdrawal': return Number(this.state.adjustments?.earlyWithdrawalPenalty) || 0;
+                case 'input-adj-jury-duty': return Number(this.state.adjustments?.juryDutyPay) || 0;
+                case 'input-adoption-credit': return Number(this.state.dependents?.adoptionCredit) || 0;
+                case 'input-ptc-credit': return Number(this.state.dependents?.premiumTaxCredit) || 0;
+                case 'input-elderly-credit': return Number(this.state.dependents?.elderlyDisabledCredit) || 0;
+                case 'input-household-tax': return Number(this.state.dependents?.householdEmploymentTax) || 0;
                 default: return 0;
             }
         };
@@ -4463,6 +4475,12 @@ class TaxApp {
         bindNum('input-adj-se-retirement', v => this.state.adjustments.seRetirement = v);
         bindNum('input-adj-se-health', v => this.state.adjustments.seHealthInsurance = v);
         bindNum('input-adj-alimony', v => this.state.adjustments.alimonyPaid = v);
+        bindNum('input-adj-military-moving', v => this.state.adjustments.militaryMoving = v);
+        bindNum('input-adj-early-withdrawal', v => this.state.adjustments.earlyWithdrawalPenalty = v);
+        bindNum('input-adj-jury-duty', v => this.state.adjustments.juryDutyPay = v);
+        bindNum('input-alimony-received', v => this.state.otherIncome.alimonyReceived = v);
+        bindNum('input-foreign-earned-excl', v => this.state.otherIncome.foreignEarnedIncomeExclusion = v);
+        bindNum('input-unreported-tips', v => this.state.otherIncome.unreportedTips = v);
         bindNum('input-children-count', v => this.state.dependents.childrenCount = v);
         bindNum('input-other-dependents', v => this.state.dependents.otherDependentsCount = v);
         bindNum('input-age65-blind', v => this.state.dependents.age65OrBlindCount = v);
@@ -4471,12 +4489,18 @@ class TaxApp {
         bindNum('input-edu-llc', v => this.state.dependents.educationExpensesLlc = v);
         bindNum('input-foreign-tax-credit', v => this.state.dependents.foreignTaxCredit = v);
         bindNum('input-clean-energy-credit', v => this.state.dependents.cleanEnergyCredit = v);
+        bindNum('input-adoption-credit', v => this.state.dependents.adoptionCredit = v);
+        bindNum('input-ptc-credit', v => this.state.dependents.premiumTaxCredit = v);
+        bindNum('input-elderly-credit', v => this.state.dependents.elderlyDisabledCredit = v);
+        bindNum('input-household-tax', v => this.state.dependents.householdEmploymentTax = v);
         bindNum('input-estimated-payments', v => this.state.dependents.estimatedTaxPayments = v);
         bindNum('input-itemized-medical', v => getItemized().medicalExpenses = v);
         bindNum('input-itemized-real-estate', v => getItemized().realEstateTax = v);
         bindNum('input-itemized-mortgage', v => getItemized().mortgageInterest = v);
         bindNum('input-itemized-charity', v => getItemized().charity = v);
         bindNum('input-itemized-gambling-losses', v => getItemized().gamblingLosses = v);
+        bindNum('input-itemized-investment-interest', v => getItemized().investmentInterest = v);
+        bindNum('input-itemized-casualty', v => getItemized().casualtyLoss = v);
         // Dynamic 1099 sources
         document.querySelectorAll('[data-src-id]').forEach(el => {
             const id = parseInt(el.dataset.srcId || '', 10);
@@ -4613,6 +4637,44 @@ class TaxApp {
             case 'itemized-gambling-losses':
                 if (this.state.itemizedDeductions)
                     this.state.itemizedDeductions.gamblingLosses = 0;
+                break;
+            case 'itemized-investment-interest':
+                if (this.state.itemizedDeductions)
+                    this.state.itemizedDeductions.investmentInterest = 0;
+                break;
+            case 'itemized-casualty':
+                if (this.state.itemizedDeductions)
+                    this.state.itemizedDeductions.casualtyLoss = 0;
+                break;
+            case 'alimony-received':
+                this.state.otherIncome.alimonyReceived = 0;
+                break;
+            case 'foreign-earned-income-2555':
+                this.state.otherIncome.foreignEarnedIncomeExclusion = 0;
+                break;
+            case 'unreported-tips-4137':
+                this.state.otherIncome.unreportedTips = 0;
+                break;
+            case 'adj-military-moving':
+                this.state.adjustments.militaryMoving = 0;
+                break;
+            case 'adj-early-withdrawal-penalty':
+                this.state.adjustments.earlyWithdrawalPenalty = 0;
+                break;
+            case 'adj-jury-duty':
+                this.state.adjustments.juryDutyPay = 0;
+                break;
+            case 'cred-adoption':
+                this.state.dependents.adoptionCredit = 0;
+                break;
+            case 'cred-ptc-8962':
+                this.state.dependents.premiumTaxCredit = 0;
+                break;
+            case 'cred-elderly-sched-r':
+                this.state.dependents.elderlyDisabledCredit = 0;
+                break;
+            case 'sched-h-household':
+                this.state.dependents.householdEmploymentTax = 0;
                 break;
         }
     }

@@ -3361,14 +3361,43 @@ export function buildCalculationBlocks(state, summary) {
             constNode('salt_cap', '$10,000', 10000),
             opNode('salt-raw', 'State/Local + Property Tax', 'add', [saltTaxNode, realEstateNode], { exact: false })
         ], { value: summary.itemizedCalc.allowableSalt, formLineLabel: 'Schedule A Line 5e', exact: false });
+        const invIntRaw = Math.max(0, Number(state.itemizedDeductions?.investmentInterest) || 0);
+        const casualtyRaw = Math.max(0, Number(state.itemizedDeductions?.casualtyLoss) || 0);
+        if (invIntRaw > 0) {
+            vars.inv_interest = makeVar('inv_interest', 'Investment Interest (Form 4952)', invIntRaw, [{
+                    label: 'Margin / Investment Interest',
+                    sign: '+',
+                    amount: invIntRaw,
+                    amountFormatted: formatCurrency(invIntRaw),
+                    isSetUp: true,
+                    targetElementId: 'input-itemized-investment-interest',
+                    panelKey: 'itemized-investment-interest',
+                    panelSection: 'itemized'
+                }]);
+        }
+        if (casualtyRaw > 0) {
+            vars.casualty_loss = makeVar('casualty_loss', 'Disaster Casualty Loss (Form 4684)', casualtyRaw, [{
+                    label: 'Federally Declared Disaster Loss',
+                    sign: '+',
+                    amount: casualtyRaw,
+                    amountFormatted: formatCurrency(casualtyRaw),
+                    isSetUp: true,
+                    targetElementId: 'input-itemized-casualty',
+                    panelKey: 'itemized-casualty',
+                    panelSection: 'itemized'
+                }]);
+        }
         const mortgageNode = inputNode('mortgage_int', 'input-itemized-mortgage', 'Mortgage Interest', mortgageRaw, { exact: false, varId: 'mortgage_int' });
         const charityNode = inputNode('charity_contrib', 'input-itemized-charity', 'Charity', charityRaw, { exact: false, varId: 'charity_contrib' });
-        const schedATotalNode = opNode('line-sched-a-total', 'Total Itemized Deductions', 'add', [
+        const schedATotalArgs = [
             inputNode('med_ded', 'line-med-deductible', 'Deductible Medical', summary.itemizedCalc.allowableMedical, { exact: true }),
             inputNode('salt_ded', 'line-salt-cap', 'SALT', summary.itemizedCalc.allowableSalt, { exact: false }),
             mortgageNode,
-            charityNode
-        ], { value: summary.itemizedCalc.totalItemized, formLineLabel: 'Schedule A Line 17', exact: true });
+            charityNode,
+            ...(invIntRaw > 0 ? [inputNode('inv_interest', 'input-itemized-investment-interest', 'Inv. Interest', invIntRaw, { exact: false, varId: 'inv_interest' })] : []),
+            ...(casualtyRaw > 0 ? [inputNode('casualty_loss', 'input-itemized-casualty', 'Casualty Loss', casualtyRaw, { exact: false, varId: 'casualty_loss' })] : [])
+        ];
+        const schedATotalNode = opNode('line-sched-a-total', 'Total Itemized Deductions', 'add', schedATotalArgs, { value: summary.itemizedCalc.totalItemized, formLineLabel: 'Schedule A Line 17', exact: true });
         const lines = [
             ...compileFormulaToLines(medDeductibleNode, vars),
             ...compileFormulaToLines(saltCapNode, vars),
@@ -3381,7 +3410,15 @@ export function buildCalculationBlocks(state, summary) {
             hasImpact: hasAnyItemized,
             lines,
             variables: vars,
-            sourceIds: ['calc-agi', 'input-itemized-medical', 'input-itemized-real-estate', 'input-itemized-mortgage', 'input-itemized-charity']
+            sourceIds: [
+                'calc-agi',
+                'input-itemized-medical',
+                'input-itemized-real-estate',
+                'input-itemized-mortgage',
+                'input-itemized-charity',
+                ...(invIntRaw > 0 ? ['input-itemized-investment-interest'] : []),
+                ...(casualtyRaw > 0 ? ['input-itemized-casualty'] : [])
+            ]
         });
     }
     // BLOCK 6: Standard vs Itemized Deduction & Taxable Income (Clustered)
