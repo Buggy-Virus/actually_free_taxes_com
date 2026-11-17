@@ -1221,9 +1221,10 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
   // Capital Gains / Losses (Schedule D / Line 7 + 28% Collectibles & 25% Unrecaptured Sec. 1250 Gain)
   const stGain = Number(state.otherIncome?.capitalGains?.shortTerm) || 0;
   const ltGain = Number(state.otherIncome?.capitalGains?.longTerm) || 0;
+  const carryoverLoss = Math.max(0, Number(state.otherIncome?.capitalGains?.carryoverLoss) || 0);
   const collectiblesGain = Math.max(0, Number(state.otherIncome?.capitalGains?.collectiblesGain) || 0);
   const unrecaptured1250Gain = Math.max(0, Number(state.otherIncome?.capitalGains?.unrecaptured1250Gain) || 0);
-  const netGainLoss = stGain + ltGain;
+  const netGainLoss = stGain + ltGain - carryoverLoss;
   const maxLoss = effectiveStatus === 'married_separate' ? -1500 : -3000;
   const allowableCapitalNet = netGainLoss < 0 ? Math.max(maxLoss, netGainLoss) : netGainLoss;
 
@@ -1241,8 +1242,13 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
   // Schedule C Business Expenses
   const scheduleCExpenses = Math.max(0, Number(state.otherIncome?.scheduleCExpenses) || 0);
 
-  // Additional Incomes (1099-NEC, 1099-DIV, 1099-INT, 1099-MISC, 1099-R, SSA-1099, Schedule K-1, 1099-G, W-2G)
+  // Additional Incomes (1099-NEC, 1099-K, Schedule F, 1099-DIV, 1099-INT, 1099-MISC, 1099-R, SSA-1099, Schedule K-1, 1099-G, W-2G)
   const interestIncome = Number(state.otherIncome?.interest) || 0;
+  const alimonyReceived = Math.max(0, Number(state.otherIncome?.alimonyReceived) || 0);
+  const feieLimit = year === 2025 ? 130000 : 126500;
+  const foreignEarnedExclusion = Math.min(feieLimit, Math.max(0, Number(state.otherIncome?.foreignEarnedIncomeExclusion) || 0));
+  const unreportedTips = Math.max(0, Number(state.otherIncome?.unreportedTips) || 0);
+  const unreportedTipsFicaTax = Math.round(unreportedTips * 0.0765 * 100) / 100;
   const extraSources = state.otherIncome?.sources || [];
   let nonSsaExtraSourcesTotal = 0;
   let qualifiedDividendsTotal = 0;
@@ -1262,7 +1268,7 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     let amt = Number(s.amount) || 0;
     extra1099WithheldTotal += Math.max(0, Number(s.federalTaxWithheld) || 0);
 
-    if (s.type === '1099-NEC') {
+    if (s.type === '1099-NEC' || s.type === '1099-K' || s.type === 'Schedule F') {
       const expUsed = Math.min(Math.max(0, amt), remainingSchedCExpenses);
       remainingSchedCExpenses -= expUsed;
       amt = Math.max(0, amt - expUsed);
@@ -1322,8 +1328,11 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
   const seRetirement = Math.max(0, Number(state.adjustments?.seRetirement) || 0);
   const seHealthInsurance = Math.max(0, Number(state.adjustments?.seHealthInsurance) || 0);
   const alimonyPaid = Math.max(0, Number(state.adjustments?.alimonyPaid) || 0);
+  const militaryMoving = Math.max(0, Number(state.adjustments?.militaryMoving) || 0);
+  const earlyWithdrawalPenalty = Math.max(0, Number(state.adjustments?.earlyWithdrawalPenalty) || 0);
+  const juryDutyPay = Math.max(0, Number(state.adjustments?.juryDutyPay) || 0);
 
-  const manualAdjustments = studentLoanInterest + iraDeduction + hsaDeduction + educatorExpenses + seRetirement + seHealthInsurance + alimonyPaid;
+  const manualAdjustments = studentLoanInterest + iraDeduction + hsaDeduction + educatorExpenses + seRetirement + seHealthInsurance + alimonyPaid + militaryMoving + earlyWithdrawalPenalty + juryDutyPay;
   const totalAdjustments = Math.round((manualAdjustments + halfSelfEmploymentTaxDeduction) * 100) / 100;
 
   // Schedule E Rental Real Estate (Schedule 1, Line 5 & Form 8582 Passive Activity Loss Rules)
@@ -1396,7 +1405,7 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
       : 'Schedule E Net Rental Income = $0'
   };
 
-  const otherIncomeTotal = interestIncome + extraSourcesTotal + allowableCapitalNet + allowableRentalNet;
+  const otherIncomeTotal = interestIncome + extraSourcesTotal + allowableCapitalNet + allowableRentalNet + alimonyReceived + unreportedTips - foreignEarnedExclusion;
 
   // 2. Total Gross Income
   const grossIncome = Math.round(Math.max(0, totalW2Wages + otherIncomeTotal) * 100) / 100;
@@ -1496,8 +1505,12 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
   const charity = Number(state.itemizedDeductions?.charity) || 0;
   const gamblingLossesRaw = Math.max(0, Number(state.itemizedDeductions?.gamblingLosses) || 0);
   const allowableGamblingLosses = Math.min(gamblingWinningsTotal, gamblingLossesRaw);
+  const investmentInterestRaw = Math.max(0, Number(state.itemizedDeductions?.investmentInterest) || 0);
+  const netInvFor4952 = Math.max(0, interestIncome + net1099InterestTotal + Math.max(0, allowableCapitalNet));
+  const allowableInvestmentInterest = Math.min(netInvFor4952, investmentInterestRaw);
+  const casualtyLoss = Math.max(0, Number(state.itemizedDeductions?.casualtyLoss) || 0);
 
-  const totalItemized = allowableMedical + allowableSalt + mortgageInterest + charity + allowableGamblingLosses;
+  const totalItemized = allowableMedical + allowableSalt + mortgageInterest + charity + allowableGamblingLosses + allowableInvestmentInterest + casualtyLoss;
 
   const method = state.deductionMethod || 'auto';
   let chosenMethod: 'standard' | 'itemized' = 'standard';
@@ -1763,8 +1776,11 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
 
   const foreignTaxCreditRaw = Math.max(0, Number(state.dependents?.foreignTaxCredit) || 0);
   const cleanEnergyCreditRaw = Math.max(0, Number(state.dependents?.cleanEnergyCredit) || 0);
+  const adoptionCreditRaw = Math.min(year === 2025 ? 17280 : 16810, Math.max(0, Number(state.dependents?.adoptionCredit) || 0));
+  const elderlyDisabledCreditRaw = Math.max(0, Number(state.dependents?.elderlyDisabledCredit) || 0);
+  const premiumTaxCreditRaw = Math.max(0, Number(state.dependents?.premiumTaxCredit) || 0);
 
-  const totalNonRefundableRaw = ctcAfterPhaseout + odcAfterPhaseout + childCareCreditRaw + educationCreditNonRefundableRaw + saversCreditRaw + foreignTaxCreditRaw + cleanEnergyCreditRaw;
+  const totalNonRefundableRaw = ctcAfterPhaseout + odcAfterPhaseout + childCareCreditRaw + educationCreditNonRefundableRaw + saversCreditRaw + foreignTaxCreditRaw + cleanEnergyCreditRaw + adoptionCreditRaw + elderlyDisabledCreditRaw;
   const totalNonRefundableCredits = Math.round(Math.min(taxBeforeCredits, totalNonRefundableRaw) * 100) / 100;
   const childCreditAllowed = Math.min(taxBeforeCredits, ctcAfterPhaseout);
   const otherDependentsCredit = Math.min(Math.max(0, taxBeforeCredits - childCreditAllowed), odcAfterPhaseout);
@@ -1801,7 +1817,7 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     }
   }
 
-  const totalRefundableCredits = Math.round((additionalChildTaxCredit + eitc + educationCreditRefundable) * 100) / 100;
+  const totalRefundableCredits = Math.round((additionalChildTaxCredit + eitc + educationCreditRefundable + premiumTaxCreditRaw) * 100) / 100;
 
   const creditsCalc: CreditsCalculation = {
     result: totalNonRefundableCredits,
@@ -1874,10 +1890,11 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
   const tentativeMinimumTax = Math.round((tmtOrdinary + preferentialTax) * 100) / 100;
   const amt = amti > amtExemptionBase ? Math.max(0, Math.round((tentativeMinimumTax - taxBeforeCredits) * 100) / 100) : 0;
 
-  // Form 5329: 10% Early Retirement Distribution Penalty
+  // Form 5329: 10% Early Retirement Distribution Penalty + Schedule H Household + Form 4137 Unreported Tips FICA
   const earlyDistributionPenaltyTax = Math.round(earlyDist1099RTotal * 0.10 * 100) / 100;
+  const householdEmploymentTax = Math.max(0, Number(state.dependents?.householdEmploymentTax) || 0);
 
-  const totalOtherTaxes = Math.round((selfEmploymentTax + additionalMedicareTax + niit + amt + earlyDistributionPenaltyTax) * 100) / 100;
+  const totalOtherTaxes = Math.round((selfEmploymentTax + additionalMedicareTax + niit + amt + earlyDistributionPenaltyTax + unreportedTipsFicaTax + householdEmploymentTax) * 100) / 100;
 
   const otherTaxParts: string[] = [];
   if (selfEmploymentTax > 0) {
@@ -2031,7 +2048,8 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     netDifference,
     isRefund,
     scheduleECalc,
-    itemizedCalc
+    itemizedCalc,
+    creditsCalc.eitc
   );
 
   return {
@@ -2082,7 +2100,8 @@ export function calculateStateReturnsAndUnifiedSummary(
   federalNetDifference: number,
   federalIsRefund: boolean,
   scheduleECalc?: ScheduleECalculation,
-  itemizedCalc?: ItemizedDeductionCalculation
+  itemizedCalc?: ItemizedDeductionCalculation,
+  federalEitc: number = 0
 ): { stateReturnsCalc: StateReturnCalculation[]; unifiedSummaryCalc: UnifiedTaxSummary } {
   const effectiveStatus = normalizeFilingStatus(filingStatus);
   const year = state.year || 2024;
@@ -2537,19 +2556,49 @@ export function calculateStateReturnsAndUnifiedSummary(
     }
     const useStateItemized = state.deductionMethod !== 'standard' && stateItemizedDed > baseStdDed;
     const resSpList = (state.statePanels || []).filter(p => p.state.toUpperCase() === residentState);
-    const resSpOther = resSpList.filter(p => p.section === 'other-income').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    const evalStatePanelAmt = (p: { itemKey: string; amount: number }): number => {
+      const amt = Math.max(0, Number(p.amount) || 0);
+      const isMfj = effectiveStatus === 'married_joint';
+      switch (p.itemKey) {
+        case 'ma-rent-deduction': return Math.min(4000, Math.round(amt * 0.5 * 100) / 100);
+        case 'ma-commuter-deduction': return Math.min(750, Math.max(0, amt - 150));
+        case 'ny-529-deduction': return Math.min(isMfj ? 10000 : 5000, amt);
+        case 'nj-property-tax-deduction': return Math.min(15000, amt);
+        case 'dc-529-deduction': return Math.min(isMfj ? 8000 : 4000, amt);
+        case 'pa-529-deduction': return Math.min(18000, amt);
+        case 'oh-bid': return Math.min(250000, amt);
+        case 'in-renters-deduction': return Math.min(3000, amt);
+        case 'in-529-credit': return Math.min(1500, Math.round(amt * 0.20 * 100) / 100);
+        case 'wi-school-prop-credit': return Math.min(300, Math.round(amt * 0.12 * 100) / 100);
+        case 'ct-property-tax-credit': return Math.min(300, amt);
+        case 'va-529-deduction': return Math.min(4000, amt);
+        case 'ut-my529-credit': return Math.round(amt * 0.0455 * 100) / 100;
+        default: return amt;
+      }
+    };
+    const resSpOther = resSpList.filter(p => p.section === 'other-income').reduce((s, p) => s + evalStatePanelAmt(p), 0)
       + (Number(state.stateSpecific?.[residentState]?.otherIncome) || 0);
-    const resSpAdj = resSpList.filter(p => p.section === 'adjustments').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    const resSpAdj = resSpList.filter(p => p.section === 'adjustments').reduce((s, p) => s + evalStatePanelAmt(p), 0)
       + (Number(state.stateSpecific?.[residentState]?.adjustments) || 0);
-    const resSpCred = resSpList.filter(p => p.section === 'credits').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    const resSpCred = resSpList.filter(p => p.section === 'credits').reduce((s, p) => s + evalStatePanelAmt(p), 0)
       + (Number(state.stateSpecific?.[residentState]?.credits) || 0);
-    const resSpItem = resSpList.filter(p => p.section === 'itemized').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    const resSpItem = resSpList.filter(p => p.section === 'itemized').reduce((s, p) => s + evalStatePanelAmt(p), 0)
       + (Number(state.stateSpecific?.[residentState]?.itemizedDeductions) || 0);
+
+    const STATE_DEPENDENT_EXEMPTION: Record<string, number> = {
+      NY: 1000, NJ: 1500, IL: 2775, MA: 1000, MI: 5600, MD: 3200, GA: 4000,
+      IN: 1500, MN: 5050, SC: 4610, VA: 930, WV: 2000, OH: 2400, OK: 1000,
+      RI: 4900, VT: 5100, WI: 700, KS: 2320
+    };
+    const totalDependents = (Number(state.dependents?.childrenCount) || 0) + (Number(state.dependents?.otherDependentsCount) || 0);
+    const stateExemptionAmount = totalDependents > 0 && STATE_DEPENDENT_EXEMPTION[residentState]
+      ? totalDependents * STATE_DEPENDENT_EXEMPTION[residentState]
+      : 0;
 
     const resStdDed = (useStateItemized ? stateItemizedDed : baseStdDed) + resSpItem;
 
     const resAdjustedIncome = Math.max(0, residentTotalWages + resSpOther - resSpAdj);
-    const resTaxable = Math.max(0, resAdjustedIncome - resStdDed);
+    const resTaxable = Math.max(0, resAdjustedIncome - resStdDed - stateExemptionAmount);
     let resTentativeTax = 0;
     let resBrackets: BracketDetail[] = [];
     if (residentRule.isFlat) {
@@ -2629,7 +2678,17 @@ export function calculateStateReturnsAndUnifiedSummary(
       }
     }
 
-    const netStateOnlyLiability = Math.max(0, Math.round((resTentativeTax - totalOtherStateCredit - resSpCred) * 100) / 100);
+    const STATE_EITC_MULTIPLIERS: Record<string, number> = {
+      NY: 0.30, NJ: 0.40, DC: 0.70, MI: 0.30, IL: 0.20, MA: 0.40, CT: 0.40,
+      MD: 0.45, VA: 0.20, ME: 0.25, NM: 0.25, RI: 0.16, IA: 0.15, KS: 0.17,
+      IN: 0.10, NE: 0.10, LA: 0.05, SC: 1.25, VT: 0.38, CO: 0.38, OR: 0.09
+    };
+    const stateEitcRate = STATE_EITC_MULTIPLIERS[residentState] || 0;
+    const stateEitcAmount = federalEitc > 0 && stateEitcRate > 0
+      ? Math.round(federalEitc * stateEitcRate * 100) / 100
+      : 0;
+
+    const netStateOnlyLiability = Math.max(0, Math.round((resTentativeTax - totalOtherStateCredit - resSpCred - stateEitcAmount) * 100) / 100);
     const finalResLiability = Math.round((netStateOnlyLiability + localTaxLiability) * 100) / 100;
     const totalResWithholding = localTaxLiability > 0 ? (resWithholding + resLocalTax) : resWithholding;
     const resNetDiff = Math.round((totalResWithholding - finalResLiability) * 100) / 100;
@@ -2689,6 +2748,9 @@ export function calculateStateReturnsAndUnifiedSummary(
       surchargeLabel,
       stateCreditAmount,
       stateCreditLabel,
+      stateExemptionAmount,
+      stateEitcAmount,
+      stateEitcRate,
       sourceFields: [
         ...resRaw.sourceFieldIds,
         ...creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-liability`)
@@ -4264,8 +4326,16 @@ export function buildStateCalcBlocks(sr: StateReturnCalculation, allStateReturns
   });
 
   const tentativeTaxRef = inputNode(`st-tent-ref-${stateKey}`, tentativeId, `Tentative ${sr.state} Tax`, sr.stateTaxBeforeCredit);
+  const stateEitcNode = (sr.stateEitcAmount ?? 0) > 0
+    ? [opNode(`line-state-${stateKey}-eitc`, `${sr.state} Earned Income Credit`, 'mul', [
+        inputNode(`st-eitc-fed-${stateKey}`, 'auto-fed-eitc', 'Federal EITC', Math.round(((sr.stateEitcAmount ?? 0) / (sr.stateEitcRate || 1)) * 100) / 100),
+        constNode(`st-eitc-rate-${stateKey}`, `${sr.state} EITC Rate`, sr.stateEitcRate || 0, 'percent')
+      ], { value: sr.stateEitcAmount ?? 0, expandIntermediate: true })]
+    : [];
+
   const creditsToSubtract: FormulaNode[] = [
     ...ostcNodes,
+    ...stateEitcNode,
     ...((sr.statePanelCredits ?? 0) > 0 ? [inputNode(`st-sp-cred-${stateKey}`, `state-${stateKey}-credits`, `${sr.state} Credits`, sr.statePanelCredits ?? 0)] : [])
   ];
 
@@ -4311,7 +4381,8 @@ export function buildStateCalcBlocks(sr: StateReturnCalculation, allStateReturns
       tentativeId,
       ...(hasLocal ? [localId] : []),
       ...sr.creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-card`),
-      ...sr.creditedStates.map(c => `auto-state-${stateKey}-ostc-${c.fromState.toLowerCase()}`)
+      ...sr.creditedStates.map(c => `auto-state-${stateKey}-ostc-${c.fromState.toLowerCase()}`),
+      ...((sr.stateEitcAmount ?? 0) > 0 ? [`auto-state-${stateKey}-eitc`] : [])
     ]))
   });
 
@@ -4524,6 +4595,39 @@ export function buildAutoPanels(
         shortExplanation: `Automatically applied ${code} property tax credit from your Schedule A property taxes.`,
         sourceIds: ['input-itemized-salt'],
         badgeLabel: 'Auto-Calculated'
+      });
+    }
+
+    // State Dependent Exemption
+    if ((sr.stateExemptionAmount ?? 0) > 0) {
+      list.push({
+        id: `auto-state-${key}-dep-exemption`,
+        section: 'itemized',
+        state: code,
+        title: `${code} Dependent Exemptions`,
+        officialTitle: `${sr.formName} Personal / Dependent Exemptions`,
+        amount: sr.stateExemptionAmount ?? 0,
+        formulaSummary: `Statutory ${code} Exemption × Qualifying Dependents`,
+        shortExplanation: `Automatically reduces ${code} taxable income for each qualifying dependent.`,
+        sourceIds: ['input-children-count'],
+        badgeLabel: 'Auto-Calculated'
+      });
+    }
+
+    // State Earned Income Tax Credit (EITC)
+    if ((sr.stateEitcAmount ?? 0) > 0) {
+      const pct = Math.round((sr.stateEitcRate || 0) * 100);
+      list.push({
+        id: `auto-state-${key}-eitc`,
+        section: 'credits',
+        state: code,
+        title: `${code} Earned Income Tax Credit (${pct}%)`,
+        officialTitle: `${sr.formName} State EITC`,
+        amount: sr.stateEitcAmount ?? 0,
+        formulaSummary: `${pct}% × Federal EITC`,
+        shortExplanation: `Automatically granted state EITC equal to ${pct}% of your Federal Earned Income Tax Credit.`,
+        sourceIds: ['auto-fed-eitc'],
+        badgeLabel: 'EITC • Auto'
       });
     }
 

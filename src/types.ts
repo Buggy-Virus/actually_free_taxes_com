@@ -61,12 +61,14 @@ export interface W2Data {
 
 export type IncomeSourceType =
   | '1099-NEC'
+  | '1099-K'
   | '1099-DIV'
   | '1099-INT'
   | '1099-MISC'
   | '1099-R'
   | 'SSA-1099'
   | 'Schedule K-1'
+  | 'Schedule F'
   | '1099-G'
   | 'W-2G'
   | 'Other';
@@ -89,6 +91,7 @@ export interface CapitalGainsInput {
   longTerm: number;
   collectiblesGain?: number; // 28% rate gain (Schedule D Line 18)
   unrecaptured1250Gain?: number; // 25% unrecaptured Section 1250 depreciation gain (Schedule D Line 19)
+  carryoverLoss?: number; // Prior-year capital loss carryover (Schedule D Line 6/14)
 }
 
 export interface ScheduleERentalInput {
@@ -104,6 +107,8 @@ export interface ItemizedDeductionsInput {
   mortgageInterest: number;
   charity: number;
   gamblingLosses?: number; // Deductible on Schedule A Line 16 up to W-2G gambling winnings
+  investmentInterest?: number; // Form 4952 / Schedule A Line 9 (capped at Net Investment Income)
+  casualtyLoss?: number; // Form 4684 / Schedule A Line 15 (federally declared disaster)
 }
 
 export interface OtherIncome {
@@ -112,6 +117,9 @@ export interface OtherIncome {
   capitalGains?: CapitalGainsInput;
   scheduleCExpenses?: number;
   scheduleERental?: ScheduleERentalInput;
+  alimonyReceived?: number; // Schedule 1 Line 2a (Pre-2019 divorce)
+  foreignEarnedIncomeExclusion?: number; // Form 2555 exclusion (up to $126,500/$130,000)
+  unreportedTips?: number; // Form 4137 unreported tip income
 }
 
 export interface Adjustments {
@@ -122,6 +130,9 @@ export interface Adjustments {
   seRetirement?: number; // Schedule 1 Line 16 (SEP, SIMPLE, Solo 401k)
   seHealthInsurance?: number; // Schedule 1 Line 17 (Self-employed health insurance)
   alimonyPaid?: number; // Schedule 1 Line 19a (Pre-2019 divorce agreements)
+  militaryMoving?: number; // Form 3903 / Schedule 1 Line 14
+  earlyWithdrawalPenalty?: number; // Schedule 1 Line 18 (1099-INT Box 2)
+  juryDutyPay?: number; // Schedule 1 Line 24a (Jury duty pay given to employer)
 }
 
 export interface Dependents {
@@ -133,7 +144,11 @@ export interface Dependents {
   educationExpensesLlc?: number; // Form 8863 Lifetime Learning Credit qualified tuition
   foreignTaxCredit?: number; // Form 1116 Foreign Tax Credit
   cleanEnergyCredit?: number; // Form 5695 / Form 8936 Clean Energy & EV Credit
-  estimatedTaxPayments?: number; // Form 1040-ES quarterly estimated tax payments
+  adoptionCredit?: number; // Form 8839 Adoption Credit
+  premiumTaxCredit?: number; // Form 8962 Net Premium Tax Credit (Refundable)
+  elderlyDisabledCredit?: number; // Schedule R Credit for the Elderly or Disabled
+  householdEmploymentTax?: number; // Schedule H Household Employment Taxes
+  estimatedTaxPayments?: number; // Form 1040-ES quarterly estimated payments
 }
 
 export type DeductionMethod = 'auto' | 'standard' | 'itemized';
@@ -342,6 +357,10 @@ export interface StateReturnCalculation extends CalculationResult {
   surchargeLabel?: string;
   stateCreditAmount?: number;
   stateCreditLabel?: string;
+  stateExemptionAmount?: number;
+  stateExemptionCredit?: number;
+  stateEitcAmount?: number;
+  stateEitcRate?: number;
   d30Details?: {
     grossReceipts: number;
     netRental: number;

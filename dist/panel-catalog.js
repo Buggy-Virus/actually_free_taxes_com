@@ -345,6 +345,146 @@ export const PANEL_CATALOG = [
         ratingKey: 'itemized-gambling',
         size: 'sm',
         inputIds: ['input-itemized-gambling-losses']
+    },
+    {
+        key: 'itemized-investment-interest',
+        section: 'itemized',
+        title: 'Investment Interest Expense',
+        officialTitle: 'Form 4952 • Schedule A Line 9',
+        shortExplanation: 'Margin interest on investment loans, deductible up to net investment income.',
+        ratingKey: 'itemized-mortgage',
+        size: 'sm',
+        inputIds: ['input-itemized-investment-interest']
+    },
+    {
+        key: 'itemized-casualty',
+        section: 'itemized',
+        title: 'Disaster Casualty Losses',
+        officialTitle: 'Form 4684 • Schedule A Line 15',
+        shortExplanation: 'Losses from a federally declared disaster (excess of $100 / 10% AGI floor).',
+        ratingKey: 'itemized-charity',
+        size: 'sm',
+        inputIds: ['input-itemized-casualty']
+    },
+    {
+        key: '1099-k',
+        section: 'other-income',
+        title: 'Payment Card / 1099-K',
+        officialTitle: 'Form 1099-K • Third-Party Network',
+        shortExplanation: 'Gross business/marketplace payments received via Stripe, PayPal, Venmo, or eBay.',
+        ratingKey: 'income-1099-nec',
+        size: 'sm',
+        inputIds: []
+    },
+    {
+        key: 'sched-f-farm',
+        section: 'other-income',
+        title: 'Farm Income & Expenses',
+        officialTitle: 'Schedule F • Net Farm Profit',
+        shortExplanation: 'Net agricultural income subject to Schedule SE self-employment tax and 20% QBI.',
+        ratingKey: 'income-1099-nec',
+        size: 'sm',
+        inputIds: []
+    },
+    {
+        key: 'alimony-received',
+        section: 'other-income',
+        title: 'Alimony Received (Pre-2019)',
+        officialTitle: 'Schedule 1 • Line 2a',
+        shortExplanation: 'Taxable alimony received under divorce/separation agreements executed before 2019.',
+        ratingKey: 'adj-alimony',
+        size: 'sm',
+        inputIds: ['input-alimony-received']
+    },
+    {
+        key: 'foreign-earned-income-2555',
+        section: 'other-income',
+        title: 'Foreign Earned Income Excl.',
+        officialTitle: 'Form 2555 • Schedule 1 Line 8d',
+        shortExplanation: 'Exclusion up to $126,500 (2024) / $130,000 (2025) for qualifying expat earned income.',
+        ratingKey: 'credits-foreign-tax',
+        size: 'sm',
+        inputIds: ['input-foreign-earned-excl']
+    },
+    {
+        key: 'unreported-tips-4137',
+        section: 'other-income',
+        title: 'Unreported Tip Income',
+        officialTitle: 'Form 4137 • Line 1a / Sched 2',
+        shortExplanation: 'Tips not reported to your employer; adds to wages and triggers 7.65% SS/Medicare tax.',
+        ratingKey: 'w2-box1',
+        size: 'sm',
+        inputIds: ['input-unreported-tips']
+    },
+    {
+        key: 'adj-military-moving',
+        section: 'adjustments',
+        title: 'Military Moving Expenses',
+        officialTitle: 'Form 3903 • Schedule 1 Line 14',
+        shortExplanation: 'Unreimbursed moving expenses for active-duty Armed Forces PCS orders.',
+        ratingKey: 'adj-educator',
+        size: 'sm',
+        inputIds: ['input-adj-military-moving']
+    },
+    {
+        key: 'adj-early-withdrawal-penalty',
+        section: 'adjustments',
+        title: 'Early Savings Withdrawal Penalty',
+        officialTitle: 'Schedule 1 • Line 18 (1099-INT Box 2)',
+        shortExplanation: 'Penalty forfeited on early withdrawal from a CD or time savings account.',
+        ratingKey: 'other-interest',
+        size: 'sm',
+        inputIds: ['input-adj-early-withdrawal']
+    },
+    {
+        key: 'adj-jury-duty',
+        section: 'adjustments',
+        title: 'Jury Duty Pay Remitted',
+        officialTitle: 'Schedule 1 • Line 24a',
+        shortExplanation: 'Jury duty pay turned over to your employer while receiving regular salary.',
+        ratingKey: 'adj-educator',
+        size: 'sm',
+        inputIds: ['input-adj-jury-duty']
+    },
+    {
+        key: 'cred-adoption',
+        section: 'credits',
+        title: 'Adoption Credit',
+        officialTitle: 'Form 8839 • Schedule 3 Line 6c',
+        shortExplanation: 'Qualified adoption expenses credit up to $16,810 (2024) / $17,280 (2025).',
+        ratingKey: 'credits-children',
+        size: 'sm',
+        inputIds: ['input-adoption-credit']
+    },
+    {
+        key: 'cred-ptc-8962',
+        section: 'credits',
+        title: 'Premium Tax Credit (ACA)',
+        officialTitle: 'Form 8962 • Schedule 3 Line 9',
+        shortExplanation: 'Refundable net Health Insurance Marketplace credit from Form 1095-A.',
+        ratingKey: 'credits-clean-energy',
+        size: 'sm',
+        inputIds: ['input-ptc-credit']
+    },
+    {
+        key: 'cred-elderly-sched-r',
+        section: 'credits',
+        title: 'Elderly or Disabled Credit',
+        officialTitle: 'Schedule R • Schedule 3 Line 6d',
+        shortExplanation: 'Nonrefundable credit for low-income taxpayers age 65+ or permanently disabled.',
+        ratingKey: 'credits-age-blind',
+        size: 'sm',
+        inputIds: ['input-elderly-credit']
+    },
+    {
+        key: 'sched-h-household',
+        section: 'credits',
+        title: 'Household Employment Tax',
+        officialTitle: 'Schedule H • Schedule 2 Line 9',
+        shortExplanation: 'FICA & FUTA taxes owed for a nanny, housekeeper, or household employee.',
+        ratingKey: 'credits-child-care',
+        size: 'sm',
+        inputIds: ['input-household-tax']
     }
 ];
 export function getPanelCatalogEntry(key) {

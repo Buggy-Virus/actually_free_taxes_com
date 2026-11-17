@@ -239,6 +239,126 @@ export const STATE_PANEL_CATALOG = [
         shortExplanation: 'Additional state-allowed itemized deductions (e.g. state-only property/medical/union dues).',
         ratingKey: 'itemized-charity',
         size: 'sm'
+    },
+    {
+        key: 'oh-bid',
+        states: ['OH'],
+        section: 'adjustments',
+        title: 'OH Business Income Deduction',
+        officialTitle: 'Form IT BUS • Up to $250k Exempt',
+        shortExplanation: 'Ohio deducts up to $250,000 of Schedule C / E / K-1 business income.',
+        ratingKey: 'income-1099-nec',
+        size: 'sm'
+    },
+    {
+        key: 'co-529-deduction',
+        states: ['CO'],
+        section: 'adjustments',
+        title: 'CO 529 (CollegeInvest) Deduction',
+        officialTitle: 'Form DR 0104AD • Subtraction',
+        shortExplanation: 'Qualifying CollegeInvest 529 contributions deductible from CO taxable income.',
+        ratingKey: 'adj-ira',
+        size: 'sm'
+    },
+    {
+        key: 'in-renters-deduction',
+        states: ['IN'],
+        section: 'itemized',
+        title: "IN Renter's Deduction",
+        officialTitle: 'Form IT-40 Schedule 2 (Max $3,000)',
+        shortExplanation: 'Rent paid on principal Indiana residence deductible up to $3,000.',
+        ratingKey: 'itemized-mortgage',
+        size: 'sm'
+    },
+    {
+        key: 'in-529-credit',
+        states: ['IN'],
+        section: 'credits',
+        title: 'IN CollegeChoice 529 Credit',
+        officialTitle: 'Schedule IN-529 (20% up to $1,500)',
+        shortExplanation: '20% credit on CollegeChoice 529 contributions up to $7,500.',
+        ratingKey: 'credits-aotc',
+        size: 'sm'
+    },
+    {
+        key: 'mi-homestead-credit',
+        states: ['MI'],
+        section: 'credits',
+        title: 'MI Homestead Property Tax Credit',
+        officialTitle: 'Form MI-1040CR (Up to $1,700)',
+        shortExplanation: 'Refundable credit for Michigan homeowners/renters based on property tax and household resources.',
+        ratingKey: 'itemized-salt',
+        size: 'sm'
+    },
+    {
+        key: 'wi-school-prop-credit',
+        states: ['WI'],
+        section: 'credits',
+        title: 'WI School Property Tax / Rent Credit',
+        officialTitle: 'Form 1 Line 22 (12% up to $300)',
+        shortExplanation: '12% credit on up to $2,500 of property taxes or rent paid in Wisconsin.',
+        ratingKey: 'itemized-salt',
+        size: 'sm'
+    },
+    {
+        key: 'az-public-school-credit',
+        states: ['AZ'],
+        section: 'credits',
+        title: 'AZ Public School / QCO Credit',
+        officialTitle: 'Form 321 / 322 ($200–$938)',
+        shortExplanation: 'Dollar-for-dollar credit for AZ public school fees and qualifying charitable organizations.',
+        ratingKey: 'itemized-charity',
+        size: 'sm'
+    },
+    {
+        key: 'ct-property-tax-credit',
+        states: ['CT'],
+        section: 'credits',
+        title: 'CT Property Tax Credit',
+        officialTitle: 'Form CT-1040 Schedule 3 (Up to $300)',
+        shortExplanation: 'Credit for primary residence or motor vehicle property taxes paid in Connecticut.',
+        ratingKey: 'itemized-salt',
+        size: 'sm'
+    },
+    {
+        key: 'ga-retirement-excl',
+        states: ['GA'],
+        section: 'adjustments',
+        title: 'GA Retirement Income Exclusion',
+        officialTitle: 'Form 500 Schedule 1 ($35k/$65k)',
+        shortExplanation: 'Up to $35,000 (ages 62–64) or $65,000 (65+) retirement income exclusion.',
+        ratingKey: 'income-1099-r',
+        size: 'sm'
+    },
+    {
+        key: 'ky-pension-excl',
+        states: ['KY'],
+        section: 'adjustments',
+        title: 'KY Pension Exclusion',
+        officialTitle: 'Schedule P (Up to $31,110)',
+        shortExplanation: 'Up to $31,110 exclusion for qualified pension/IRA distributions in Kentucky.',
+        ratingKey: 'income-1099-r',
+        size: 'sm'
+    },
+    {
+        key: 'va-529-deduction',
+        states: ['VA'],
+        section: 'adjustments',
+        title: 'VA CollegeAmerica 529 Deduction',
+        officialTitle: 'Schedule ADJ (Up to $4,000/acct)',
+        shortExplanation: 'Up to $4,000 per Invest529/CollegeAmerica account (unlimited if age 70+).',
+        ratingKey: 'adj-ira',
+        size: 'sm'
+    },
+    {
+        key: 'ut-my529-credit',
+        states: ['UT'],
+        section: 'credits',
+        title: 'UT my529 Tax Credit',
+        officialTitle: 'Form TC-40A (4.55% Credit)',
+        shortExplanation: '4.55% credit on qualifying Utah my529 education savings contributions.',
+        ratingKey: 'credits-aotc',
+        size: 'sm'
     }
 ];
 export function getStateCatalogForSection(stateCode, section) {
