@@ -1029,4 +1029,73 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
     assert.strictEqual(waLowRet.stateExemptionCredit, 650, 'WA grants $650 Working Families Tax Credit for 1-child EITC filer');
     console.log("✓ TS Test 18: Phase 2-4 State Rules (AZ LTCG, MA Rent Cap, WA WFTC) verified!");
 }
-console.log("\nAll 18 TypeScript test suites PASSED with 100% accuracy!\n");
+// =========================================================================
+// TEST 19: Remaining Gaps — Federal User Panels & State Auto-Panel sourceIds
+// =========================================================================
+{
+    const gapState = {
+        year: 2024,
+        filingStatus: 'single',
+        residentState: 'AZ',
+        deductionMethod: 'standard',
+        w2s: [{ id: 0, employer: 'Acme', ein: '11-1111111', box1: 80000, box2: 10000, box3: 80000, box4: 4960, box5: 80000, box6: 1160, states: [{ id: 0, state: 'AZ', stateId: 'AZ-1', stateWages: 80000, stateTaxWithheld: 2000, localWages: 0, localTaxWithheld: 0, localityName: '' }] }],
+        otherIncome: {
+            interest: 0,
+            sources: [
+                { id: 1, type: '1099-K', payer: 'Stripe', amount: 5000 },
+                { id: 2, type: 'Schedule F', payer: 'Farm', amount: 3000 }
+            ],
+            alimonyReceived: 4000,
+            unreportedTips: 2000,
+            foreignEarnedIncomeExclusion: 10000,
+            capitalGains: { shortTerm: 0, longTerm: 20000 }
+        },
+        adjustments: {
+            studentLoan: 0,
+            ira: 0,
+            hsa: 0,
+            militaryMoving: 1500,
+            earlyWithdrawalPenalty: 500,
+            juryDutyPay: 300
+        },
+        dependents: {
+            childrenCount: 1,
+            adoptionCredit: 2500,
+            elderlyDisabledCredit: 400,
+            premiumTaxCredit: 600,
+            householdEmploymentTax: 1200
+        },
+        showAllArrows: true
+    };
+    const gapRes = calculateTaxes(gapState);
+    const gapBlocks = buildCalculationBlocks(gapState, gapRes);
+    const agiBlock = gapBlocks.find(b => b.id === 'calc-agi');
+    assert.ok(agiBlock.sourceIds.includes('input-alimony-received'), 'calc-agi includes input-alimony-received');
+    assert.ok(agiBlock.sourceIds.includes('input-unreported-tips'), 'calc-agi includes input-unreported-tips');
+    assert.ok(agiBlock.sourceIds.includes('input-foreign-earned-excl'), 'calc-agi includes input-foreign-earned-excl');
+    assert.ok(agiBlock.sourceIds.includes('input-adj-military-moving'), 'calc-agi includes input-adj-military-moving');
+    assert.ok(agiBlock.sourceIds.includes('input-adj-early-withdrawal'), 'calc-agi includes input-adj-early-withdrawal');
+    assert.ok(agiBlock.sourceIds.includes('input-adj-jury-duty'), 'calc-agi includes input-adj-jury-duty');
+    assert.strictEqual(agiBlock.variables.other_1099.contributors.some(c => c.panelKey === '1099-k' && c.amount === 5000), true, 'calc-agi breaks out 1099-K');
+    assert.strictEqual(agiBlock.variables.other_1099.contributors.some(c => c.panelKey === 'sched-f-farm' && c.amount === 3000), true, 'calc-agi breaks out Schedule F');
+    const credBlock = gapBlocks.find(b => b.id === 'calc-total-credits');
+    assert.ok(credBlock.sourceIds.includes('input-adoption-credit'), 'calc-total-credits includes input-adoption-credit');
+    assert.ok(credBlock.sourceIds.includes('input-elderly-credit'), 'calc-total-credits includes input-elderly-credit');
+    assert.ok(credBlock.sourceIds.includes('input-ptc-credit'), 'calc-total-credits includes input-ptc-credit');
+    const otherTaxBlock = gapBlocks.find(b => b.id === 'calc-other-taxes');
+    assert.ok(otherTaxBlock.sourceIds.includes('input-unreported-tips'), 'calc-other-taxes includes input-unreported-tips');
+    assert.ok(otherTaxBlock.sourceIds.includes('input-household-tax'), 'calc-other-taxes includes input-household-tax');
+    assert.ok(otherTaxBlock.lines.some(l => l.id === 'line-unreported-tips-tax'), 'calc-other-taxes has line-unreported-tips-tax');
+    assert.ok(otherTaxBlock.lines.some(l => l.id === 'line-household-tax'), 'calc-other-taxes has line-household-tax');
+    const azRet = gapRes.stateReturnsCalc.find(r => r.state === 'AZ');
+    const azBlocks = buildStateCalcBlocks(azRet, gapRes.stateReturnsCalc);
+    const azTaxableBlock = azBlocks.find(b => b.id === 'calc-state-az-taxable');
+    assert.ok(azTaxableBlock.sourceIds.includes('auto-state-az-ltcg-excl'), 'calc-state-az-taxable links auto-state-az-ltcg-excl');
+    const ilState = { ...gapState, residentState: 'IL', w2s: [{ ...gapState.w2s[0], states: [{ id: 0, state: 'IL', stateId: 'IL-1', stateWages: 80000, stateTaxWithheld: 2000, localWages: 0, localTaxWithheld: 0, localityName: '' }] }] };
+    const ilRes = calculateTaxes(ilState);
+    const ilAutoPanels = buildAutoPanels(ilState, ilRes);
+    const ilExempPanel = (ilAutoPanels.byState['IL'] || []).find(p => p.id === 'auto-state-il-dep-exemption');
+    assert.ok(ilExempPanel.sourceIds.includes('select-filing-status'), 'auto-state-il-dep-exemption includes select-filing-status');
+    console.log("✓ TS Test 19: Federal User Panel FormulaNode Wiring & State Auto-Panel sourceIds verified!");
+}
+console.log("\nAll 19 TypeScript test suites PASSED with 100% accuracy!\n");

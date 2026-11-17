@@ -2815,14 +2815,21 @@ export function buildCalculationBlocks(state, summary) {
     const interest1099 = sources.filter(s => s.type === '1099-INT').reduce((s, x) => s + Math.max(0, (Number(x.amount) || 0) - Math.max(0, Number(x.accruedInterestPaid) || 0)), 0);
     const totalInterest = interestDirect + interest1099;
     const totalDiv = sources.filter(s => s.type === '1099-DIV').reduce((s, x) => s + (Number(x.amount) || 0), 0);
-    const totalNecGross = sources.filter(s => s.type === '1099-NEC').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+    const totalNecOnly = sources.filter(s => s.type === '1099-NEC').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+    const total1099K = sources.filter(s => s.type === '1099-K').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+    const totalSchedF = sources.filter(s => s.type === 'Schedule F').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+    const totalNecGross = totalNecOnly + total1099K + totalSchedF;
     const schedCExp = Math.max(0, Number(state.otherIncome?.scheduleCExpenses) || 0);
     const netNec = Math.max(0, totalNecGross - schedCExp);
     const totalOther1099 = sources
-        .filter(s => !['1099-INT', '1099-DIV', '1099-NEC', 'SSA-1099', 'Schedule K-1'].includes(s.type))
+        .filter(s => !['1099-INT', '1099-DIV', '1099-NEC', '1099-K', 'Schedule F', 'SSA-1099', 'Schedule K-1'].includes(s.type))
         .reduce((s, x) => s + (Number(x.amount) || 0), 0);
     const k1Total = sources.filter(s => s.type === 'Schedule K-1').reduce((s, x) => s + (Number(x.amount) || 0), 0);
     const ssaGross = sources.filter(s => s.type === 'SSA-1099').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+    const alimonyRec = Math.max(0, Number(state.otherIncome?.alimonyReceived) || 0);
+    const unreportedTips = Math.max(0, Number(state.otherIncome?.unreportedTips) || 0);
+    const feieLimit = year === 2025 ? 130000 : 126500;
+    const foreignEarnedExcl = Math.min(feieLimit, Math.max(0, Number(state.otherIncome?.foreignEarnedIncomeExclusion) || 0));
     const stGain = Number(state.otherIncome?.capitalGains?.shortTerm) || 0;
     const ltGain = Number(state.otherIncome?.capitalGains?.longTerm) || 0;
     const collectiblesGain = Math.max(0, Number(state.otherIncome?.capitalGains?.collectiblesGain) || 0);
@@ -2838,6 +2845,9 @@ export function buildCalculationBlocks(state, summary) {
     const adjSeRet = Math.max(0, Number(state.adjustments?.seRetirement) || 0);
     const adjSeHealth = Math.max(0, Number(state.adjustments?.seHealthInsurance) || 0);
     const adjAlimony = Math.max(0, Number(state.adjustments?.alimonyPaid) || 0);
+    const adjMilitary = Math.max(0, Number(state.adjustments?.militaryMoving) || 0);
+    const adjEarlyWithdr = Math.max(0, Number(state.adjustments?.earlyWithdrawalPenalty) || 0);
+    const adjJury = Math.max(0, Number(state.adjustments?.juryDutyPay) || 0);
     const halfSeTax = summary.otherTaxesCalc.halfSelfEmploymentTaxDeduction;
     const medRaw = Math.max(0, Number(state.itemizedDeductions?.medicalExpenses) || 0);
     const realEstateRaw = Math.max(0, Number(state.itemizedDeductions?.realEstateTax) || 0);
@@ -2851,7 +2861,7 @@ export function buildCalculationBlocks(state, summary) {
     const hasAnyW2Activity = w2s.some(w => (Number(w.box1) || 0) !== 0 || (Number(w.box2) || 0) !== 0 || (Number(w.box4) || 0) !== 0 || (Number(w.box6) || 0) !== 0);
     const hasAnyCapGains = stGain !== 0 || ltGain !== 0 || collectiblesGain !== 0 || sec1250Gain !== 0;
     const hasAnySchedE = grossRents !== 0 || rentalExp !== 0 || rentalDepr !== 0 || k1Total !== 0;
-    const hasAnyOtherIncome = totalInterest !== 0 || totalDiv !== 0 || totalNecGross !== 0 || schedCExp !== 0 || totalOther1099 !== 0 || ssaGross !== 0 || hasAnyCapGains || hasAnySchedE;
+    const hasAnyOtherIncome = totalInterest !== 0 || totalDiv !== 0 || totalNecGross !== 0 || schedCExp !== 0 || totalOther1099 !== 0 || ssaGross !== 0 || alimonyRec !== 0 || unreportedTips !== 0 || foreignEarnedExcl !== 0 || hasAnyCapGains || hasAnySchedE;
     const hasAnyAdjustments = summary.adjustmentsCalc.result !== 0;
     const hasAnyItemized = medRaw !== 0 || realEstateRaw !== 0 || mortgageRaw !== 0 || charityRaw !== 0 || gamblingLossesRaw !== 0 || state.deductionMethod === 'itemized';
     const hasAnyCreditsInput = (Number(state.dependents?.childrenCount) || 0) > 0 ||
@@ -2861,6 +2871,9 @@ export function buildCalculationBlocks(state, summary) {
         (Number(state.dependents?.educationExpensesLlc) || 0) > 0 ||
         (Number(state.dependents?.foreignTaxCredit) || 0) > 0 ||
         (Number(state.dependents?.cleanEnergyCredit) || 0) > 0 ||
+        (Number(state.dependents?.adoptionCredit) || 0) > 0 ||
+        (Number(state.dependents?.elderlyDisabledCredit) || 0) > 0 ||
+        (Number(state.dependents?.premiumTaxCredit) || 0) > 0 ||
         summary.creditsCalc.totalNonRefundableCredits > 0 ||
         summary.creditsCalc.totalRefundableCredits > 0;
     const hasAnyOtherTaxes = summary.otherTaxesCalc.totalOtherTaxes > 0 || summary.ficaCalc.excessSSTaxCredit > 0;
@@ -3042,16 +3055,18 @@ export function buildCalculationBlocks(state, summary) {
             formLineLabel: null,
             exact: false
         });
+        const schedEAllowableArgs = [
+            inputNode('sched-e-pal', 'line-sched-e-net', 'Allowable Rental (After Form 8582 PAL)', summary.scheduleECalc.allowableNet - k1Total, { exact: false }),
+            ...(k1Total !== 0 ? [inputNode('sched-e-k1', 'section-federal-other-income', 'Schedule K-1', k1Total, { exact: false })] : [])
+        ];
+        const schedEAllowableNode = opNode('line-sched-e-allowable', 'Allowable Schedule E Income / (Loss)', 'add', schedEAllowableArgs, {
+            value: summary.scheduleECalc.allowableNet,
+            formLineLabel: 'Schedule 1 Line 5',
+            exact: false
+        });
         const lines = [
             ...compileFormulaToLines(schedENetNode, vars),
-            {
-                id: 'line-sched-e-allowable',
-                label: 'Allowable Schedule E Income / (Loss)',
-                formLineLabel: 'Schedule 1 Line 5',
-                generalTokens: [t('Allowable Schedule E (after Form 8582 $25k PAL phaseout) + K-1 Income')],
-                pluggedTokens: [t(`Allowable Schedule E = ${formatCurrency(summary.scheduleECalc.allowableNet)}`)],
-                resultFormatted: formatCurrency(summary.scheduleECalc.allowableNet)
-            }
+            ...compileFormulaToLines(schedEAllowableNode, vars)
         ];
         blocks.push({
             id: 'calc-schedule-e',
@@ -3101,11 +3116,31 @@ export function buildCalculationBlocks(state, summary) {
             {
                 label: '1099-NEC Self-Employment',
                 sign: '+',
-                amount: totalNecGross,
-                amountFormatted: formatCurrency(totalNecGross),
-                isSetUp: totalNecGross !== 0,
+                amount: totalNecOnly,
+                amountFormatted: formatCurrency(totalNecOnly),
+                isSetUp: totalNecOnly !== 0,
                 targetElementId: 'section-federal-other-income',
                 panelKey: '1099-nec',
+                panelSection: 'other-income'
+            },
+            {
+                label: '1099-K Payment Card / Marketplace',
+                sign: '+',
+                amount: total1099K,
+                amountFormatted: formatCurrency(total1099K),
+                isSetUp: total1099K !== 0,
+                targetElementId: 'section-federal-other-income',
+                panelKey: '1099-k',
+                panelSection: 'other-income'
+            },
+            {
+                label: 'Schedule F Farm Profit',
+                sign: '+',
+                amount: totalSchedF,
+                amountFormatted: formatCurrency(totalSchedF),
+                isSetUp: totalSchedF !== 0,
+                targetElementId: 'section-federal-other-income',
+                panelKey: 'sched-f-farm',
                 panelSection: 'other-income'
             },
             {
@@ -3127,9 +3162,39 @@ export function buildCalculationBlocks(state, summary) {
                 targetElementId: 'section-federal-other-income',
                 panelKey: '1099-r',
                 panelSection: 'other-income'
+            },
+            {
+                label: 'Alimony Received (Pre-2019)',
+                sign: '+',
+                amount: alimonyRec,
+                amountFormatted: formatCurrency(alimonyRec),
+                isSetUp: alimonyRec !== 0,
+                targetElementId: 'input-alimony-received',
+                panelKey: 'alimony-received',
+                panelSection: 'other-income'
+            },
+            {
+                label: 'Unreported Tip Income (Form 4137)',
+                sign: '+',
+                amount: unreportedTips,
+                amountFormatted: formatCurrency(unreportedTips),
+                isSetUp: unreportedTips !== 0,
+                targetElementId: 'input-unreported-tips',
+                panelKey: 'unreported-tips-4137',
+                panelSection: 'other-income'
+            },
+            {
+                label: 'Foreign Earned Income Excl. (Form 2555)',
+                sign: '-',
+                amount: foreignEarnedExcl,
+                amountFormatted: formatCurrency(foreignEarnedExcl),
+                isSetUp: foreignEarnedExcl !== 0,
+                targetElementId: 'input-foreign-earned-excl',
+                panelKey: 'foreign-earned-income-2555',
+                panelSection: 'other-income'
             }
         ];
-        const otherIncomeCombined = totalDiv + netNec + totalOther1099;
+        const otherIncomeCombined = totalDiv + netNec + totalOther1099 + alimonyRec + unreportedTips - foreignEarnedExcl;
         const adjContribs = [
             { label: 'Student Loan Interest', sign: '+', amount: adjStudentLoan, amountFormatted: formatCurrency(adjStudentLoan), isSetUp: adjStudentLoan !== 0, targetElementId: 'input-adj-student-loan', panelKey: 'adj-student-loan', panelSection: 'adjustments' },
             { label: 'Traditional IRA', sign: '+', amount: adjIra, amountFormatted: formatCurrency(adjIra), isSetUp: adjIra !== 0, targetElementId: 'input-adj-ira', panelKey: 'adj-ira', panelSection: 'adjustments' },
@@ -3138,6 +3203,9 @@ export function buildCalculationBlocks(state, summary) {
             { label: 'SEP / Solo 401(k)', sign: '+', amount: adjSeRet, amountFormatted: formatCurrency(adjSeRet), isSetUp: adjSeRet !== 0, targetElementId: 'input-adj-se-retirement', panelKey: 'adj-se-retirement', panelSection: 'adjustments' },
             { label: 'SE Health Insurance', sign: '+', amount: adjSeHealth, amountFormatted: formatCurrency(adjSeHealth), isSetUp: adjSeHealth !== 0, targetElementId: 'input-adj-se-health', panelKey: 'adj-se-health', panelSection: 'adjustments' },
             { label: 'Alimony Paid', sign: '+', amount: adjAlimony, amountFormatted: formatCurrency(adjAlimony), isSetUp: adjAlimony !== 0, targetElementId: 'input-adj-alimony', panelKey: 'adj-alimony', panelSection: 'adjustments' },
+            { label: 'Military Moving Expenses (Form 3903)', sign: '+', amount: adjMilitary, amountFormatted: formatCurrency(adjMilitary), isSetUp: adjMilitary !== 0, targetElementId: 'input-adj-military-moving', panelKey: 'adj-military-moving', panelSection: 'adjustments' },
+            { label: 'Early Savings Withdrawal Penalty', sign: '+', amount: adjEarlyWithdr, amountFormatted: formatCurrency(adjEarlyWithdr), isSetUp: adjEarlyWithdr !== 0, targetElementId: 'input-adj-early-withdrawal', panelKey: 'adj-early-withdrawal-penalty', panelSection: 'adjustments' },
+            { label: 'Jury Duty Pay Remitted', sign: '+', amount: adjJury, amountFormatted: formatCurrency(adjJury), isSetUp: adjJury !== 0, targetElementId: 'input-adj-jury-duty', panelKey: 'adj-jury-duty', panelSection: 'adjustments' },
             { label: '½ Self-Employment Tax (Auto)', sign: '+', amount: halfSeTax, amountFormatted: formatCurrencyExact(halfSeTax), isSetUp: halfSeTax !== 0, targetElementId: 'auto-fed-half-se' }
         ];
         const vars = {
@@ -3204,7 +3272,22 @@ export function buildCalculationBlocks(state, summary) {
             isOutput: true,
             lines,
             variables: vars,
-            sourceIds: ['calc-total-w2-wages', 'calc-capital-gains', 'calc-schedule-e', 'input-other-interest', 'input-adj-student-loan', 'input-adj-ira', 'input-adj-hsa', ...(halfSeTax > 0 ? ['auto-fed-half-se'] : [])]
+            sourceIds: [
+                'calc-total-w2-wages',
+                'calc-capital-gains',
+                'calc-schedule-e',
+                'input-other-interest',
+                'input-adj-student-loan',
+                'input-adj-ira',
+                'input-adj-hsa',
+                ...(alimonyRec > 0 ? ['input-alimony-received'] : []),
+                ...(unreportedTips > 0 ? ['input-unreported-tips'] : []),
+                ...(foreignEarnedExcl > 0 ? ['input-foreign-earned-excl'] : []),
+                ...(adjMilitary > 0 ? ['input-adj-military-moving'] : []),
+                ...(adjEarlyWithdr > 0 ? ['input-adj-early-withdrawal'] : []),
+                ...(adjJury > 0 ? ['input-adj-jury-duty'] : []),
+                ...(halfSeTax > 0 ? ['auto-fed-half-se'] : [])
+            ]
         });
     }
     // BLOCK 5: Schedule A Itemized Deductions (with full Medical 7.5% AGI floor math & SALT $10k cap math)
@@ -3387,22 +3470,11 @@ export function buildCalculationBlocks(state, summary) {
             formLineLabel: null,
             expandIntermediate: true
         });
-        const prefNode = inputNode('line-tax-preferential', 'calc-taxable-income', 'Preferential LTCG & Qualified Dividends Tax', prefTax, { exact: true });
+        const prefNode = opNode('line-tax-preferential', 'Preferential LTCG & Qualified Dividends Tax', 'add', [
+            inputNode('pref-inc-tax', 'calc-taxable-income', 'LTCG & Qualified Dividends Tax', prefTax, { exact: true })
+        ], { value: prefTax, formLineLabel: null, expandIntermediate: true, exact: true });
         const taxBeforeCredNode = opNode('line-tax-before-credits', 'Tax from Brackets & Preferential Rates', 'add', prefIncome > 0 ? [bracketNode, prefNode] : [bracketNode], { value: summary.taxBeforeCreditsCalc.result, formLineLabel: 'Form 1040 Line 16', exact: true });
-        const lines = [
-            ...compileFormulaToLines(taxBeforeCredNode, vars),
-            ...(prefIncome > 0
-                ? [{
-                        id: 'line-tax-preferential',
-                        label: 'Preferential LTCG & Qualified Dividends Tax',
-                        formLineLabel: null,
-                        isIntermediate: true,
-                        generalTokens: [t('Preferential Tax = LTCG & Qualified Dividends × (0% / 15% / 20% / 25% / 28%)')],
-                        pluggedTokens: [t(`Preferential Tax = ${formatCurrencyExact(prefTax)} (on ${formatCurrencyExact(prefIncome)} preferential income)`)],
-                        resultFormatted: formatCurrencyExact(prefTax)
-                    }]
-                : [])
-        ];
+        const lines = compileFormulaToLines(taxBeforeCredNode, vars);
         blocks.push({
             id: 'calc-tax-before-credits',
             stepLabel: 'Step 5 • Tax Brackets',
@@ -3423,6 +3495,9 @@ export function buildCalculationBlocks(state, summary) {
         const llc = Number(state.dependents?.educationExpensesLlc) || 0;
         const ftc = Number(state.dependents?.foreignTaxCredit) || 0;
         const clean = Number(state.dependents?.cleanEnergyCredit) || 0;
+        const adoption = Math.min(year === 2025 ? 17280 : 16810, Math.max(0, Number(state.dependents?.adoptionCredit) || 0));
+        const elderly = Math.max(0, Number(state.dependents?.elderlyDisabledCredit) || 0);
+        const ptc = Math.max(0, Number(state.dependents?.premiumTaxCredit) || 0);
         const vars = {
             nonref_credits: makeVar('nonref_credits', 'Nonrefundable Credits', cr.totalNonRefundableCredits, [
                 { label: `Child Tax Credit (${kids} kids)`, sign: '+', amount: cr.childTaxCredit, amountFormatted: formatCurrencyExact(cr.childTaxCredit), isSetUp: kids > 0, targetElementId: 'input-children-count', panelKey: 'cred-children', panelSection: 'credits' },
@@ -3431,12 +3506,15 @@ export function buildCalculationBlocks(state, summary) {
                 { label: 'Education Credits (Nonrefundable)', sign: '+', amount: cr.educationCreditNonRefundable, amountFormatted: formatCurrencyExact(cr.educationCreditNonRefundable), isSetUp: aotc > 0 || llc > 0, targetElementId: 'input-edu-aotc', panelKey: 'cred-aotc', panelSection: 'credits' },
                 { label: "Saver's Credit (Form 8880)", sign: '+', amount: cr.saversCredit, amountFormatted: formatCurrencyExact(cr.saversCredit), isSetUp: cr.saversCredit > 0, targetElementId: 'auto-fed-savers-credit', panelKey: 'adj-ira', panelSection: 'adjustments' },
                 { label: 'Foreign Tax Credit (Form 1116)', sign: '+', amount: cr.foreignTaxCredit, amountFormatted: formatCurrencyExact(cr.foreignTaxCredit), isSetUp: ftc > 0, targetElementId: 'input-foreign-tax-credit', panelKey: 'cred-foreign-tax', panelSection: 'credits' },
-                { label: 'Clean Energy Credit (Form 5695)', sign: '+', amount: cr.cleanEnergyCredit, amountFormatted: formatCurrencyExact(cr.cleanEnergyCredit), isSetUp: clean > 0, targetElementId: 'input-clean-energy-credit', panelKey: 'cred-clean-energy', panelSection: 'credits' }
+                { label: 'Clean Energy Credit (Form 5695)', sign: '+', amount: cr.cleanEnergyCredit, amountFormatted: formatCurrencyExact(cr.cleanEnergyCredit), isSetUp: clean > 0, targetElementId: 'input-clean-energy-credit', panelKey: 'cred-clean-energy', panelSection: 'credits' },
+                { label: 'Adoption Credit (Form 8839)', sign: '+', amount: adoption, amountFormatted: formatCurrencyExact(adoption), isSetUp: adoption > 0, targetElementId: 'input-adoption-credit', panelKey: 'cred-adoption', panelSection: 'credits' },
+                { label: 'Elderly or Disabled Credit (Sched R)', sign: '+', amount: elderly, amountFormatted: formatCurrencyExact(elderly), isSetUp: elderly > 0, targetElementId: 'input-elderly-credit', panelKey: 'cred-elderly-sched-r', panelSection: 'credits' }
             ], true),
             ref_credits: makeVar('ref_credits', 'Refundable Credits', cr.totalRefundableCredits, [
                 { label: 'Additional Child Tax Credit (Sched 8812)', sign: '+', amount: cr.additionalChildTaxCredit, amountFormatted: formatCurrencyExact(cr.additionalChildTaxCredit), isSetUp: cr.additionalChildTaxCredit > 0, targetElementId: 'auto-fed-actc', panelKey: 'cred-children', panelSection: 'credits' },
                 { label: 'Earned Income Tax Credit (EITC)', sign: '+', amount: cr.eitc, amountFormatted: formatCurrencyExact(cr.eitc), isSetUp: cr.eitc > 0, targetElementId: 'auto-fed-eitc', panelKey: 'cred-children', panelSection: 'credits' },
-                { label: 'Refundable AOTC (40%, Form 8863)', sign: '+', amount: cr.educationCreditRefundable, amountFormatted: formatCurrencyExact(cr.educationCreditRefundable), isSetUp: cr.educationCreditRefundable > 0, targetElementId: 'input-edu-aotc', panelKey: 'cred-aotc', panelSection: 'credits' }
+                { label: 'Refundable AOTC (40%, Form 8863)', sign: '+', amount: cr.educationCreditRefundable, amountFormatted: formatCurrencyExact(cr.educationCreditRefundable), isSetUp: cr.educationCreditRefundable > 0, targetElementId: 'input-edu-aotc', panelKey: 'cred-aotc', panelSection: 'credits' },
+                { label: 'Premium Tax Credit (Form 8962)', sign: '+', amount: ptc, amountFormatted: formatCurrencyExact(ptc), isSetUp: ptc > 0, targetElementId: 'input-ptc-credit', panelKey: 'cred-ptc-8962', panelSection: 'credits' }
             ], true)
         };
         const nonrefArgs = [];
@@ -3467,6 +3545,12 @@ export function buildCalculationBlocks(state, summary) {
         if (cr.cleanEnergyCredit > 0) {
             nonrefArgs.push(inputNode('line-cred-clean', 'input-clean-energy-credit', 'Clean Energy Credit (Form 5695)', cr.cleanEnergyCredit));
         }
+        if (adoption > 0) {
+            nonrefArgs.push(inputNode('line-cred-adoption', 'input-adoption-credit', 'Adoption Credit (Form 8839)', adoption));
+        }
+        if (elderly > 0) {
+            nonrefArgs.push(inputNode('line-cred-elderly', 'input-elderly-credit', 'Elderly or Disabled Credit (Schedule R)', elderly));
+        }
         const rawNonrefSum = nonrefArgs.length > 0
             ? opNode('line-nonref-raw', 'Raw Nonrefundable Credits', 'add', nonrefArgs, { expandIntermediate: nonrefArgs.length > 1 })
             : constNode('nonref-zero', '$0 Credits', 0);
@@ -3486,6 +3570,9 @@ export function buildCalculationBlocks(state, summary) {
         }
         if (cr.educationCreditRefundable > 0) {
             refArgs.push(inputNode('ref-aotc', 'input-edu-aotc', 'Refundable AOTC (40% Form 8863)', cr.educationCreditRefundable));
+        }
+        if (ptc > 0) {
+            refArgs.push(inputNode('ref-ptc', 'input-ptc-credit', 'Premium Tax Credit (Form 8962)', ptc));
         }
         const refRoot = opNode('line-ref-credits', 'Refundable Credits', 'add', refArgs.length > 0 ? refArgs : [constNode('ref-zero', '$0 Refundable Credits', 0)], { value: cr.totalRefundableCredits, formLineLabel: 'Form 1040 Line 27–29' });
         const lines = [
@@ -3509,9 +3596,11 @@ export function buildCalculationBlocks(state, summary) {
             ]))
         });
     }
-    // BLOCK 9: Other Taxes (SE Tax, Form 8959 Add'l Medicare, Form 8960 NIIT, Form 6251 AMT, Form 5329) via FormulaNode Graph
+    // BLOCK 9: Other Taxes (SE Tax, Form 8959 Add'l Medicare, Form 8960 NIIT, Form 6251 AMT, Form 5329, Form 4137, Sched H) via FormulaNode Graph
     {
         const ot = summary.otherTaxesCalc;
+        const unreportedTipsFica = Math.round(unreportedTips * 0.0765 * 100) / 100;
+        const householdTax = Math.max(0, Number(state.dependents?.householdEmploymentTax) || 0);
         const vars = {
             se_tax: makeVar('se_tax', 'Self-Employment Tax (Sched SE)', ot.selfEmploymentTax, [
                 { label: 'SE Social Security (12.4%)', sign: '+', amount: ot.seSSPortion ?? 0, amountFormatted: formatCurrencyExact(ot.seSSPortion ?? 0), isSetUp: (ot.seSSPortion ?? 0) > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-nec', panelSection: 'other-income' },
@@ -3528,6 +3617,12 @@ export function buildCalculationBlocks(state, summary) {
             ], true),
             early_dist_tax: makeVar('early_dist_tax', 'Early Distribution Penalty (Form 5329)', ot.earlyDistributionPenaltyTax, [
                 { label: '10% Penalty on Early 1099-R Distributions', sign: '+', amount: ot.earlyDistributionPenaltyTax, amountFormatted: formatCurrencyExact(ot.earlyDistributionPenaltyTax), isSetUp: ot.earlyDistributionPenaltyTax > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-r', panelSection: 'other-income' }
+            ], true),
+            unreported_tips_tax: makeVar('unreported_tips_tax', 'Unreported Tips FICA (Form 4137)', unreportedTipsFica, [
+                { label: '7.65% Employee FICA on Unreported Tips', sign: '+', amount: unreportedTipsFica, amountFormatted: formatCurrencyExact(unreportedTipsFica), isSetUp: unreportedTipsFica > 0, targetElementId: 'input-unreported-tips', panelKey: 'unreported-tips-4137', panelSection: 'other-income' }
+            ], true),
+            household_tax: makeVar('household_tax', 'Household Employment Tax (Sched H)', householdTax, [
+                { label: 'Schedule H Nanny / Household FICA & FUTA', sign: '+', amount: householdTax, amountFormatted: formatCurrencyExact(householdTax), isSetUp: householdTax > 0, targetElementId: 'input-household-tax', panelKey: 'sched-h-household', panelSection: 'credits' }
             ], true)
         };
         const otherTaxNodes = [];
@@ -3601,6 +3696,17 @@ export function buildCalculationBlocks(state, summary) {
                 inputNode('early-dist-amt', 'section-federal-other-income', 'Early 1099-R Distribution', ot.earlyDist1099RTotal ?? 0),
                 constNode('early-dist-rate', '10% Penalty Rate', 0.10, 'percent')
             ], { value: ot.earlyDistributionPenaltyTax, expandIntermediate: true }));
+        }
+        if (unreportedTipsFica > 0) {
+            otherTaxNodes.push(opNode('line-unreported-tips-tax', 'Form 4137 Unreported Tips FICA', 'mul', [
+                inputNode('tips-amt', 'input-unreported-tips', 'Unreported Tips', unreportedTips, { varId: 'unreported_tips_tax' }),
+                constNode('tips-fica-rate', '7.65% FICA Rate', 0.0765, 'percent')
+            ], { value: unreportedTipsFica, expandIntermediate: true }));
+        }
+        if (householdTax > 0) {
+            otherTaxNodes.push(opNode('line-household-tax', 'Schedule H Household Employment Tax', 'add', [
+                inputNode('household-tax-val', 'input-household-tax', 'Schedule H Tax', householdTax, { varId: 'household_tax' })
+            ], { value: householdTax, expandIntermediate: true }));
         }
         const otherTaxesRoot = opNode('line-other-taxes', 'Other Taxes', 'add', otherTaxNodes.length > 0 ? otherTaxNodes : [constNode('other-zero', '$0 Other Taxes', 0)], { value: ot.totalOtherTaxes, formLineLabel: 'Form 1040 Line 23' });
         blocks.push({
@@ -3845,6 +3951,7 @@ export function buildStateCalcBlocks(sr, allStateReturns) {
         ])
     ], { value: sr.stateTaxableIncome, formLineLabel: `${sr.formName} Taxable` });
     p1Lines.push(...compileFormulaToLines(taxableNode, vars));
+    const modSourceIds = (sr.modifications || []).map((mod, idx) => mod.sourceId || `auto-state-${stateKey}-mod-${idx}`);
     blocks.push({
         id: taxableId,
         stepLabel: `${sr.stateName} • Step 1: Deductions & Taxable Income`,
@@ -3856,6 +3963,7 @@ export function buildStateCalcBlocks(sr, allStateReturns) {
             ...(sr.baseStdDeduction ? [`auto-state-${stateKey}-std-ded`] : []),
             ...(sr.stateItemizedUsed ? [`auto-state-${stateKey}-itemized`] : []),
             ...(hasExempDed ? [`auto-state-${stateKey}-dep-exemption`] : []),
+            ...modSourceIds,
             `state-group-${stateKey}`
         ]))
     });
@@ -3891,7 +3999,8 @@ export function buildStateCalcBlocks(sr, allStateReturns) {
         ], { value: sr.surchargeAmount ?? 0 });
         p2Lines.push(...compileFormulaToLines(surNode, vars));
     }
-    if ((sr.stateCreditAmount ?? 0) > 0 && sr.stateCreditLabel) {
+    const hasBuiltinCredit = (sr.stateCreditAmount ?? 0) > 0 && !!sr.stateCreditLabel;
+    if (hasBuiltinCredit && sr.stateCreditLabel) {
         const credNode = opNode(`line-state-${stateKey}-builtin-cred`, sr.stateCreditLabel, 'sub', [
             constNode(`st-cred-zero-${stateKey}`, '$0', 0),
             inputNode(`st-cred-val-${stateKey}`, `auto-state-${stateKey}-builtin-credit`, sr.stateCreditLabel, sr.stateCreditAmount ?? 0)
@@ -3905,7 +4014,10 @@ export function buildStateCalcBlocks(sr, allStateReturns) {
         hasImpact: true,
         lines: p2Lines,
         variables: vars,
-        sourceIds: [taxableId]
+        sourceIds: [
+            taxableId,
+            ...(hasBuiltinCredit ? [`auto-state-${stateKey}-builtin-credit`] : [])
+        ]
     });
     // PANEL 3: Local / Municipal Tax (NYC, Yonkers, MD County, etc.)
     const hasLocal = sr.localTaxLiability > 0;
@@ -4237,7 +4349,10 @@ export function buildAutoPanels(state, summary) {
                 amount: sr.stateExemptionAmount ?? 0,
                 formulaSummary: `Statutory ${code} Exemption × Qualifying Dependents`,
                 shortExplanation: `Automatically reduces ${code} taxable income for each qualifying dependent.`,
-                sourceIds: ['input-children-count'],
+                sourceIds: [
+                    'select-filing-status',
+                    ...(((Number(state.dependents?.childrenCount) || 0) > 0 || (Number(state.dependents?.otherDependentsCount) || 0) > 0) ? ['input-children-count'] : [])
+                ],
                 badgeLabel: 'Auto-Calculated'
             });
         }
