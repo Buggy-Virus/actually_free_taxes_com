@@ -2351,22 +2351,32 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             modifications.push({ label: 'NJ Property Tax Deduction (Cap $15,000)', amount: -njPropertyTaxDed, sourceId: `auto-state-${residentState.toLowerCase()}-prop-tax-ded` });
         const preModResidentWages = residentTotalWages;
         residentTotalWages = Math.max(0, residentTotalWages + hsaAddBack + paAddBack - stateLtcgExclusion - fedTaxSubtraction - njPropertyTaxDed);
-        const baseStdDed = residentRule.standardDeduction[effectiveStatus] || 0;
-        // Support State Itemized Deductions (e.g., NY Form IT-196: Medical + Property Tax (up to $10k) + Mortgage Interest + Charity)
+        let baseStdDed = residentRule.standardDeduction[effectiveStatus] || 0;
+        if (residentState === 'MD') {
+            const mdMin = effectiveStatus === 'married_joint' ? 3650 : 1800;
+            const mdMax = effectiveStatus === 'married_joint' ? 5450 : 2700;
+            baseStdDed = Math.min(mdMax, Math.max(mdMin, Math.round(residentTotalWages * 0.15)));
+        }
+        else if (residentState === 'LA' && year >= 2025) {
+            baseStdDed = effectiveStatus === 'married_joint' ? 25000 : 12500;
+        }
+        // Support State Itemized Deductions (e.g., NY Form IT-196, CA Schedule CA uncapped property tax, DC, MD, VA)
         let stateItemizedDed = 0;
         if (itemizedCalc && (residentState === 'NY' || residentState === 'CA' || residentState === 'DC' || residentState === 'MD' || residentState === 'VA')) {
-            const propTax = Math.min(10000, Number(state.itemizedDeductions?.realEstateTax) || 0);
+            const rawPropTax = Number(state.itemizedDeductions?.realEstateTax) || 0;
+            const propTax = residentState === 'CA' ? rawPropTax : Math.min(10000, rawPropTax);
             stateItemizedDed = itemizedCalc.allowableMedical + propTax + itemizedCalc.mortgage + itemizedCalc.charity;
         }
         const useStateItemized = state.deductionMethod !== 'standard' && stateItemizedDed > baseStdDed;
         const resSpList = (state.statePanels || []).filter(p => p.state.toUpperCase() === residentState);
+        const isMfj = effectiveStatus === 'married_joint';
         const evalStatePanelAmt = (p) => {
             const amt = Math.max(0, Number(p.amount) || 0);
-            const isMfj = effectiveStatus === 'married_joint';
             switch (p.itemKey) {
                 case 'ma-rent-deduction': return Math.min(4000, Math.round(amt * 0.5 * 100) / 100);
                 case 'ma-commuter-deduction': return Math.min(750, Math.max(0, amt - 150));
                 case 'ny-529-deduction': return Math.min(isMfj ? 10000 : 5000, amt);
+                case 'ny-tuition-credit': return Math.min(400, Math.round(amt * 0.04 * 100) / 100);
                 case 'nj-property-tax-deduction': return Math.min(15000, amt);
                 case 'dc-529-deduction': return Math.min(isMfj ? 8000 : 4000, amt);
                 case 'pa-529-deduction': return Math.min(18000, amt);
@@ -2377,6 +2387,23 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
                 case 'ct-property-tax-credit': return Math.min(300, amt);
                 case 'va-529-deduction': return Math.min(4000, amt);
                 case 'ut-my529-credit': return Math.round(amt * 0.0455 * 100) / 100;
+                case 'al-529-deduction':
+                case 'ar-529-deduction':
+                case 'ct-529-deduction':
+                case 'mi-529-deduction': return Math.min(isMfj ? 10000 : 5000, amt);
+                case 'az-529-deduction': return Math.min(isMfj ? 4000 : 2000, amt);
+                case 'ga-529-deduction': return Math.min(isMfj ? 8000 : 4000, amt);
+                case 'id-529-deduction': return Math.min(isMfj ? 12000 : 6000, amt);
+                case 'il-529-deduction':
+                case 'ok-529-deduction': return Math.min(isMfj ? 20000 : 10000, amt);
+                case 'ks-529-deduction':
+                case 'mt-529-deduction': return Math.min(isMfj ? 6000 : 3000, amt);
+                case 'md-529-deduction': return Math.min(2500, amt);
+                case 'mo-529-deduction': return Math.min(isMfj ? 16000 : 8000, amt);
+                case 'ne-529-deduction': return Math.min(effectiveStatus === 'married_separate' ? 5000 : 10000, amt);
+                case 'nj-529-deduction': return residentTotalWages <= 200000 ? Math.min(10000, amt) : 0;
+                case 'ca-renters-credit': return Math.min(isMfj ? 120 : 60, amt);
+                case 'sc-two-wage-earner-credit': return Math.min(350, amt);
                 default: return amt;
             }
         };
@@ -2393,16 +2420,30 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             IN: 1500, MN: 5050, SC: 4610, VA: 930, WV: 2000, OH: 2400, OK: 1000,
             RI: 4900, VT: 5100, WI: 700, KS: 2320
         };
-        const totalDependents = (Number(state.dependents?.childrenCount) || 0) + (Number(state.dependents?.otherDependentsCount) || 0);
-        const stateExemptionAmount = totalDependents > 0 && STATE_DEPENDENT_EXEMPTION[residentState]
+        const numChildrenDep = Number(state.dependents?.childrenCount) || 0;
+        const totalDependents = numChildrenDep + (Number(state.dependents?.otherDependentsCount) || 0);
+        let stateExemptionAmount = totalDependents > 0 && STATE_DEPENDENT_EXEMPTION[residentState]
             ? totalDependents * STATE_DEPENDENT_EXEMPTION[residentState]
             : 0;
+        if (residentState === 'NC' && numChildrenDep > 0) {
+            const ncPerChild = residentTotalWages <= (isMfj ? 40000 : 20000) ? 3000 : (residentTotalWages <= (isMfj ? 100000 : 50000) ? 1500 : 500);
+            stateExemptionAmount += numChildrenDep * ncPerChild;
+        }
         const resStdDed = (useStateItemized ? stateItemizedDed : baseStdDed) + resSpItem;
         const resAdjustedIncome = Math.max(0, residentTotalWages + resSpOther - resSpAdj);
         const resTaxable = Math.max(0, resAdjustedIncome - resStdDed - stateExemptionAmount);
         let resTentativeTax = 0;
         let resBrackets = [];
-        if (residentRule.isFlat) {
+        if (residentState === 'LA' && year >= 2025) {
+            resTentativeTax = resTaxable * 0.03;
+        }
+        else if (residentState === 'IA' && year >= 2025) {
+            resTentativeTax = resTaxable * 0.038;
+        }
+        else if (residentState === 'NC' && year >= 2025) {
+            resTentativeTax = resTaxable * 0.0425;
+        }
+        else if (residentRule.isFlat) {
             resTentativeTax = resTaxable * (residentRule.flatRate || 0);
         }
         else {
@@ -2412,11 +2453,18 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
         }
         let surchargeAmount = 0;
         let surchargeLabel = '';
-        // Massachusetts 8.5% Short-Term Capital Gains Surcharge (+3.5% above the 5.0% base rate):
+        // Massachusetts 8.5% Short-Term Capital Gains Surcharge (+3.5% above 5.0% base) & 4% Millionaire Surtax (>$1,053,750):
         if (residentState === 'MA' && stGain > 0 && resTaxable > 0) {
-            surchargeAmount = Math.round(Math.min(stGain, resTaxable) * 0.035 * 100) / 100;
+            const stcgSur = Math.round(Math.min(stGain, resTaxable) * 0.035 * 100) / 100;
+            surchargeAmount += stcgSur;
             surchargeLabel = 'MA +3.5% Short-Term Capital Gains Surcharge';
-            resTentativeTax += surchargeAmount;
+            resTentativeTax += stcgSur;
+        }
+        if (residentState === 'MA' && resTaxable > 1053750) {
+            const mhSur = Math.round((resTaxable - 1053750) * 0.04 * 100) / 100;
+            surchargeAmount += mhSur;
+            surchargeLabel = surchargeLabel ? `${surchargeLabel} + 4% Millionaire Surtax` : 'MA 4% Fair Share Millionaire Surtax';
+            resTentativeTax += mhSur;
         }
         // California 1% Mental Health Services Tax on CA taxable income exceeding $1,000,000:
         if (residentState === 'CA' && resTaxable > 1000000) {
@@ -2480,13 +2528,68 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
         const STATE_EITC_MULTIPLIERS = {
             NY: 0.30, NJ: 0.40, DC: 0.70, MI: 0.30, IL: 0.20, MA: 0.40, CT: 0.40,
             MD: 0.45, VA: 0.20, ME: 0.25, NM: 0.25, RI: 0.16, IA: 0.15, KS: 0.17,
-            IN: 0.10, NE: 0.10, LA: 0.05, SC: 1.25, VT: 0.38, CO: 0.38, OR: 0.09
+            IN: 0.10, NE: 0.10, LA: 0.05, SC: 1.25, VT: 0.38, CO: 0.38, OR: 0.09,
+            CA: 0.45
         };
         const stateEitcRate = STATE_EITC_MULTIPLIERS[residentState] || 0;
-        const stateEitcAmount = federalEitc > 0 && stateEitcRate > 0
+        const stateEitcAmount = federalEitc > 0 && stateEitcRate > 0 && (residentState !== 'CA' || resAdjustedIncome <= 31950)
             ? Math.round(federalEitc * stateEitcRate * 100) / 100
             : 0;
-        const netStateOnlyLiability = Math.max(0, Math.round((resTentativeTax - totalOtherStateCredit - resSpCred - stateEitcAmount) * 100) / 100);
+        // Personal & Dependent Exemption Credits + State Child Credits + Poverty Forgiveness
+        const taxPayerCount = isMfj ? 2 : 1;
+        let stateExemptionCredit = 0;
+        if (residentState === 'CA') {
+            const caPhaseoutThresh = isMfj ? 474075 : 237035;
+            const caRawExemp = taxPayerCount * 144 + totalDependents * 446;
+            const caReduction = resAdjustedIncome > caPhaseoutThresh ? Math.ceil((resAdjustedIncome - caPhaseoutThresh) / 2500) * 6 * (taxPayerCount + totalDependents) : 0;
+            stateExemptionCredit = Math.max(0, caRawExemp - caReduction);
+        }
+        else if (residentState === 'AZ' && totalDependents > 0) {
+            stateExemptionCredit = numChildrenDep * 100 + (Number(state.dependents?.otherDependentsCount) || 0) * 25;
+        }
+        else if (residentState === 'AR') {
+            stateExemptionCredit = (taxPayerCount + totalDependents) * 29;
+        }
+        else if (residentState === 'DE') {
+            stateExemptionCredit = (taxPayerCount + totalDependents) * 110;
+        }
+        else if (residentState === 'ID') {
+            stateExemptionCredit = (taxPayerCount + totalDependents) * 120 + numChildrenDep * 205;
+        }
+        else if (residentState === 'IA') {
+            stateExemptionCredit = (taxPayerCount + totalDependents) * 40;
+        }
+        else if (residentState === 'NE') {
+            stateExemptionCredit = (taxPayerCount + totalDependents) * 157;
+        }
+        else if (residentState === 'OR') {
+            stateExemptionCredit = (taxPayerCount + totalDependents) * 249 + (numChildrenDep > 0 && resAdjustedIncome <= 30000 ? numChildrenDep * 1000 : 0);
+        }
+        else if (residentState === 'UT') {
+            const utBase = Math.round(((itemizedCalc?.chosenDeduction || 14600) + totalDependents * 2000) * 0.06 * 100) / 100;
+            const utThresh = isMfj ? 33364 : 16682;
+            const utPhase = Math.max(0, (resAdjustedIncome - utThresh) * 0.013);
+            stateExemptionCredit = Math.max(0, Math.round((utBase - utPhase) * 100) / 100);
+        }
+        else if (residentState === 'MA' && totalDependents > 0) {
+            stateExemptionCredit = totalDependents * 440;
+        }
+        else if (residentState === 'MN' && numChildrenDep > 0 && resAdjustedIncome <= 35000) {
+            stateExemptionCredit = numChildrenDep * 1750;
+        }
+        else if (residentState === 'NM' && numChildrenDep > 0 && resAdjustedIncome <= 75000) {
+            stateExemptionCredit = numChildrenDep * 600;
+        }
+        else if (residentState === 'VT' && numChildrenDep > 0 && resAdjustedIncome <= 125000) {
+            stateExemptionCredit = numChildrenDep * 1000;
+        }
+        else if (residentState === 'PA' && resAdjustedIncome > 0 && resAdjustedIncome <= (isMfj ? 13000 : 6500) + totalDependents * 9500) {
+            stateExemptionCredit = resTentativeTax; // PA Schedule SP 100% Tax Forgiveness
+        }
+        else if (residentState === 'KY' && resAdjustedIncome > 0 && resAdjustedIncome <= 15060 + totalDependents * 5380) {
+            stateExemptionCredit = resTentativeTax; // KY Family Size Tax Credit 100%
+        }
+        const netStateOnlyLiability = Math.max(0, Math.round((resTentativeTax - totalOtherStateCredit - resSpCred - stateEitcAmount - stateExemptionCredit) * 100) / 100);
         const finalResLiability = Math.round((netStateOnlyLiability + localTaxLiability) * 100) / 100;
         const totalResWithholding = localTaxLiability > 0 ? (resWithholding + resLocalTax) : resWithholding;
         const resNetDiff = Math.round((totalResWithholding - finalResLiability) * 100) / 100;
@@ -2547,6 +2650,7 @@ export function calculateStateReturnsAndUnifiedSummary(state, w2List, totalFeder
             stateCreditAmount,
             stateCreditLabel,
             stateExemptionAmount,
+            stateExemptionCredit,
             stateEitcAmount,
             stateEitcRate,
             sourceFields: [
@@ -3978,9 +4082,13 @@ export function buildStateCalcBlocks(sr, allStateReturns) {
                 constNode(`st-eitc-rate-${stateKey}`, `${sr.state} EITC Rate`, sr.stateEitcRate || 0, 'percent')
             ], { value: sr.stateEitcAmount ?? 0, expandIntermediate: true })]
         : [];
+    const stateExempCredNode = (sr.stateExemptionCredit ?? 0) > 0
+        ? [inputNode(`line-state-${stateKey}-exemp-cred`, `auto-state-${stateKey}-exemption-credit`, `${sr.state} Exemption / Child Credit`, sr.stateExemptionCredit ?? 0)]
+        : [];
     const creditsToSubtract = [
         ...ostcNodes,
         ...stateEitcNode,
+        ...stateExempCredNode,
         ...((sr.statePanelCredits ?? 0) > 0 ? [inputNode(`st-sp-cred-${stateKey}`, `state-${stateKey}-credits`, `${sr.state} Credits`, sr.statePanelCredits ?? 0)] : [])
     ];
     const netStateOnlyNode = creditsToSubtract.length > 0
@@ -4023,7 +4131,8 @@ export function buildStateCalcBlocks(sr, allStateReturns) {
             ...(hasLocal ? [localId] : []),
             ...sr.creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-card`),
             ...sr.creditedStates.map(c => `auto-state-${stateKey}-ostc-${c.fromState.toLowerCase()}`),
-            ...((sr.stateEitcAmount ?? 0) > 0 ? [`auto-state-${stateKey}-eitc`] : [])
+            ...((sr.stateEitcAmount ?? 0) > 0 ? [`auto-state-${stateKey}-eitc`] : []),
+            ...((sr.stateExemptionCredit ?? 0) > 0 ? [`auto-state-${stateKey}-exemption-credit`] : [])
         ]))
     });
     return blocks;
@@ -4248,6 +4357,21 @@ export function buildAutoPanels(state, summary) {
                 shortExplanation: `Automatically granted state EITC equal to ${pct}% of your Federal Earned Income Tax Credit.`,
                 sourceIds: ['auto-fed-eitc'],
                 badgeLabel: 'EITC • Auto'
+            });
+        }
+        // State Exemption / Child / Poverty Credit
+        if ((sr.stateExemptionCredit ?? 0) > 0) {
+            list.push({
+                id: `auto-state-${key}-exemption-credit`,
+                section: 'credits',
+                state: code,
+                title: `${code} Exemption / Child Credit`,
+                officialTitle: `${sr.formName} Statutory Credit`,
+                amount: sr.stateExemptionCredit ?? 0,
+                formulaSummary: `Statutory ${code} Personal, Dependent, or Child Tax Credit`,
+                shortExplanation: `Automatically calculated ${code} tax credit based on filing status, dependents, and income.`,
+                sourceIds: ['select-filing-status', 'input-children-count'],
+                badgeLabel: 'Auto-Calculated'
             });
         }
         byState[code] = list;

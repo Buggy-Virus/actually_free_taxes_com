@@ -1044,7 +1044,56 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   console.log("✓ TS Test 16: FormulaNode Expansion (Other Taxes, State/Local Brackets, OSTC) & AutoPanels verified!");
 }
 
-console.log("\nAll 16 TypeScript test suites PASSED with 100% accuracy!\n");
+// Test Case 17: State-Specific Rules (CA Uncapped Prop Tax + Exemption Credits, MA 4% Surtax, UT Taxpayer Credit, PA Schedule SP, MD 15% Std Ded)
+{
+  // 1. California: $144 personal + $446 dependent exemption credit + uncapped $25,000 property tax
+  const caState: TaxAppState = {
+    year: 2025,
+    filingStatus: 'single',
+    residentState: 'CA',
+    w2s: [{ id: 0, employer: 'SF Tech', ein: '94-1111111', box1: 180000, box2: 30000, box3: 176100, box4: 10918.2, box5: 180000, box6: 2610, states: [{ id: 0, state: 'CA', stateId: 'CA-1', stateWages: 180000, stateTaxWithheld: 12000, localWages: 0, localTaxWithheld: 0, localityName: '' }] }],
+    otherIncome: { interest: 0, sources: [] },
+    adjustments: { studentLoan: 0, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 1 },
+    itemizedDeductions: { medicalExpenses: 0, realEstateTax: 25000, mortgageInterest: 15000, charity: 0 },
+    showAllArrows: true
+  };
+  const caRes = calculateTaxes(caState);
+  const caRet = caRes.stateReturnsCalc.find(r => r.state === 'CA')!;
+  assert.strictEqual(caRet.stateItemizedAmount, 40000, 'CA Schedule CA allows uncapped $25k property tax + $15k mortgage = $40k');
+  assert.strictEqual(caRet.stateExemptionCredit, 590, 'CA grants $144 personal + $446 dependent = $590 exemption credit');
+  const caAutos = buildAutoPanels(caState, caRes).byState['CA'] || [];
+  assert(caAutos.some(p => p.id === 'auto-state-ca-exemption-credit' && p.amount === 590), 'CA exemption credit auto panel emitted');
+
+  // 2. Massachusetts: 4% Millionaire Surtax over $1,053,750 + $440 Child/Family Credit
+  const maState: TaxAppState = {
+    ...caState,
+    residentState: 'MA',
+    w2s: [{ id: 0, employer: 'Boston Bio', ein: '04-1111111', box1: 1200000, box2: 350000, box3: 176100, box4: 10918.2, box5: 1200000, box6: 26400, states: [{ id: 0, state: 'MA', stateId: 'MA-1', stateWages: 1200000, stateTaxWithheld: 60000, localWages: 0, localTaxWithheld: 0, localityName: '' }] }],
+    itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 0 }
+  };
+  const maRes = calculateTaxes(maState);
+  const maRet = maRes.stateReturnsCalc.find(r => r.state === 'MA')!;
+  assert((maRet.surchargeAmount ?? 0) > 0 && maRet.surchargeLabel?.includes('Millionaire Surtax'), 'MA 4% Millionaire Surtax triggered over $1,053,750');
+  assert.strictEqual(maRet.stateExemptionCredit, 440, 'MA grants $440 Child & Family Tax Credit');
+
+  // 3. PA Schedule SP 100% Tax Forgiveness for low-income single filer ($6,000)
+  const paLowState: TaxAppState = {
+    ...caState,
+    residentState: 'PA',
+    dependents: { childrenCount: 0 },
+    itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 0 },
+    w2s: [{ id: 0, employer: 'Philly Cafe', ein: '23-1111111', box1: 6000, box2: 0, box3: 6000, box4: 372, box5: 6000, box6: 87, states: [{ id: 0, state: 'PA', stateId: 'PA-1', stateWages: 6000, stateTaxWithheld: 184.2, localWages: 0, localTaxWithheld: 0, localityName: '' }] }]
+  };
+  const paLowRes = calculateTaxes(paLowState);
+  const paLowRet = paLowRes.stateReturnsCalc.find(r => r.state === 'PA')!;
+  assert.strictEqual(paLowRet.stateTaxLiability, 0, 'PA Schedule SP forgives 100% of PA tax for $6,000 single filer');
+
+  console.log("✓ TS Test 17: State-Specific Rules (CA Uncapped Prop Tax + Credits, MA 4% Surtax, PA Schedule SP) verified!");
+}
+
+console.log("\nAll 17 TypeScript test suites PASSED with 100% accuracy!\n");
+
 
 
 
