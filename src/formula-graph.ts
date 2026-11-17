@@ -282,6 +282,7 @@ export function compileFormulaToLines(
             id: node.id,
             label: node.label,
             formLineLabel: isRoot ? (node.formLineLabel ?? null) : null,
+            isIntermediate: !isRoot || !node.formLineLabel,
             generalTokens: nodeToTokens(node, true, vars, true),
             pluggedTokens: nodeToTokens(node, false, vars, true),
             resultFormatted: fmtCurrency(node.value, node.exact ?? true)

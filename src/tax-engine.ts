@@ -3137,43 +3137,21 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       })), true)
     };
 
+    const w2WagesNode = opNode('line-w2-wages', 'Total W-2 Wages', 'add', [
+      inputNode('w2_wages', 'w2-list', '∑ W-2 Box 1', totalW2Wages, { exact: false, varId: 'w2_wages' })
+    ], { value: totalW2Wages, formLineLabel: 'Form 1040 Line 1a', exact: false });
+    const w2WhNode = opNode('line-w2-withholding', 'W-2 Federal Tax Withheld', 'add', [
+      inputNode('w2_withholding', 'w2-list', '∑ W-2 Box 2', totalW2FedWh, { exact: true, varId: 'w2_withholding' })
+    ], { value: totalW2FedWh, formLineLabel: 'Form 1040 Line 25a', exact: true });
+    const ficaNode = opNode('line-fica-total', 'FICA Payroll Taxes (SS + Medicare)', 'add', [
+      inputNode('ss_tax', 'w2-list', 'SS Tax (6.2%)', summary.ficaCalc.ssTax, { exact: true, varId: 'ss_tax' }),
+      inputNode('med_tax', 'w2-list', 'Medicare Tax (1.45%)', summary.ficaCalc.medTax, { exact: true, varId: 'med_tax' })
+    ], { value: summary.ficaCalc.totalFica, formLineLabel: null, exact: true });
+
     const lines: CalcLineItem[] = [
-      {
-        id: 'line-w2-wages',
-        label: 'Total W-2 Wages',
-        formLineLabel: 'Form 1040 Line 1a',
-        generalTokens: [t('Total W-2 Wages = '), v('w2_wages', '∑ W-2 Box 1', totalW2Wages, vars.w2_wages.isEmpty)],
-        pluggedTokens: sumPluggedTokens('Total W-2 Wages = ', 'w2_wages', w2WageContribs, totalW2Wages, vars.w2_wages.isEmpty),
-        resultFormatted: formatCurrency(totalW2Wages)
-      },
-      {
-        id: 'line-w2-withholding',
-        label: 'W-2 Federal Tax Withheld',
-        formLineLabel: 'Form 1040 Line 25a',
-        generalTokens: [t('W-2 Withholding = '), v('w2_withholding', '∑ W-2 Box 2', totalW2FedWh, vars.w2_withholding.isEmpty, true)],
-        pluggedTokens: sumPluggedTokens('W-2 Withholding = ', 'w2_withholding', w2FedWhContribs, totalW2FedWh, vars.w2_withholding.isEmpty, true),
-        resultFormatted: formatCurrencyExact(totalW2FedWh)
-      },
-      {
-        id: 'line-fica-total',
-        label: 'FICA Payroll Taxes (SS + Medicare)',
-        formLineLabel: null,
-        isIntermediate: true,
-        generalTokens: [
-          t('Total FICA = '),
-          v('ss_tax', 'SS Tax (6.2%)', summary.ficaCalc.ssTax, vars.ss_tax.isEmpty, true),
-          t(' + '),
-          v('med_tax', 'Medicare Tax (1.45%)', summary.ficaCalc.medTax, vars.med_tax.isEmpty, true)
-        ],
-        pluggedTokens: [
-          t('Total FICA = '),
-          v('ss_tax', formatCurrencyExact(summary.ficaCalc.ssTax), summary.ficaCalc.ssTax, vars.ss_tax.isEmpty, true),
-          t(' + '),
-          v('med_tax', formatCurrencyExact(summary.ficaCalc.medTax), summary.ficaCalc.medTax, vars.med_tax.isEmpty, true),
-          t(` = ${formatCurrencyExact(summary.ficaCalc.totalFica)}`)
-        ],
-        resultFormatted: formatCurrencyExact(summary.ficaCalc.totalFica)
-      }
+      ...compileFormulaToLines(w2WagesNode, vars),
+      ...compileFormulaToLines(w2WhNode, vars),
+      ...compileFormulaToLines(ficaNode, vars)
     ];
 
     blocks.push({
@@ -3212,44 +3190,23 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       }])
     };
     const rawNet = stGain + ltGain;
-    const lines: CalcLineItem[] = [
-      {
-        id: 'line-cap-raw',
-        label: 'Combined Capital Gain / (Loss)',
-        formLineLabel: null,
-        isIntermediate: true,
-        generalTokens: [
-          t('Combined Net = '),
-          v('st_gain', 'Short-Term', stGain, vars.st_gain.isEmpty),
-          t(' + '),
-          v('lt_gain', 'Long-Term', ltGain, vars.lt_gain.isEmpty)
-        ],
-        pluggedTokens: [
-          t('Combined Net = '),
-          v('st_gain', formatCurrency(stGain), stGain, vars.st_gain.isEmpty),
-          t(' + '),
-          v('lt_gain', formatCurrency(ltGain), ltGain, vars.lt_gain.isEmpty),
-          t(` = ${formatCurrency(rawNet)}`)
-        ],
-        resultFormatted: formatCurrency(rawNet)
-      },
-      {
-        id: 'line-cap-allowable',
-        label: 'Allowable Capital Gain / (Loss)',
-        formLineLabel: 'Form 1040 Line 7',
-        generalTokens: [
-          t(`Allowable = max(${formatCurrency(capLossLimit)}, `),
-          v('st_gain', 'Short-Term', stGain, vars.st_gain.isEmpty),
-          t(' + '),
-          v('lt_gain', 'Long-Term', ltGain, vars.lt_gain.isEmpty),
-          t(')')
-        ],
-        pluggedTokens: [
-          t(`Allowable = max(${formatCurrency(capLossLimit)}, ${formatCurrency(rawNet)}) = ${formatCurrency(summary.capitalGainsCalc.result)}`)
-        ],
-        resultFormatted: formatCurrency(summary.capitalGainsCalc.result)
-      }
-    ];
+    const stGainNode = inputNode('st_gain', 'input-capital-gains-st', 'Short-Term', stGain, { exact: false, varId: 'st_gain' });
+    const ltGainNode = inputNode('lt_gain', 'input-capital-gains-lt', 'Long-Term', ltGain, { exact: false, varId: 'lt_gain' });
+    const rawCapNode = opNode('line-cap-raw', 'Combined Capital Gain / (Loss)', 'add', [stGainNode, ltGainNode], {
+      value: rawNet,
+      formLineLabel: null,
+      expandIntermediate: true,
+      exact: false
+    });
+    const allowableCapNode = opNode('line-cap-allowable', 'Allowable Capital Gain / (Loss)', 'max', [
+      constNode('cap_loss_limit', formatCurrency(capLossLimit), capLossLimit),
+      rawCapNode
+    ], {
+      value: summary.capitalGainsCalc.result,
+      formLineLabel: 'Form 1040 Line 7',
+      exact: false
+    });
+    const lines: CalcLineItem[] = compileFormulaToLines(allowableCapNode, vars);
     blocks.push({
       id: 'calc-capital-gains',
       stepLabel: 'Step 2a • Schedule D / Form 8949',
@@ -3296,31 +3253,19 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       }])
     };
 
+    const rentsNode = inputNode('sched_e_rents', 'input-sched-e-rents', 'Gross Rents', grossRents, { exact: false, varId: 'sched_e_rents' });
+    const expNode = inputNode('sched_e_exp', 'input-sched-e-expenses', 'Expenses', rentalExp, { exact: false, varId: 'sched_e_exp' });
+    const deprNode = inputNode('sched_e_depr', 'input-sched-e-depreciation', 'Depreciation', rentalDepr, { exact: false, varId: 'sched_e_depr' });
+    const schedENetNode = opNode('line-sched-e-net', 'Net Rental Income Before PAL', 'sub', [
+      rentsNode,
+      opNode('sched-e-costs', 'Expenses + Depreciation', 'add', [expNode, deprNode], { exact: false })
+    ], {
+      value: summary.scheduleECalc.netBeforePal,
+      formLineLabel: null,
+      exact: false
+    });
     const lines: CalcLineItem[] = [
-      {
-        id: 'line-sched-e-net',
-        label: 'Net Rental Income Before PAL',
-        formLineLabel: null,
-        isIntermediate: true,
-        generalTokens: [
-          t('Net Rental = '),
-          v('sched_e_rents', 'Gross Rents', grossRents, vars.sched_e_rents.isEmpty),
-          t(' − '),
-          v('sched_e_exp', 'Expenses', rentalExp, vars.sched_e_exp.isEmpty),
-          t(' − '),
-          v('sched_e_depr', 'Depreciation', rentalDepr, vars.sched_e_depr.isEmpty)
-        ],
-        pluggedTokens: [
-          t('Net Rental = '),
-          v('sched_e_rents', formatCurrency(grossRents), grossRents, vars.sched_e_rents.isEmpty),
-          t(' − '),
-          v('sched_e_exp', formatCurrency(rentalExp), rentalExp, vars.sched_e_exp.isEmpty),
-          t(' − '),
-          v('sched_e_depr', formatCurrency(rentalDepr), rentalDepr, vars.sched_e_depr.isEmpty),
-          t(` = ${formatCurrency(summary.scheduleECalc.netBeforePal)}`)
-        ],
-        resultFormatted: formatCurrency(summary.scheduleECalc.netBeforePal)
-      },
+      ...compileFormulaToLines(schedENetNode, vars),
       {
         id: 'line-sched-e-allowable',
         label: 'Allowable Schedule E Income / (Loss)',
@@ -3419,7 +3364,7 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       { label: 'SEP / Solo 401(k)', sign: '+', amount: adjSeRet, amountFormatted: formatCurrency(adjSeRet), isSetUp: adjSeRet !== 0, targetElementId: 'input-adj-se-retirement', panelKey: 'adj-se-retirement', panelSection: 'adjustments' },
       { label: 'SE Health Insurance', sign: '+', amount: adjSeHealth, amountFormatted: formatCurrency(adjSeHealth), isSetUp: adjSeHealth !== 0, targetElementId: 'input-adj-se-health', panelKey: 'adj-se-health', panelSection: 'adjustments' },
       { label: 'Alimony Paid', sign: '+', amount: adjAlimony, amountFormatted: formatCurrency(adjAlimony), isSetUp: adjAlimony !== 0, targetElementId: 'input-adj-alimony', panelKey: 'adj-alimony', panelSection: 'adjustments' },
-      { label: '½ Self-Employment Tax (Auto)', sign: '+', amount: halfSeTax, amountFormatted: formatCurrencyExact(halfSeTax), isSetUp: halfSeTax !== 0, targetElementId: 'section-federal-other-income', panelKey: '1099-nec', panelSection: 'other-income' }
+      { label: '½ Self-Employment Tax (Auto)', sign: '+', amount: halfSeTax, amountFormatted: formatCurrencyExact(halfSeTax), isSetUp: halfSeTax !== 0, targetElementId: 'auto-fed-half-se' }
     ];
 
     const vars: Record<string, CalcVariableBreakdown> = {
@@ -3452,65 +3397,33 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       ])
     };
 
+    const w2Node = inputNode('w2_wages', 'calc-total-w2-wages', 'W-2 Wages', totalW2Wages, { exact: false, varId: 'w2_wages' });
+    const intNode = inputNode('interest_inc', 'input-other-interest', 'Interest', totalInterest, { exact: false, varId: 'interest_inc' });
+    const otherNode = inputNode('other_1099', 'section-federal-other-income', '1099/Business', otherIncomeCombined, { exact: false, varId: 'other_1099' });
+    const capNode = inputNode('cap_gains', 'calc-capital-gains', 'Cap Gains', summary.capitalGainsCalc.result, { exact: false, varId: 'cap_gains' });
+    const schedENode = inputNode('sched_e', 'calc-schedule-e', 'Sched E', summary.scheduleECalc.allowableNet, { exact: false, varId: 'sched_e' });
+    const grossIncomeNode = opNode('line-gross-income', 'Total Gross Income', 'add', [w2Node, intNode, otherNode, capNode, schedENode], {
+      value: summary.grossIncomeCalc.result,
+      formLineLabel: 'Form 1040 Line 9',
+      exact: true
+    });
+    const adjTotalNode = inputNode('adjustments_total', 'section-federal-adjustments', 'Adjustments', summary.adjustmentsCalc.result, { exact: true, varId: 'adjustments_total' });
+    const adjustmentsLineNode = opNode('line-adjustments', 'Total Adjustments (Above-the-Line)', 'add', [adjTotalNode], {
+      value: summary.adjustmentsCalc.result,
+      formLineLabel: 'Form 1040 Line 10',
+      exact: true
+    });
+    const grossRefNode = inputNode('gross_income', 'line-gross-income', 'Gross Income', summary.grossIncomeCalc.result, { exact: true, varId: 'gross_income' });
+    const agiNode = opNode('line-agi', 'Adjusted Gross Income (AGI)', 'sub', [grossRefNode, adjTotalNode], {
+      value: agi,
+      formLineLabel: 'Form 1040 Line 11',
+      exact: true
+    });
+
     const lines: CalcLineItem[] = [
-      {
-        id: 'line-gross-income',
-        label: 'Total Gross Income',
-        formLineLabel: 'Form 1040 Line 9',
-        generalTokens: [
-          t('Gross Income = '),
-          v('w2_wages', 'W-2 Wages', totalW2Wages, vars.w2_wages.isEmpty),
-          t(' + '),
-          v('interest_inc', 'Interest', totalInterest, vars.interest_inc.isEmpty),
-          t(' + '),
-          v('other_1099', '1099/Business', otherIncomeCombined, vars.other_1099.isEmpty),
-          t(' + '),
-          v('cap_gains', 'Cap Gains', summary.capitalGainsCalc.result, vars.cap_gains.isEmpty),
-          t(' + '),
-          v('sched_e', 'Sched E', summary.scheduleECalc.allowableNet, vars.sched_e.isEmpty)
-        ],
-        pluggedTokens: [
-          t('Gross Income = '),
-          v('w2_wages', formatCurrency(totalW2Wages), totalW2Wages, vars.w2_wages.isEmpty),
-          t(' + '),
-          v('interest_inc', formatCurrency(totalInterest), totalInterest, vars.interest_inc.isEmpty),
-          t(' + '),
-          v('other_1099', formatCurrency(otherIncomeCombined), otherIncomeCombined, vars.other_1099.isEmpty),
-          t(' + '),
-          v('cap_gains', formatCurrency(summary.capitalGainsCalc.result), summary.capitalGainsCalc.result, vars.cap_gains.isEmpty),
-          t(' + '),
-          v('sched_e', formatCurrency(summary.scheduleECalc.allowableNet), summary.scheduleECalc.allowableNet, vars.sched_e.isEmpty),
-          t(` = ${formatCurrencyExact(summary.grossIncomeCalc.result)}`)
-        ],
-        resultFormatted: formatCurrencyExact(summary.grossIncomeCalc.result)
-      },
-      {
-        id: 'line-adjustments',
-        label: 'Total Adjustments (Above-the-Line)',
-        formLineLabel: 'Form 1040 Line 10',
-        generalTokens: [t('Adjustments = '), v('adjustments_total', '∑ Schedule 1 Adjustments', summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true)],
-        pluggedTokens: sumPluggedTokens('Adjustments = ', 'adjustments_total', adjContribs, summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true),
-        resultFormatted: formatCurrencyExact(summary.adjustmentsCalc.result)
-      },
-      {
-        id: 'line-agi',
-        label: 'Adjusted Gross Income (AGI)',
-        formLineLabel: 'Form 1040 Line 11',
-        generalTokens: [
-          t('AGI = '),
-          v('gross_income', 'Gross Income', summary.grossIncomeCalc.result, vars.gross_income.isEmpty),
-          t(' − '),
-          v('adjustments_total', 'Adjustments', summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true)
-        ],
-        pluggedTokens: [
-          t('AGI = '),
-          v('gross_income', formatCurrencyExact(summary.grossIncomeCalc.result), summary.grossIncomeCalc.result, vars.gross_income.isEmpty),
-          t(' − '),
-          v('adjustments_total', formatCurrencyExact(summary.adjustmentsCalc.result), summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true),
-          t(` = ${formatCurrencyExact(agi)}`)
-        ],
-        resultFormatted: formatCurrencyExact(agi)
-      }
+      ...compileFormulaToLines(grossIncomeNode, vars),
+      ...compileFormulaToLines(adjustmentsLineNode, vars),
+      ...compileFormulaToLines(agiNode, vars)
     ];
 
     blocks.push({
@@ -3521,7 +3434,7 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       isOutput: true,
       lines,
       variables: vars,
-      sourceIds: ['calc-total-w2-wages', 'calc-capital-gains', 'calc-schedule-e', 'input-other-interest', 'input-adj-student-loan', 'input-adj-ira', 'input-adj-hsa']
+      sourceIds: ['calc-total-w2-wages', 'calc-capital-gains', 'calc-schedule-e', 'input-other-interest', 'input-adj-student-loan', 'input-adj-ira', 'input-adj-hsa', ...(halfSeTax > 0 ? ['auto-fed-half-se'] : [])]
     });
   }
 
@@ -3581,51 +3494,37 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       }])
     };
 
+    const agiNode = inputNode('agi_val', 'calc-agi', 'AGI', agi, { exact: true, varId: 'agi_val' });
+    const medExpNode = inputNode('med_expenses', 'input-itemized-medical', 'Medical Expenses', medRaw, { exact: false, varId: 'med_expenses' });
+    const medFloorNode = opNode('line-med-floor', 'Medical 7.5% AGI Floor', 'mul', [
+      agiNode,
+      constNode('med_pct', '7.5%', 0.075, 'percent')
+    ], { value: medFloor, formLineLabel: null, expandIntermediate: true, exact: false });
+    const medDeductibleNode = opNode('line-med-deductible', 'Deductible Medical Expenses', 'max', [
+      constNode('zero', '$0', 0),
+      opNode('med-over-floor', 'Medical − Floor', 'sub', [medExpNode, medFloorNode], { exact: false })
+    ], { value: summary.itemizedCalc.allowableMedical, formLineLabel: 'Schedule A Line 4', exact: false });
+
+    const saltTaxNode = inputNode('state_local_tax', 'w2-list', 'State/Local Tax', stateLocalTaxesForSalt, { exact: false, varId: 'state_local_tax' });
+    const realEstateNode = inputNode('real_estate_tax', 'input-itemized-real-estate', 'Property Tax', realEstateRaw, { exact: false, varId: 'real_estate_tax' });
+    const saltCapNode = opNode('line-salt-cap', 'SALT Deduction (Capped at $10,000)', 'min', [
+      constNode('salt_cap', '$10,000', 10000),
+      opNode('salt-raw', 'State/Local + Property Tax', 'add', [saltTaxNode, realEstateNode], { exact: false })
+    ], { value: summary.itemizedCalc.allowableSalt, formLineLabel: 'Schedule A Line 5e', exact: false });
+
+    const mortgageNode = inputNode('mortgage_int', 'input-itemized-mortgage', 'Mortgage Interest', mortgageRaw, { exact: false, varId: 'mortgage_int' });
+    const charityNode = inputNode('charity_contrib', 'input-itemized-charity', 'Charity', charityRaw, { exact: false, varId: 'charity_contrib' });
+    const schedATotalNode = opNode('line-sched-a-total', 'Total Itemized Deductions', 'add', [
+      inputNode('med_ded', 'line-med-deductible', 'Deductible Medical', summary.itemizedCalc.allowableMedical, { exact: true }),
+      inputNode('salt_ded', 'line-salt-cap', 'SALT', summary.itemizedCalc.allowableSalt, { exact: false }),
+      mortgageNode,
+      charityNode
+    ], { value: summary.itemizedCalc.totalItemized, formLineLabel: 'Schedule A Line 17', exact: true });
+
     const lines: CalcLineItem[] = [
-      {
-        id: 'line-med-floor',
-        label: 'Medical 7.5% AGI Floor',
-        formLineLabel: 'Schedule A Line 3',
-        isIntermediate: true,
-        generalTokens: [t('Medical Floor = '), v('agi_val', 'AGI', agi, vars.agi_val.isEmpty, true), t(' × 0.075')],
-        pluggedTokens: [t('Medical Floor = '), v('agi_val', formatCurrencyExact(agi), agi, vars.agi_val.isEmpty, true), t(` × 0.075 = ${formatCurrencyExact(medFloor)}`)],
-        resultFormatted: formatCurrencyExact(medFloor)
-      },
-      {
-        id: 'line-med-deductible',
-        label: 'Deductible Medical Expenses',
-        formLineLabel: 'Schedule A Line 4',
-        generalTokens: [t('Deductible Medical = max(0, '), v('med_expenses', 'Medical Expenses', medRaw, vars.med_expenses.isEmpty), t(' − '), t('Medical Floor)')],
-        pluggedTokens: [t('Deductible Medical = max(0, '), v('med_expenses', formatCurrency(medRaw), medRaw, vars.med_expenses.isEmpty), t(` − ${formatCurrencyExact(medFloor)}) = ${formatCurrencyExact(summary.itemizedCalc.allowableMedical)}`)],
-        resultFormatted: formatCurrencyExact(summary.itemizedCalc.allowableMedical)
-      },
-      {
-        id: 'line-salt-cap',
-        label: 'SALT Deduction (Capped at $10,000)',
-        formLineLabel: 'Schedule A Line 5e',
-        generalTokens: [t('SALT = min($10,000, '), v('state_local_tax', 'State/Local Tax', stateLocalTaxesForSalt, vars.state_local_tax.isEmpty), t(' + '), v('real_estate_tax', 'Property Tax', realEstateRaw, vars.real_estate_tax.isEmpty), t(')')],
-        pluggedTokens: [t('SALT = min($10,000, '), v('state_local_tax', formatCurrency(stateLocalTaxesForSalt), stateLocalTaxesForSalt, vars.state_local_tax.isEmpty), t(' + '), v('real_estate_tax', formatCurrency(realEstateRaw), realEstateRaw, vars.real_estate_tax.isEmpty), t(` = ${formatCurrency(rawSalt)}) = ${formatCurrency(summary.itemizedCalc.allowableSalt)}`)],
-        resultFormatted: formatCurrency(summary.itemizedCalc.allowableSalt)
-      },
-      {
-        id: 'line-sched-a-total',
-        label: 'Total Itemized Deductions',
-        formLineLabel: 'Schedule A Line 17',
-        generalTokens: [
-          t('Total Itemized = Deductible Medical + SALT + '),
-          v('mortgage_int', 'Mortgage Interest', mortgageRaw, vars.mortgage_int.isEmpty),
-          t(' + '),
-          v('charity_contrib', 'Charity', charityRaw, vars.charity_contrib.isEmpty)
-        ],
-        pluggedTokens: [
-          t(`Total Itemized = ${formatCurrencyExact(summary.itemizedCalc.allowableMedical)} + ${formatCurrency(summary.itemizedCalc.allowableSalt)} + `),
-          v('mortgage_int', formatCurrency(mortgageRaw), mortgageRaw, vars.mortgage_int.isEmpty),
-          t(' + '),
-          v('charity_contrib', formatCurrency(charityRaw), charityRaw, vars.charity_contrib.isEmpty),
-          t(` = ${formatCurrencyExact(summary.itemizedCalc.totalItemized)}`)
-        ],
-        resultFormatted: formatCurrencyExact(summary.itemizedCalc.totalItemized)
-      }
+      ...compileFormulaToLines(medDeductibleNode, vars),
+      ...compileFormulaToLines(saltCapNode, vars),
+      ...compileFormulaToLines(schedATotalNode, vars)
     ];
 
     blocks.push({
@@ -3645,10 +3544,10 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       agi_val: makeVar('agi_val', 'Adjusted Gross Income (AGI)', agi, [
         { label: 'Form 1040 Line 11 AGI', sign: '+', amount: agi, amountFormatted: formatCurrencyExact(agi), isSetUp: agi !== 0, targetElementId: 'calc-agi' }
       ], true),
-      std_ded: makeVar('std_ded', 'Standard Deduction', summary.itemizedCalc.standardDeduction, [
-        { label: `Filing Status (${filingStatusLabel(state.filingStatus)})`, sign: '+', amount: rules.standardDeduction[effectiveStatus], amountFormatted: formatCurrency(rules.standardDeduction[effectiveStatus]), isSetUp: true, targetElementId: 'select-filing-status' },
-        { label: 'Age 65+ / Blind Extra', sign: '+', amount: summary.itemizedCalc.standardDeduction - rules.standardDeduction[effectiveStatus], amountFormatted: formatCurrency(summary.itemizedCalc.standardDeduction - rules.standardDeduction[effectiveStatus]), isSetUp: (Number(state.dependents?.age65OrBlindCount) || 0) > 0, targetElementId: 'input-age65-blind', panelKey: 'cred-age-blind', panelSection: 'credits' }
-      ]),
+      std_ded: makeVar('std_ded', 'Standard Deduction', summary.itemizedCalc.standardDeduction, ([
+        { label: `Filing Status (${filingStatusLabel(state.filingStatus)})`, sign: '+' as const, amount: rules.standardDeduction[effectiveStatus], amountFormatted: formatCurrency(rules.standardDeduction[effectiveStatus]), isSetUp: true, targetElementId: 'select-filing-status' },
+        { label: 'Age 65+ / Blind Extra', sign: '+' as const, amount: summary.itemizedCalc.standardDeduction - rules.standardDeduction[effectiveStatus], amountFormatted: formatCurrency(summary.itemizedCalc.standardDeduction - rules.standardDeduction[effectiveStatus]), isSetUp: (Number(state.dependents?.age65OrBlindCount) || 0) > 0, targetElementId: 'input-age65-blind', panelKey: 'cred-age-blind', panelSection: 'credits' }
+      ] as CalcVariableContributor[]).map((c) => ({ ...c, targetElementId: summary.itemizedCalc.chosenMethod === 'standard' ? 'auto-fed-std-deduction' : c.targetElementId }))),
       item_ded: makeVar('item_ded', 'Itemized Deductions', summary.itemizedCalc.totalItemized, [
         { label: 'Medical (Over 7.5% AGI)', sign: '+', amount: summary.itemizedCalc.allowableMedical, amountFormatted: formatCurrencyExact(summary.itemizedCalc.allowableMedical), isSetUp: medRaw > 0, targetElementId: 'input-itemized-medical', panelKey: 'itemized-medical', panelSection: 'itemized' },
         { label: 'SALT (Capped $10k)', sign: '+', amount: summary.itemizedCalc.allowableSalt, amountFormatted: formatCurrency(summary.itemizedCalc.allowableSalt), isSetUp: rawSalt > 0, targetElementId: 'input-itemized-real-estate', panelKey: 'itemized-real-estate', panelSection: 'itemized' },
@@ -3656,59 +3555,39 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
         { label: 'Charity', sign: '+', amount: charityRaw, amountFormatted: formatCurrency(charityRaw), isSetUp: charityRaw > 0, targetElementId: 'input-itemized-charity', panelKey: 'itemized-charity', panelSection: 'itemized' }
       ], true),
       qbi_ded: makeVar('qbi_ded', 'QBI Deduction (20% Sec. 199A)', summary.qbiDeduction, [
-        { label: 'Net Schedule C + K-1 QBI × 20%', sign: '+', amount: summary.qbiDeduction, amountFormatted: formatCurrencyExact(summary.qbiDeduction), isSetUp: summary.qbiDeduction > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-nec', panelSection: 'other-income' }
+        { label: 'Net Schedule C + K-1 QBI × 20%', sign: '+', amount: summary.qbiDeduction, amountFormatted: formatCurrencyExact(summary.qbiDeduction), isSetUp: summary.qbiDeduction > 0, targetElementId: summary.qbiDeduction > 0 ? 'auto-fed-qbi' : 'section-federal-other-income', panelKey: '1099-nec', panelSection: 'other-income' }
       ], true)
     };
 
+    const stdDedNode = inputNode('std_ded', 'select-filing-status', 'Standard', summary.itemizedCalc.standardDeduction, { exact: false, varId: 'std_ded' });
+    const itemDedNode = inputNode('item_ded', 'calc-itemized-deductions', 'Itemized', summary.itemizedCalc.totalItemized, { exact: true, varId: 'item_ded' });
+    const dedChosenNode = opNode(
+      'line-deduction',
+      `Applied Deduction (${summary.itemizedCalc.chosenMethod === 'itemized' ? 'Itemized' : 'Standard'})`,
+      'max',
+      [stdDedNode, itemDedNode],
+      { value: summary.deductionCalc.result, formLineLabel: 'Form 1040 Line 12', exact: true }
+    );
+    const qbiDedNode = inputNode('qbi_ded', 'auto-fed-qbi', 'QBI', summary.qbiDeduction, { exact: true, varId: 'qbi_ded' });
+    const qbiLineNode = opNode('line-qbi', 'Qualified Business Income Deduction', 'add', [qbiDedNode], {
+      value: summary.qbiDeduction,
+      formLineLabel: 'Form 1040 Line 13',
+      exact: true
+    });
+    const agiNode = inputNode('agi_val', 'calc-agi', 'AGI', agi, { exact: true, varId: 'agi_val' });
+    const dedUsedNode = inputNode('ded_used', 'line-deduction', 'Deduction', summary.deductionCalc.result, { exact: true });
+    const totalDedSubNode = summary.qbiDeduction > 0
+      ? opNode('total-ded-qbi', 'Deduction + QBI', 'add', [dedUsedNode, qbiDedNode], { exact: true })
+      : dedUsedNode;
+    const taxableIncomeNode = opNode('line-taxable-income', 'Taxable Income', 'max', [
+      constNode('zero', '$0.00', 0),
+      opNode('agi-minus-ded', 'AGI − Deduction', 'sub', [agiNode, totalDedSubNode], { exact: true })
+    ], { value: summary.taxableIncomeCalc.result, formLineLabel: 'Form 1040 Line 15', exact: true });
+
     const lines: CalcLineItem[] = [
-      {
-        id: 'line-deduction',
-        label: `Applied Deduction (${summary.itemizedCalc.chosenMethod === 'itemized' ? 'Itemized' : 'Standard'})`,
-        formLineLabel: 'Form 1040 Line 12',
-        generalTokens: [
-          t('Deduction = max('),
-          v('std_ded', 'Standard', summary.itemizedCalc.standardDeduction, vars.std_ded.isEmpty),
-          t(', '),
-          v('item_ded', 'Itemized', summary.itemizedCalc.totalItemized, vars.item_ded.isEmpty, true),
-          t(')')
-        ],
-        pluggedTokens: [
-          t('Deduction = '),
-          v('std_ded', formatCurrency(summary.itemizedCalc.standardDeduction), summary.itemizedCalc.standardDeduction, vars.std_ded.isEmpty),
-          t(' vs '),
-          v('item_ded', formatCurrencyExact(summary.itemizedCalc.totalItemized), summary.itemizedCalc.totalItemized, vars.item_ded.isEmpty, true),
-          t(` ➔ ${formatCurrencyExact(summary.deductionCalc.result)}`)
-        ],
-        resultFormatted: formatCurrencyExact(summary.deductionCalc.result)
-      },
-      ...(summary.qbiDeduction > 0 ? [{
-        id: 'line-qbi',
-        label: 'Qualified Business Income Deduction',
-        formLineLabel: 'Form 1040 Line 13',
-        generalTokens: [t('QBI = 20% × Qualified Business Income '), v('qbi_ded', 'QBI', summary.qbiDeduction, vars.qbi_ded.isEmpty, true)],
-        pluggedTokens: [t('QBI = '), v('qbi_ded', formatCurrencyExact(summary.qbiDeduction), summary.qbiDeduction, vars.qbi_ded.isEmpty, true)],
-        resultFormatted: formatCurrencyExact(summary.qbiDeduction)
-      }] : []),
-      {
-        id: 'line-taxable-income',
-        label: 'Taxable Income',
-        formLineLabel: 'Form 1040 Line 15',
-        generalTokens: [
-          t('Taxable Income = max(0, '),
-          v('agi_val', 'AGI', agi, vars.agi_val.isEmpty, true),
-          t(' − Deduction'),
-          ...(summary.qbiDeduction > 0 ? [t(' − '), v('qbi_ded', 'QBI', summary.qbiDeduction, vars.qbi_ded.isEmpty, true)] : []),
-          t(')')
-        ],
-        pluggedTokens: [
-          t('Taxable Income = max(0, '),
-          v('agi_val', formatCurrencyExact(agi), agi, vars.agi_val.isEmpty, true),
-          t(` − ${formatCurrencyExact(summary.deductionCalc.result)}`),
-          ...(summary.qbiDeduction > 0 ? [t(` − ${formatCurrencyExact(summary.qbiDeduction)}`)] : []),
-          t(`) = ${formatCurrencyExact(summary.taxableIncomeCalc.result)}`)
-        ],
-        resultFormatted: formatCurrencyExact(summary.taxableIncomeCalc.result)
-      }
+      ...compileFormulaToLines(dedChosenNode, vars),
+      ...(summary.qbiDeduction > 0 ? compileFormulaToLines(qbiLineNode, vars) : []),
+      ...compileFormulaToLines(taxableIncomeNode, vars)
     ];
 
     blocks.push({
@@ -3718,7 +3597,13 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       hasImpact: hasAnyOverallImpact,
       lines,
       variables: vars,
-      sourceIds: ['calc-agi', 'select-filing-status', ...(hasAnyItemized ? ['calc-itemized-deductions'] : [])]
+      sourceIds: [
+        'calc-agi',
+        'select-filing-status',
+        ...(hasAnyItemized ? ['calc-itemized-deductions'] : []),
+        ...(summary.itemizedCalc.chosenMethod === 'standard' ? ['auto-fed-std-deduction'] : []),
+        ...(summary.qbiDeduction > 0 ? ['auto-fed-qbi'] : [])
+      ]
     });
   }
 
@@ -3730,69 +3615,48 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       ], true)
     };
 
-    const activeBrackets = summary.taxBeforeCreditsCalc.brackets.filter(b => b.taxableAmount > 0);
     const ordInc = summary.taxBeforeCreditsCalc.ordinaryTaxableIncome;
     const prefIncome = summary.taxBeforeCreditsCalc.preferentialIncome;
     const prefTax = summary.taxBeforeCreditsCalc.preferentialTax;
+    const ordTax = Math.max(0, summary.taxBeforeCreditsCalc.result - prefTax);
+    const taxableIncNode = inputNode('taxable_inc', 'calc-taxable-income', 'Taxable Ordinary Income', ordInc, { exact: true, varId: 'taxable_inc' });
+    const bracketSlices: BracketSliceNode[] = summary.taxBeforeCreditsCalc.brackets.map(b => ({
+      index: b.bracketIndex,
+      rate: b.rate,
+      ratePercent: b.ratePercent,
+      range: b.range,
+      bracketWidth: b.bracketWidth ?? Infinity,
+      taxableAmount: b.taxableAmount,
+      taxAmount: b.taxAmount,
+      remainingBefore: b.remainingBefore ?? 0,
+      remainingAfter: b.remainingAfter ?? 0
+    }));
+    const bracketNode = bracketsNode('line-tax-bracket', 'Federal Ordinary Income Brackets', taxableIncNode, bracketSlices, ordTax, {
+      formLineLabel: null,
+      expandIntermediate: true
+    });
+    const prefNode = inputNode('line-tax-preferential', 'calc-taxable-income', 'Preferential LTCG & Qualified Dividends Tax', prefTax, { exact: true });
+    const taxBeforeCredNode = opNode(
+      'line-tax-before-credits',
+      'Tax from Brackets & Preferential Rates',
+      'add',
+      prefIncome > 0 ? [bracketNode, prefNode] : [bracketNode],
+      { value: summary.taxBeforeCreditsCalc.result, formLineLabel: 'Form 1040 Line 16', exact: true }
+    );
 
     const lines: CalcLineItem[] = [
-      ...activeBrackets.map((b, idx): CalcLineItem => {
-        const remBefore = b.remainingBefore ?? 0;
-        const remAfter = b.remainingAfter ?? 0;
-        const remLabel = idx === 0 ? 'Taxable Ordinary Income' : 'Remaining Income';
-        const generalTokens: FormulaToken[] =
-          b.bracketWidth !== undefined && b.bracketWidth !== Infinity
-            ? [
-                t(`Bracket ${b.bracketIndex} (${b.ratePercent}, ${b.range}) = min(`),
-                ...(idx === 0 ? [v('taxable_inc', remLabel, ordInc, vars.taxable_inc.isEmpty, true)] : [t(remLabel)]),
-                t(`, ${formatCurrency(b.bracketWidth)}) × ${b.ratePercent}`)
-              ]
-            : [
-                t(`Bracket ${b.bracketIndex} (${b.ratePercent}, ${b.range}) = ${remLabel} × ${b.ratePercent}`)
-              ];
-
-        return {
-          id: `line-tax-bracket-${b.bracketIndex}`,
-          label: `Bracket ${b.bracketIndex} (${b.ratePercent})`,
-          formLineLabel: null,
-          generalTokens,
-          pluggedTokens: [
-            t(`Bracket ${b.bracketIndex} (${b.ratePercent}): ${formatCurrencyExact(b.taxableAmount)} × ${b.ratePercent} = ${formatCurrencyExact(b.taxAmount)} (Remaining: ${formatCurrencyExact(remBefore)} − ${formatCurrencyExact(b.taxableAmount)} = ${formatCurrencyExact(remAfter)})`)
-          ],
-          resultFormatted: formatCurrencyExact(b.taxAmount)
-        };
-      }),
+      ...compileFormulaToLines(taxBeforeCredNode, vars),
       ...(prefIncome > 0
         ? [{
             id: 'line-tax-preferential',
             label: 'Preferential LTCG & Qualified Dividends Tax',
             formLineLabel: null,
+            isIntermediate: true,
             generalTokens: [t('Preferential Tax = LTCG & Qualified Dividends × (0% / 15% / 20% / 25% / 28%)')],
             pluggedTokens: [t(`Preferential Tax = ${formatCurrencyExact(prefTax)} (on ${formatCurrencyExact(prefIncome)} preferential income)`)],
             resultFormatted: formatCurrencyExact(prefTax)
           }]
-        : []),
-      {
-        id: 'line-tax-before-credits',
-        label: 'Tax from Brackets & Preferential Rates',
-        formLineLabel: 'Form 1040 Line 16',
-        generalTokens: [
-          t('Tentative Tax = '),
-          ...(activeBrackets.length > 0 ? [t('∑(Bracket Taxes)')] : [t('$0')]),
-          ...(prefIncome > 0 ? [t(' + Preferential Tax')] : [])
-        ],
-        pluggedTokens: [
-          t(
-            activeBrackets.length > 0 || prefIncome > 0
-              ? `Tentative Tax = ${[
-                  ...activeBrackets.map(b => formatCurrencyExact(b.taxAmount)),
-                  ...(prefIncome > 0 ? [formatCurrencyExact(prefTax)] : [])
-                ].join(' + ')} = ${formatCurrencyExact(summary.taxBeforeCreditsCalc.result)}`
-              : `Tentative Tax = $0.00`
-          )
-        ],
-        resultFormatted: formatCurrencyExact(summary.taxBeforeCreditsCalc.result)
-      }
+        : [])
     ];
 
     blocks.push({
@@ -4067,43 +3931,33 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
           targetElementId: `w2-${w.id}-box2`
         })),
         { label: 'Estimated Tax Payments (1040-ES)', sign: '+', amount: estPay, amountFormatted: formatCurrencyExact(estPay), isSetUp: estPay > 0, targetElementId: 'input-estimated-payments', panelKey: 'cred-estimated-payments', panelSection: 'credits' },
-        { label: 'Excess SS Tax Credit (Sched 3 Line 11)', sign: '+', amount: summary.ficaCalc.excessSSTaxCredit, amountFormatted: formatCurrencyExact(summary.ficaCalc.excessSSTaxCredit), isSetUp: summary.ficaCalc.excessSSTaxCredit > 0, targetElementId: 'calc-total-w2-wages' },
+        { label: 'Excess SS Tax Credit (Sched 3 Line 11)', sign: '+', amount: summary.ficaCalc.excessSSTaxCredit, amountFormatted: formatCurrencyExact(summary.ficaCalc.excessSSTaxCredit), isSetUp: summary.ficaCalc.excessSSTaxCredit > 0, targetElementId: summary.ficaCalc.excessSSTaxCredit > 0 ? 'auto-fed-excess-ss' : 'calc-total-w2-wages' },
         { label: 'Refundable Credits (ACTC/EITC/AOTC)', sign: '+', amount: summary.creditsCalc.totalRefundableCredits, amountFormatted: formatCurrencyExact(summary.creditsCalc.totalRefundableCredits), isSetUp: summary.creditsCalc.totalRefundableCredits > 0, targetElementId: 'calc-total-credits' }
       ], true)
     };
 
+    const taxBeforeCredNode = inputNode('tax_before_cred', 'calc-tax-before-credits', 'Line 16 Tax', summary.taxBeforeCreditsCalc.result, { exact: true, varId: 'tax_before_cred' });
+    const nonrefCredNode = inputNode('nonref_cred', 'calc-total-credits', 'Nonref Credits', summary.creditsCalc.totalNonRefundableCredits, { exact: true, varId: 'nonref_cred' });
+    const otherTaxesNode = inputNode('other_taxes', 'calc-other-taxes', 'Other Taxes', summary.otherTaxesCalc.totalOtherTaxes, { exact: true, varId: 'other_taxes' });
+    const netTaxAfterCredNode = opNode('net-tax-after-cred', 'Tax After Nonref Credits', 'max', [
+      constNode('zero', '$0.00', 0),
+      opNode('tax-minus-cred', 'Tax − Nonref Credits', 'sub', [taxBeforeCredNode, nonrefCredNode], { exact: true })
+    ], { value: Math.max(0, summary.taxBeforeCreditsCalc.result - summary.creditsCalc.totalNonRefundableCredits), formLineLabel: null, exact: true });
+    const totalTaxNode = opNode('line-total-tax', 'Total Federal Tax Liability', 'add', [netTaxAfterCredNode, otherTaxesNode], {
+      value: summary.totalTaxCalc.result,
+      formLineLabel: 'Form 1040 Line 24',
+      exact: true
+    });
+    const paymentsNode = inputNode('payments_total', 'calc-total-w2-wages', 'Withholding + Est. Payments + Refundable Credits', summary.withholdingCalc.result, { exact: true, varId: 'payments_total' });
+    const totalPaymentsNode = opNode('line-total-payments', 'Total Payments & Refundable Credits', 'add', [paymentsNode], {
+      value: summary.withholdingCalc.result,
+      formLineLabel: 'Form 1040 Line 33',
+      exact: true
+    });
+
     const lines: CalcLineItem[] = [
-      {
-        id: 'line-total-tax',
-        label: 'Total Federal Tax Liability',
-        formLineLabel: 'Form 1040 Line 24',
-        generalTokens: [
-          t('Total Tax = max(0, '),
-          v('tax_before_cred', 'Line 16 Tax', summary.taxBeforeCreditsCalc.result, vars.tax_before_cred.isEmpty, true),
-          t(' − '),
-          v('nonref_cred', 'Nonref Credits', summary.creditsCalc.totalNonRefundableCredits, vars.nonref_cred.isEmpty, true),
-          t(') + '),
-          v('other_taxes', 'Other Taxes', summary.otherTaxesCalc.totalOtherTaxes, vars.other_taxes.isEmpty, true)
-        ],
-        pluggedTokens: [
-          t('Total Tax = max(0, '),
-          v('tax_before_cred', formatCurrencyExact(summary.taxBeforeCreditsCalc.result), summary.taxBeforeCreditsCalc.result, vars.tax_before_cred.isEmpty, true),
-          t(' − '),
-          v('nonref_cred', formatCurrencyExact(summary.creditsCalc.totalNonRefundableCredits), summary.creditsCalc.totalNonRefundableCredits, vars.nonref_cred.isEmpty, true),
-          t(') + '),
-          v('other_taxes', formatCurrencyExact(summary.otherTaxesCalc.totalOtherTaxes), summary.otherTaxesCalc.totalOtherTaxes, vars.other_taxes.isEmpty, true),
-          t(` = ${formatCurrencyExact(summary.totalTaxCalc.result)}`)
-        ],
-        resultFormatted: formatCurrencyExact(summary.totalTaxCalc.result)
-      },
-      {
-        id: 'line-total-payments',
-        label: 'Total Payments & Refundable Credits',
-        formLineLabel: 'Form 1040 Line 33',
-        generalTokens: [t('Total Payments = '), v('payments_total', 'Withholding + Est. Payments + Refundable Credits', summary.withholdingCalc.result, vars.payments_total.isEmpty, true)],
-        pluggedTokens: [t('Total Payments = '), v('payments_total', formatCurrencyExact(summary.withholdingCalc.result), summary.withholdingCalc.result, vars.payments_total.isEmpty, true)],
-        resultFormatted: formatCurrencyExact(summary.withholdingCalc.result)
-      },
+      ...compileFormulaToLines(totalTaxNode, vars),
+      ...compileFormulaToLines(totalPaymentsNode, vars),
       {
         id: 'line-final-outcome',
         label: summary.finalResultCalc.isRefund ? 'Federal Tax Refund' : 'Federal Tax Balance Owed',
@@ -4122,7 +3976,13 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       isOutput: true,
       lines,
       variables: vars,
-      sourceIds: ['calc-tax-before-credits', 'calc-total-w2-wages', ...(hasAnyCreditsInput ? ['calc-total-credits'] : []), ...(hasAnyOtherTaxes ? ['calc-other-taxes'] : [])]
+      sourceIds: [
+        'calc-tax-before-credits',
+        'calc-total-w2-wages',
+        ...(hasAnyCreditsInput ? ['calc-total-credits'] : []),
+        ...(hasAnyOtherTaxes ? ['calc-other-taxes'] : []),
+        ...(summary.ficaCalc.excessSSTaxCredit > 0 ? ['auto-fed-excess-ss'] : [])
+      ]
     });
   }
 
@@ -4746,7 +4606,7 @@ export function buildAutoPanels(
         id: `auto-state-${key}-dep-exemption`,
         section: 'itemized',
         state: code,
-        title: `${code} Dependent Exemptions`,
+        title: `${code} Personal & Dependent Exemptions`,
         officialTitle: `${sr.formName} Personal / Dependent Exemptions`,
         amount: sr.stateExemptionAmount ?? 0,
         formulaSummary: `Statutory ${code} Exemption × Qualifying Dependents`,
