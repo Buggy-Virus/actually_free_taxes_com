@@ -1,4 +1,4 @@
-import { calculateTaxes, buildCalculationBlocks, formatCurrency, formatCurrencyExact } from '../tax-engine.js';
+import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlock, buildAutoPanels, formatCurrency, formatCurrencyExact } from '../tax-engine.js';
 import { TaxAppState } from '../types.js';
 import { getFieldRating, renderRatingPill, renderRatingCardHtml, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from '../field-ratings.js';
 import assert from 'assert';
@@ -956,6 +956,73 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   console.log("✓ TS Test 15: Clustered Calculation Blocks, Impact Filtering, Medical 7.5% Math & Variable Breakdowns verified!");
 }
 
-console.log("\nAll 15 TypeScript test suites PASSED with 100% accuracy!\n");
+// Test Case 16: FormulaNode Expansion (Other Taxes, State/Local Brackets, OSTC) & AutoPanels
+{
+  const state: TaxAppState = {
+    year: 2025,
+    filingStatus: 'single',
+    residentState: 'NY',
+    w2s: [
+      {
+        id: 0,
+        employer: 'NJ Corp',
+        ein: '11-1111111',
+        box1: 120000,
+        box2: 18000,
+        box3: 120000,
+        box4: 7440,
+        box5: 120000,
+        box6: 1740,
+        states: [{ id: 0, state: 'NJ', stateId: 'NJ-1', stateWages: 120000, stateTaxWithheld: 5000, localWages: 0, localTaxWithheld: 0, localityName: '' }]
+      },
+      {
+        id: 1,
+        employer: 'NYC Inc',
+        ein: '22-2222222',
+        box1: 110000,
+        box2: 20000,
+        box3: 110000,
+        box4: 6820,
+        box5: 110000,
+        box6: 1595,
+        states: [{ id: 1, state: 'NY', stateId: 'NY-1', stateWages: 110000, stateTaxWithheld: 6000, localWages: 110000, localTaxWithheld: 4000, localityName: 'NYC' }]
+      }
+    ],
+    otherIncome: {
+      interest: 4000,
+      sources: [{ id: 0, type: '1099-NEC', payer: 'Consulting', amount: 15000, state: 'NY' }]
+    },
+    adjustments: { studentLoan: 0, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 0 },
+    showAllArrows: true
+  };
+
+  const summary = calculateTaxes(state);
+  const fedBlocks = buildCalculationBlocks(state, summary);
+  const otherTaxesBlock = fedBlocks.find(b => b.id === 'calc-other-taxes')!;
+  assert(otherTaxesBlock, 'calc-other-taxes block exists');
+  assert(otherTaxesBlock.lines.some(l => l.id === 'line-se-total'), 'Schedule SE intermediate line is expanded');
+  assert(otherTaxesBlock.lines.some(l => l.id === 'line-addl-med-tax'), 'Form 8959 Additional Medicare intermediate line is expanded');
+  assert(otherTaxesBlock.lines.some(l => l.id === 'line-niit-tax'), 'Form 8960 NIIT intermediate line is expanded');
+
+  const nyReturn = summary.stateReturnsCalc.find(r => r.state === 'NY')!;
+  const nyBlock = buildStateCalcBlock(nyReturn, summary.stateReturnsCalc);
+  assert(nyBlock.lines.some(l => l.id.startsWith('line-state-ny-tentative-b')), 'NY state bracket waterfall intermediate lines are generated');
+  assert(nyBlock.lines.some(l => l.id.startsWith('line-state-ny-local-b')), 'NYC local bracket waterfall intermediate lines are generated');
+  assert(nyBlock.lines.some(l => l.id === 'line-state-ny-ostc-nj'), 'NY OSTC credit line for NJ is generated');
+
+  const autoPanels = buildAutoPanels(state, summary);
+  assert(autoPanels.federal.some(p => p.id === 'auto-fed-std-deduction'), 'Federal Standard Deduction auto panel generated');
+  assert(autoPanels.federal.some(p => p.id === 'auto-fed-half-se'), 'Federal 1/2 SE Tax Deduction auto panel generated');
+  assert(autoPanels.federal.some(p => p.id === 'auto-fed-qbi'), 'Federal 20% QBI Deduction auto panel generated');
+  assert(autoPanels.federal.some(p => p.id === 'auto-fed-excess-ss'), 'Federal Excess SS Tax Credit auto panel generated');
+  assert((autoPanels.byState['NY'] || []).some(p => p.id === 'auto-state-ny-ostc-nj'), 'NY OSTC auto panel generated');
+  assert((autoPanels.byState['NY'] || []).some(p => p.id === 'auto-state-ny-std-ded'), 'NY Standard Deduction auto panel generated');
+
+  console.log("✓ TS Test 16: FormulaNode Expansion (Other Taxes, State/Local Brackets, OSTC) & AutoPanels verified!");
+}
+
+console.log("\nAll 16 TypeScript test suites PASSED with 100% accuracy!\n");
+
 
 

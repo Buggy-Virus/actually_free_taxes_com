@@ -3689,4 +3689,43 @@ input[type="number"] {
   }
 }
 
+/* System-Derived Automatic Panels (Read-Only) */
+.auto-panel-card {
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  border: 1px dashed #94a3b8;
+  border-top: 3px solid #6366f1;
+  cursor: pointer;
+}
+
+.auto-panel-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.auto-panel-amount-display {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0.35rem 0 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.auto-panel-formula {
+  font-size: 0.76rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 0.3rem 0.45rem;
+  border-radius: 4px;
+  margin-bottom: 0.4rem;
+}
+
+
 

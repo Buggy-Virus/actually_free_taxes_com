@@ -31,8 +31,20 @@ import {
   CalcLineItem,
   CalcVariableBreakdown,
   CalcVariableContributor,
-  FormulaToken
+  FormulaToken,
+  StateModificationItem,
+  AutoPanelItem
 } from './types.js';
+import {
+  FormulaNode,
+  inputNode,
+  constNode,
+  opNode,
+  bracketsNode,
+  compileFormulaToLines,
+  extractSourceIds,
+  BracketSliceNode
+} from './formula-graph.js';
 
 export type CoreFilingStatus = 'single' | 'married_joint' | 'married_separate' | 'head_of_household';
 
@@ -1052,6 +1064,48 @@ export function computeStateTaxFromBrackets(taxable: number, brackets: BracketDe
   return tax;
 }
 
+export function computeStateBracketDetails(taxable: number, brackets: BracketDef[]): BracketDetail[] {
+  const details: BracketDetail[] = [];
+  let remaining = Math.max(0, taxable);
+  for (let i = 0; i < brackets.length; i++) {
+    const b = brackets[i];
+    const bracketWidth = b.max === Infinity ? Infinity : b.max - b.min;
+    const maxLabel = b.max === Infinity ? '+' : ` to ${formatCurrency(b.max)}`;
+    if (taxable > b.min) {
+      const taxableInBracket = Math.min(taxable, b.max) - b.min;
+      const taxFromBracket = taxableInBracket * b.rate;
+      const remBefore = remaining;
+      remaining = Math.max(0, remaining - taxableInBracket);
+      details.push({
+        bracketIndex: i + 1,
+        rate: b.rate,
+        ratePercent: formatPercent(b.rate),
+        range: `${formatCurrency(b.min)}${maxLabel}`,
+        taxableAmount: taxableInBracket,
+        taxAmount: taxFromBracket,
+        formula: `${formatCurrency(taxableInBracket)} × ${formatPercent(b.rate)} = ${formatCurrency(taxFromBracket)}`,
+        bracketWidth,
+        remainingBefore: remBefore,
+        remainingAfter: remaining
+      });
+    } else {
+      details.push({
+        bracketIndex: i + 1,
+        rate: b.rate,
+        ratePercent: formatPercent(b.rate),
+        range: `${formatCurrency(b.min)}${maxLabel}`,
+        taxableAmount: 0,
+        taxAmount: 0,
+        formula: `$0 × ${formatPercent(b.rate)} = $0`,
+        bracketWidth,
+        remainingBefore: 0,
+        remainingAfter: 0
+      });
+    }
+  }
+  return details;
+}
+
 export function formatCurrency(num: number | null | undefined): string {
   if (num === null || num === undefined || isNaN(num)) return "$0";
   const roundedCents = Math.round(num * 100) / 100;
@@ -1248,11 +1302,13 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
   let selfEmploymentTax = 0;
   let halfSelfEmploymentTaxDeduction = 0;
   let seTaxableEarnings = 0;
+  let seSSPortion = 0;
+  let seMedPortion = 0;
   if (netScheduleCProfit >= 400) {
     seTaxableEarnings = netScheduleCProfit * 0.9235;
     const remainingSSCap = Math.max(0, rules.ssWageLimit - totalSSWages);
-    const seSSPortion = Math.min(seTaxableEarnings, remainingSSCap) * 0.124;
-    const seMedPortion = seTaxableEarnings * 0.029;
+    seSSPortion = Math.round(Math.min(seTaxableEarnings, remainingSSCap) * 0.124 * 100) / 100;
+    seMedPortion = Math.round(seTaxableEarnings * 0.029 * 100) / 100;
     selfEmploymentTax = Math.round((seSSPortion + seMedPortion) * 100) / 100;
     halfSelfEmploymentTaxDeduction = Math.round(selfEmploymentTax * 0.50 * 100) / 100;
   }
@@ -1847,6 +1903,19 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     earlyDistributionPenaltyTax,
     netInvestmentIncome,
     totalOtherTaxes,
+    seTaxableEarnings,
+    seSSPortion,
+    seMedPortion,
+    combinedMedAndSeWages,
+    addMedThreshold,
+    excessMedWages,
+    niitThreshold,
+    magiExcessOverNiit,
+    amti,
+    amtAllowedDeductions,
+    amtExemption,
+    tentativeMinimumTax,
+    earlyDist1099RTotal,
     sourceFields: ['calc-agi', ...w2List.map((w, idx) => `w2-${w.id || idx}-box5`)],
     generalFormula: 'Schedule 2 Other Taxes = Schedule SE (15.3%) + Form 8959 Additional Medicare (0.9% over $200k) + Form 8960 NIIT (3.8%) + Form 6251 AMT',
     pluggedFormula: totalOtherTaxes > 0
@@ -2264,15 +2333,18 @@ export function calculateStateReturnsAndUnifiedSummary(
     const spItem = spList.filter(p => p.section === 'itemized').reduce((s, p) => s + (Number(p.amount) || 0), 0)
       + (Number(state.stateSpecific?.[code]?.itemizedDeductions) || 0);
 
-    const stdDed = (rule.standardDeduction[effectiveStatus] || 0) + spItem;
+    const baseStdDed = rule.standardDeduction[effectiveStatus] || 0;
+    const stdDed = baseStdDed + spItem;
     const adjStateWages = Math.max(0, stateWages + spOther - spAdj);
     const taxable = Math.max(0, adjStateWages - stdDed);
     let tax = 0;
+    let nrBrackets: BracketDetail[] = [];
     if (rule.isFlat) {
       tax = taxable * (rule.flatRate || 0);
     } else {
       const bList = rule.brackets?.[effectiveStatus] || rule.brackets?.['single'] || [];
       tax = computeStateTaxFromBrackets(taxable, bList);
+      nrBrackets = computeStateBracketDetails(taxable, bList);
     }
     const stateTaxLiability = Math.max(0, Math.round((tax - spCred) * 100) / 100);
     const netDiff = withholding - stateTaxLiability;
@@ -2289,7 +2361,7 @@ export function calculateStateReturnsAndUnifiedSummary(
       stateWages,
       stateStandardDeduction: stdDed,
       stateTaxableIncome: taxable,
-      stateTaxBeforeCredit: stateTaxLiability,
+      stateTaxBeforeCredit: Math.round(tax * 100) / 100,
       creditForOtherStates: 0,
       creditedStates: [],
       reciprocityExemption: false,
@@ -2299,6 +2371,14 @@ export function calculateStateReturnsAndUnifiedSummary(
       localTaxWithheld: localTax,
       netOutcome,
       isRefund,
+      isFlat: rule.isFlat,
+      flatRate: rule.flatRate,
+      brackets: nrBrackets,
+      baseStdDeduction: baseStdDed,
+      statePanelOtherIncome: spOther,
+      statePanelAdjustments: spAdj,
+      statePanelItemized: spItem,
+      statePanelCredits: spCred,
       sourceFields: raw.sourceFieldIds,
       generalFormula: `${rule.formNonResident}: State Tax = max(0, State Sourced Wages − State Standard Deduction) × Rates`,
       pluggedFormula: `Taxable Income = ${formatCurrency(stateWages)} − ${formatCurrency(stdDed)} = ${formatCurrency(taxable)} ➔ State Tax Liability = ${formatCurrencyExact(stateTaxLiability)}`
@@ -2428,6 +2508,14 @@ export function calculateStateReturnsAndUnifiedSummary(
     // 5. NJ Property Tax Deduction (up to $15,000 of realEstateTax on Form NJ-1040):
     const njPropertyTaxDed = residentState === 'NJ' ? Math.min(15000, Number(state.itemizedDeductions?.realEstateTax) || 0) : 0;
 
+    const modifications: StateModificationItem[] = [];
+    if (hsaAddBack > 0) modifications.push({ label: `${residentState} HSA Add-Back`, amount: hsaAddBack, sourceId: `auto-state-${residentState.toLowerCase()}-hsa-addback` });
+    if (paAddBack > 0) modifications.push({ label: 'PA Non-Conformity Add-Back (IRA/HSA/Student Loan/Cap Loss)', amount: paAddBack, sourceId: `auto-state-${residentState.toLowerCase()}-pa-addback` });
+    if (stateLtcgExclusion > 0) modifications.push({ label: `${residentState} LTCG Exclusion`, amount: -stateLtcgExclusion, sourceId: `auto-state-${residentState.toLowerCase()}-ltcg-excl` });
+    if (fedTaxSubtraction > 0) modifications.push({ label: `${residentState} Federal Tax Paid Deduction`, amount: -fedTaxSubtraction, sourceId: `auto-state-${residentState.toLowerCase()}-fed-tax-ded` });
+    if (njPropertyTaxDed > 0) modifications.push({ label: 'NJ Property Tax Deduction (Cap $15,000)', amount: -njPropertyTaxDed, sourceId: `auto-state-${residentState.toLowerCase()}-prop-tax-ded` });
+
+    const preModResidentWages = residentTotalWages;
     residentTotalWages = Math.max(0, residentTotalWages + hsaAddBack + paAddBack - stateLtcgExclusion - fedTaxSubtraction - njPropertyTaxDed);
 
     const baseStdDed = residentRule.standardDeduction[effectiveStatus] || 0;
@@ -2453,43 +2541,61 @@ export function calculateStateReturnsAndUnifiedSummary(
     const resAdjustedIncome = Math.max(0, residentTotalWages + resSpOther - resSpAdj);
     const resTaxable = Math.max(0, resAdjustedIncome - resStdDed);
     let resTentativeTax = 0;
+    let resBrackets: BracketDetail[] = [];
     if (residentRule.isFlat) {
       resTentativeTax = resTaxable * (residentRule.flatRate || 0);
     } else {
       const bList = residentRule.brackets?.[effectiveStatus] || residentRule.brackets?.['single'] || [];
       resTentativeTax = computeStateTaxFromBrackets(resTaxable, bList);
+      resBrackets = computeStateBracketDetails(resTaxable, bList);
     }
 
+    let surchargeAmount = 0;
+    let surchargeLabel = '';
     // Massachusetts 8.5% Short-Term Capital Gains Surcharge (+3.5% above the 5.0% base rate):
     if (residentState === 'MA' && stGain > 0 && resTaxable > 0) {
-      resTentativeTax += Math.min(stGain, resTaxable) * 0.035;
+      surchargeAmount = Math.round(Math.min(stGain, resTaxable) * 0.035 * 100) / 100;
+      surchargeLabel = 'MA +3.5% Short-Term Capital Gains Surcharge';
+      resTentativeTax += surchargeAmount;
     }
     // California 1% Mental Health Services Tax on CA taxable income exceeding $1,000,000:
     if (residentState === 'CA' && resTaxable > 1000000) {
-      resTentativeTax += (resTaxable - 1000000) * 0.01;
+      surchargeAmount = Math.round((resTaxable - 1000000) * 0.01 * 100) / 100;
+      surchargeLabel = 'CA 1% Mental Health Services Tax (Over $1M)';
+      resTentativeTax += surchargeAmount;
     }
+    let stateCreditAmount = 0;
+    let stateCreditLabel = '';
     // Illinois 5% Property Tax Credit (Schedule ICR):
     if (residentState === 'IL' && (Number(state.itemizedDeductions?.realEstateTax) || 0) > 0) {
-      const ilPropCredit = (Number(state.itemizedDeductions?.realEstateTax) || 0) * 0.05;
-      resTentativeTax = Math.max(0, resTentativeTax - ilPropCredit);
+      stateCreditAmount = Math.round((Number(state.itemizedDeductions?.realEstateTax) || 0) * 0.05 * 100) / 100;
+      stateCreditLabel = 'IL 5% Property Tax Credit (Schedule ICR)';
+      resTentativeTax = Math.max(0, resTentativeTax - stateCreditAmount);
     }
 
     resTentativeTax = Math.round(resTentativeTax * 100) / 100;
 
     // Local / Municipal / County Piggyback Income Tax (NYC, Yonkers, MD County Tax, PA Local/Philly, OH/IN/KY/MI/MO/DE/AL Local):
     let localTaxLiability = 0;
+    let localBrackets: BracketDetail[] = [];
+    let localRuleLabel = '';
     if (residentState === 'NY' && resRaw.hasNycLocality) {
       const nycBList = NYC_LOCAL_BRACKETS[effectiveStatus] || NYC_LOCAL_BRACKETS.single;
       localTaxLiability = Math.round(computeStateTaxFromBrackets(resTaxable, nycBList) * 100) / 100;
+      localBrackets = computeStateBracketDetails(resTaxable, nycBList);
+      localRuleLabel = 'NYC Municipal Resident Tax Brackets';
     } else if (residentState === 'NY' && resRaw.hasYonkersLocality) {
       localTaxLiability = Math.round(resTentativeTax * 0.1675 * 100) / 100; // Yonkers 16.75% resident surcharge
+      localRuleLabel = 'Yonkers Resident Surcharge (16.75% of NY State Tax)';
     } else if (residentState === 'MD') {
       // Maryland mandatory County Piggyback Income Tax (uses Box 19 local withholding or standard 3.20% county rate when local wages/withholding present)
       if (resRaw.localWithheld > 0 || resRaw.localWages > 0) {
         localTaxLiability = Math.round(resTaxable * 0.032 * 100) / 100;
+        localRuleLabel = 'MD County Piggyback Income Tax (3.20%)';
       }
     } else if (resRaw.localWithheld > 0 && ['PA', 'OH', 'IN', 'KY', 'MI', 'MO', 'DE', 'AL', 'OR'].includes(residentState)) {
       localTaxLiability = resRaw.localWithheld;
+      localRuleLabel = `${residentState} Local / Municipal Tax (W-2 Box 19)`;
     }
 
     // Compute OSTC: Credit for taxes paid to non-resident states
@@ -2556,6 +2662,23 @@ export function calculateStateReturnsAndUnifiedSummary(
       localTaxWithheld: resLocalTax,
       netOutcome: resNetOutcome,
       isRefund: resIsRefund,
+      isFlat: residentRule.isFlat,
+      flatRate: residentRule.flatRate,
+      brackets: resBrackets,
+      localBrackets,
+      localRuleLabel,
+      modifications,
+      baseStdDeduction: baseStdDed,
+      stateItemizedAmount: stateItemizedDed,
+      stateItemizedUsed: useStateItemized,
+      statePanelOtherIncome: resSpOther,
+      statePanelAdjustments: resSpAdj,
+      statePanelItemized: resSpItem,
+      statePanelCredits: resSpCred,
+      surchargeAmount,
+      surchargeLabel,
+      stateCreditAmount,
+      stateCreditLabel,
       sourceFields: [
         ...resRaw.sourceFieldIds,
         ...creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-liability`)
@@ -3478,8 +3601,9 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
     });
   }
 
-  // BLOCK 8: Tax Credits (Nonrefundable & Refundable)
+  // BLOCK 8: Tax Credits (Nonrefundable & Refundable) via FormulaNode Graph
   {
+    const cr = summary.creditsCalc;
     const kids = Number(state.dependents?.childrenCount) || 0;
     const otherDeps = Number(state.dependents?.otherDependentsCount) || 0;
     const care = Number(state.dependents?.childCareExpenses) || 0;
@@ -3489,39 +3613,85 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
     const clean = Number(state.dependents?.cleanEnergyCredit) || 0;
 
     const vars: Record<string, CalcVariableBreakdown> = {
-      nonref_credits: makeVar('nonref_credits', 'Nonrefundable Credits', summary.creditsCalc.totalNonRefundableCredits, [
-        { label: `Child Tax Credit (${kids} kids)`, sign: '+', amount: summary.creditsCalc.childTaxCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.childTaxCredit), isSetUp: kids > 0, targetElementId: 'input-children-count', panelKey: 'cred-children', panelSection: 'credits' },
-        { label: `Other Dependents ($500 × ${otherDeps})`, sign: '+', amount: summary.creditsCalc.otherDependentsCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.otherDependentsCredit), isSetUp: otherDeps > 0, targetElementId: 'input-other-dependents', panelKey: 'cred-other-dependents', panelSection: 'credits' },
-        { label: 'Child & Dependent Care (Form 2441)', sign: '+', amount: summary.creditsCalc.childCareCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.childCareCredit), isSetUp: care > 0, targetElementId: 'input-child-care', panelKey: 'cred-child-care', panelSection: 'credits' },
-        { label: 'Education Credits (Nonrefundable)', sign: '+', amount: summary.creditsCalc.educationCreditNonRefundable, amountFormatted: formatCurrencyExact(summary.creditsCalc.educationCreditNonRefundable), isSetUp: aotc > 0 || llc > 0, targetElementId: 'input-edu-aotc', panelKey: 'cred-aotc', panelSection: 'credits' },
-        { label: "Saver's Credit (Form 8880)", sign: '+', amount: summary.creditsCalc.saversCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.saversCredit), isSetUp: summary.creditsCalc.saversCredit > 0, targetElementId: 'input-adj-ira', panelKey: 'adj-ira', panelSection: 'adjustments' },
-        { label: 'Foreign Tax Credit (Form 1116)', sign: '+', amount: summary.creditsCalc.foreignTaxCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.foreignTaxCredit), isSetUp: ftc > 0, targetElementId: 'input-foreign-tax-credit', panelKey: 'cred-foreign-tax', panelSection: 'credits' },
-        { label: 'Clean Energy Credit (Form 5695)', sign: '+', amount: summary.creditsCalc.cleanEnergyCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.cleanEnergyCredit), isSetUp: clean > 0, targetElementId: 'input-clean-energy-credit', panelKey: 'cred-clean-energy', panelSection: 'credits' }
+      nonref_credits: makeVar('nonref_credits', 'Nonrefundable Credits', cr.totalNonRefundableCredits, [
+        { label: `Child Tax Credit (${kids} kids)`, sign: '+', amount: cr.childTaxCredit, amountFormatted: formatCurrencyExact(cr.childTaxCredit), isSetUp: kids > 0, targetElementId: 'input-children-count', panelKey: 'cred-children', panelSection: 'credits' },
+        { label: `Other Dependents ($500 × ${otherDeps})`, sign: '+', amount: cr.otherDependentsCredit, amountFormatted: formatCurrencyExact(cr.otherDependentsCredit), isSetUp: otherDeps > 0, targetElementId: 'input-other-dependents', panelKey: 'cred-other-dependents', panelSection: 'credits' },
+        { label: 'Child & Dependent Care (Form 2441)', sign: '+', amount: cr.childCareCredit, amountFormatted: formatCurrencyExact(cr.childCareCredit), isSetUp: care > 0, targetElementId: 'input-child-care', panelKey: 'cred-child-care', panelSection: 'credits' },
+        { label: 'Education Credits (Nonrefundable)', sign: '+', amount: cr.educationCreditNonRefundable, amountFormatted: formatCurrencyExact(cr.educationCreditNonRefundable), isSetUp: aotc > 0 || llc > 0, targetElementId: 'input-edu-aotc', panelKey: 'cred-aotc', panelSection: 'credits' },
+        { label: "Saver's Credit (Form 8880)", sign: '+', amount: cr.saversCredit, amountFormatted: formatCurrencyExact(cr.saversCredit), isSetUp: cr.saversCredit > 0, targetElementId: 'auto-fed-savers-credit', panelKey: 'adj-ira', panelSection: 'adjustments' },
+        { label: 'Foreign Tax Credit (Form 1116)', sign: '+', amount: cr.foreignTaxCredit, amountFormatted: formatCurrencyExact(cr.foreignTaxCredit), isSetUp: ftc > 0, targetElementId: 'input-foreign-tax-credit', panelKey: 'cred-foreign-tax', panelSection: 'credits' },
+        { label: 'Clean Energy Credit (Form 5695)', sign: '+', amount: cr.cleanEnergyCredit, amountFormatted: formatCurrencyExact(cr.cleanEnergyCredit), isSetUp: clean > 0, targetElementId: 'input-clean-energy-credit', panelKey: 'cred-clean-energy', panelSection: 'credits' }
       ], true),
-      ref_credits: makeVar('ref_credits', 'Refundable Credits', summary.creditsCalc.totalRefundableCredits, [
-        { label: 'Additional Child Tax Credit (Sched 8812)', sign: '+', amount: summary.creditsCalc.additionalChildTaxCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.additionalChildTaxCredit), isSetUp: summary.creditsCalc.additionalChildTaxCredit > 0, targetElementId: 'input-children-count', panelKey: 'cred-children', panelSection: 'credits' },
-        { label: 'Earned Income Tax Credit (EITC)', sign: '+', amount: summary.creditsCalc.eitc, amountFormatted: formatCurrencyExact(summary.creditsCalc.eitc), isSetUp: summary.creditsCalc.eitc > 0, targetElementId: 'input-children-count', panelKey: 'cred-children', panelSection: 'credits' },
-        { label: 'Refundable AOTC (40%, Form 8863)', sign: '+', amount: summary.creditsCalc.educationCreditRefundable, amountFormatted: formatCurrencyExact(summary.creditsCalc.educationCreditRefundable), isSetUp: summary.creditsCalc.educationCreditRefundable > 0, targetElementId: 'input-edu-aotc', panelKey: 'cred-aotc', panelSection: 'credits' }
+      ref_credits: makeVar('ref_credits', 'Refundable Credits', cr.totalRefundableCredits, [
+        { label: 'Additional Child Tax Credit (Sched 8812)', sign: '+', amount: cr.additionalChildTaxCredit, amountFormatted: formatCurrencyExact(cr.additionalChildTaxCredit), isSetUp: cr.additionalChildTaxCredit > 0, targetElementId: 'auto-fed-actc', panelKey: 'cred-children', panelSection: 'credits' },
+        { label: 'Earned Income Tax Credit (EITC)', sign: '+', amount: cr.eitc, amountFormatted: formatCurrencyExact(cr.eitc), isSetUp: cr.eitc > 0, targetElementId: 'auto-fed-eitc', panelKey: 'cred-children', panelSection: 'credits' },
+        { label: 'Refundable AOTC (40%, Form 8863)', sign: '+', amount: cr.educationCreditRefundable, amountFormatted: formatCurrencyExact(cr.educationCreditRefundable), isSetUp: cr.educationCreditRefundable > 0, targetElementId: 'input-edu-aotc', panelKey: 'cred-aotc', panelSection: 'credits' }
       ], true)
     };
 
+    const nonrefArgs: FormulaNode[] = [];
+    if (kids > 0) {
+      nonrefArgs.push(opNode('line-cred-ctc', `Child Tax Credit (${kids} × $2,000 − Phaseout)`, 'min', [
+        inputNode('cred-ctc-raw', 'input-children-count', 'CTC Allowed', cr.childTaxCredit),
+        inputNode('cred-ctc-taxcap', 'calc-tax-before-credits', 'Line 16 Tax', summary.taxBeforeCreditsCalc.result)
+      ], { value: cr.childTaxCredit, expandIntermediate: true }));
+    }
+    if (otherDeps > 0) {
+      nonrefArgs.push(opNode('line-cred-odc', 'Other Dependents Credit', 'mul', [
+        inputNode('cred-odc-cnt', 'input-other-dependents', 'Other Dependents', otherDeps, { exact: false }),
+        constNode('cred-odc-rate', '$500/Dependent', 500)
+      ], { value: cr.otherDependentsCredit, expandIntermediate: true }));
+    }
+    if (care > 0) {
+      nonrefArgs.push(inputNode('line-cred-care', 'input-child-care', 'Child & Dependent Care (Form 2441)', cr.childCareCredit));
+    }
+    if (cr.educationCreditNonRefundable > 0) {
+      nonrefArgs.push(inputNode('line-cred-edu-nonref', 'input-edu-aotc', 'Nonrefundable Education Credits (Form 8863)', cr.educationCreditNonRefundable));
+    }
+    if (cr.saversCredit > 0) {
+      nonrefArgs.push(inputNode('line-cred-savers', 'auto-fed-savers-credit', "Saver's Credit (Form 8880)", cr.saversCredit));
+    }
+    if (cr.foreignTaxCredit > 0) {
+      nonrefArgs.push(inputNode('line-cred-ftc', 'input-foreign-tax-credit', 'Foreign Tax Credit (Form 1116)', cr.foreignTaxCredit));
+    }
+    if (cr.cleanEnergyCredit > 0) {
+      nonrefArgs.push(inputNode('line-cred-clean', 'input-clean-energy-credit', 'Clean Energy Credit (Form 5695)', cr.cleanEnergyCredit));
+    }
+
+    const rawNonrefSum = nonrefArgs.length > 0
+      ? opNode('line-nonref-raw', 'Raw Nonrefundable Credits', 'add', nonrefArgs, { expandIntermediate: nonrefArgs.length > 1 })
+      : constNode('nonref-zero', '$0 Credits', 0);
+
+    const nonrefRoot = opNode('line-nonref-credits', 'Nonrefundable Credits', 'min', [
+      inputNode('tax-cap-ref', 'calc-tax-before-credits', 'Line 16 Tax', summary.taxBeforeCreditsCalc.result),
+      rawNonrefSum
+    ], {
+      value: cr.totalNonRefundableCredits,
+      formLineLabel: 'Form 1040 Line 19–20'
+    });
+
+    const refArgs: FormulaNode[] = [];
+    if (cr.additionalChildTaxCredit > 0) {
+      refArgs.push(inputNode('ref-actc', 'auto-fed-actc', 'ACTC (Schedule 8812)', cr.additionalChildTaxCredit));
+    }
+    if (cr.eitc > 0) {
+      refArgs.push(inputNode('ref-eitc', 'auto-fed-eitc', 'EITC (Schedule EIC)', cr.eitc));
+    }
+    if (cr.educationCreditRefundable > 0) {
+      refArgs.push(inputNode('ref-aotc', 'input-edu-aotc', 'Refundable AOTC (40% Form 8863)', cr.educationCreditRefundable));
+    }
+
+    const refRoot = opNode(
+      'line-ref-credits',
+      'Refundable Credits',
+      'add',
+      refArgs.length > 0 ? refArgs : [constNode('ref-zero', '$0 Refundable Credits', 0)],
+      { value: cr.totalRefundableCredits, formLineLabel: 'Form 1040 Line 27–29' }
+    );
+
     const lines: CalcLineItem[] = [
-      {
-        id: 'line-nonref-credits',
-        label: 'Total Nonrefundable Credits',
-        formLineLabel: 'Form 1040 Line 19–20',
-        generalTokens: [t('Nonrefundable Credits = '), v('nonref_credits', '∑ Credits (Capped at Tax)', summary.creditsCalc.totalNonRefundableCredits, vars.nonref_credits.isEmpty, true)],
-        pluggedTokens: [t('Nonrefundable Credits = '), v('nonref_credits', formatCurrencyExact(summary.creditsCalc.totalNonRefundableCredits), summary.creditsCalc.totalNonRefundableCredits, vars.nonref_credits.isEmpty, true)],
-        resultFormatted: formatCurrencyExact(summary.creditsCalc.totalNonRefundableCredits)
-      },
-      {
-        id: 'line-ref-credits',
-        label: 'Total Refundable Credits (ACTC / EITC / AOTC)',
-        formLineLabel: 'Form 1040 Line 27–29',
-        generalTokens: [t('Refundable Credits = '), v('ref_credits', 'ACTC + EITC + 40% AOTC', summary.creditsCalc.totalRefundableCredits, vars.ref_credits.isEmpty, true)],
-        pluggedTokens: [t('Refundable Credits = '), v('ref_credits', formatCurrencyExact(summary.creditsCalc.totalRefundableCredits), summary.creditsCalc.totalRefundableCredits, vars.ref_credits.isEmpty, true)],
-        resultFormatted: formatCurrencyExact(summary.creditsCalc.totalRefundableCredits)
-      }
+      ...compileFormulaToLines(nonrefRoot, vars),
+      ...compileFormulaToLines(refRoot, vars)
     ];
 
     blocks.push({
@@ -3531,55 +3701,141 @@ export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculati
       hasImpact: hasAnyCreditsInput,
       lines,
       variables: vars,
-      sourceIds: ['calc-tax-before-credits', 'input-children-count']
+      sourceIds: Array.from(new Set([
+        'calc-tax-before-credits',
+        ...extractSourceIds(nonrefRoot),
+        ...extractSourceIds(refRoot),
+        ...(cr.saversCredit > 0 ? ['auto-fed-savers-credit'] : []),
+        ...(cr.additionalChildTaxCredit > 0 ? ['auto-fed-actc'] : []),
+        ...(cr.eitc > 0 ? ['auto-fed-eitc'] : [])
+      ]))
     });
   }
 
-  // BLOCK 9: Other Taxes (SE Tax, NIIT, Add'l Medicare, AMT, Early Dist)
+  // BLOCK 9: Other Taxes (SE Tax, Form 8959 Add'l Medicare, Form 8960 NIIT, Form 6251 AMT, Form 5329) via FormulaNode Graph
   {
     const ot = summary.otherTaxesCalc;
     const vars: Record<string, CalcVariableBreakdown> = {
       se_tax: makeVar('se_tax', 'Self-Employment Tax (Sched SE)', ot.selfEmploymentTax, [
-        { label: 'Net 1099-NEC × 0.9235 × 15.3%', sign: '+', amount: ot.selfEmploymentTax, amountFormatted: formatCurrencyExact(ot.selfEmploymentTax), isSetUp: ot.selfEmploymentTax > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-nec', panelSection: 'other-income' }
+        { label: 'SE Social Security (12.4%)', sign: '+', amount: ot.seSSPortion ?? 0, amountFormatted: formatCurrencyExact(ot.seSSPortion ?? 0), isSetUp: (ot.seSSPortion ?? 0) > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-nec', panelSection: 'other-income' },
+        { label: 'SE Medicare (2.9%)', sign: '+', amount: ot.seMedPortion ?? 0, amountFormatted: formatCurrencyExact(ot.seMedPortion ?? 0), isSetUp: (ot.seMedPortion ?? 0) > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-nec', panelSection: 'other-income' }
       ], true),
-      niit_addl: makeVar('niit_addl', 'NIIT & Addl Medicare / AMT', ot.niit + ot.additionalMedicareTax + ot.amt + ot.earlyDistributionPenaltyTax, [
-        { label: 'Form 8959 Additional Medicare (0.9%)', sign: '+', amount: ot.additionalMedicareTax, amountFormatted: formatCurrencyExact(ot.additionalMedicareTax), isSetUp: ot.additionalMedicareTax > 0, targetElementId: 'calc-agi' },
-        { label: 'Form 8960 NIIT (3.8%)', sign: '+', amount: ot.niit, amountFormatted: formatCurrencyExact(ot.niit), isSetUp: ot.niit > 0, targetElementId: 'calc-agi' },
-        { label: 'Form 6251 AMT', sign: '+', amount: ot.amt, amountFormatted: formatCurrencyExact(ot.amt), isSetUp: ot.amt > 0, targetElementId: 'calc-agi' },
-        { label: 'Form 5329 10% Early Distribution', sign: '+', amount: ot.earlyDistributionPenaltyTax, amountFormatted: formatCurrencyExact(ot.earlyDistributionPenaltyTax), isSetUp: ot.earlyDistributionPenaltyTax > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-r', panelSection: 'other-income' }
+      addl_med_tax: makeVar('addl_med_tax', 'Additional Medicare Tax (Form 8959)', ot.additionalMedicareTax, [
+        { label: '0.9% on Medicare/SE Wages Over Threshold', sign: '+', amount: ot.additionalMedicareTax, amountFormatted: formatCurrencyExact(ot.additionalMedicareTax), isSetUp: ot.additionalMedicareTax > 0, targetElementId: 'calc-total-w2-wages' }
+      ], true),
+      niit_tax: makeVar('niit_tax', 'Net Investment Income Tax (Form 8960)', ot.niit, [
+        { label: '3.8% on min(NII, MAGI Over Threshold)', sign: '+', amount: ot.niit, amountFormatted: formatCurrencyExact(ot.niit), isSetUp: ot.niit > 0, targetElementId: 'calc-agi' }
+      ], true),
+      amt_tax: makeVar('amt_tax', 'Alternative Minimum Tax (Form 6251)', ot.amt, [
+        { label: 'Excess Tentative Minimum Tax over Regular Tax', sign: '+', amount: ot.amt, amountFormatted: formatCurrencyExact(ot.amt), isSetUp: ot.amt > 0, targetElementId: 'calc-tax-before-credits' }
+      ], true),
+      early_dist_tax: makeVar('early_dist_tax', 'Early Distribution Penalty (Form 5329)', ot.earlyDistributionPenaltyTax, [
+        { label: '10% Penalty on Early 1099-R Distributions', sign: '+', amount: ot.earlyDistributionPenaltyTax, amountFormatted: formatCurrencyExact(ot.earlyDistributionPenaltyTax), isSetUp: ot.earlyDistributionPenaltyTax > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-r', panelSection: 'other-income' }
       ], true)
     };
 
-    const lines: CalcLineItem[] = [
-      {
-        id: 'line-other-taxes',
-        label: 'Total Other Taxes',
-        formLineLabel: 'Form 1040 Line 23',
-        generalTokens: [
-          t('Other Taxes = '),
-          v('se_tax', 'SE Tax', ot.selfEmploymentTax, vars.se_tax.isEmpty, true),
-          t(' + '),
-          v('niit_addl', 'NIIT / Addl Med / AMT / 5329', ot.niit + ot.additionalMedicareTax + ot.amt + ot.earlyDistributionPenaltyTax, vars.niit_addl.isEmpty, true)
-        ],
-        pluggedTokens: [
-          t('Other Taxes = '),
-          v('se_tax', formatCurrencyExact(ot.selfEmploymentTax), ot.selfEmploymentTax, vars.se_tax.isEmpty, true),
-          t(' + '),
-          v('niit_addl', formatCurrencyExact(ot.niit + ot.additionalMedicareTax + ot.amt + ot.earlyDistributionPenaltyTax), ot.niit + ot.additionalMedicareTax + ot.amt + ot.earlyDistributionPenaltyTax, vars.niit_addl.isEmpty, true),
-          t(` = ${formatCurrencyExact(ot.totalOtherTaxes)}`)
-        ],
-        resultFormatted: formatCurrencyExact(ot.totalOtherTaxes)
-      }
-    ];
+    const otherTaxNodes: FormulaNode[] = [];
+
+    if (ot.selfEmploymentTax > 0) {
+      const seEarnings = opNode('line-se-earnings', 'SE Taxable Earnings', 'mul', [
+        inputNode('se-net-c', 'section-federal-other-income', 'Net 1099-NEC Profit', ot.seTaxableEarnings ? Math.round(ot.seTaxableEarnings / 0.9235 * 100) / 100 : 0),
+        constNode('se-factor', '92.35% SE Factor', 0.9235, 'number')
+      ], { value: ot.seTaxableEarnings ?? 0, expandIntermediate: true });
+
+      const seSS = opNode('line-se-ss', 'SE Social Security Tax', 'mul', [
+        seEarnings,
+        constNode('se-ss-rate', '12.4% SS Rate', 0.124, 'percent')
+      ], { value: ot.seSSPortion ?? 0, expandIntermediate: true });
+
+      const seMed = opNode('line-se-med', 'SE Medicare Tax', 'mul', [
+        seEarnings,
+        constNode('se-med-rate', '2.9% Med Rate', 0.029, 'percent')
+      ], { value: ot.seMedPortion ?? 0, expandIntermediate: true });
+
+      otherTaxNodes.push(opNode('line-se-total', 'Schedule SE Tax', 'add', [seSS, seMed], {
+        value: ot.selfEmploymentTax,
+        expandIntermediate: true
+      }));
+    }
+
+    if (ot.additionalMedicareTax > 0) {
+      const excessMed = opNode('line-addl-med-excess', 'Excess Medicare Wages', 'max', [
+        constNode('zero-med', '$0', 0),
+        opNode('addl-med-diff', 'Wages − Threshold', 'sub', [
+          inputNode('med-wages', 'calc-total-w2-wages', 'Medicare + SE Wages', ot.combinedMedAndSeWages ?? 0),
+          constNode('med-thresh', 'Addl Medicare Threshold', ot.addMedThreshold ?? 200000)
+        ])
+      ], { value: ot.excessMedWages ?? 0, expandIntermediate: true });
+
+      otherTaxNodes.push(opNode('line-addl-med-tax', 'Form 8959 Additional Medicare Tax', 'mul', [
+        excessMed,
+        constNode('addl-med-rate', '0.9% Rate', 0.009, 'percent')
+      ], { value: ot.additionalMedicareTax, expandIntermediate: true }));
+    }
+
+    if (ot.niit > 0) {
+      const magiExcess = opNode('line-niit-magi-excess', 'MAGI Over NIIT Threshold', 'max', [
+        constNode('zero-niit', '$0', 0),
+        opNode('niit-diff', 'AGI − Threshold', 'sub', [
+          inputNode('niit-agi', 'calc-agi', 'AGI', summary.agiCalc.result),
+          constNode('niit-thresh', 'NIIT Threshold', ot.niitThreshold ?? 200000)
+        ])
+      ], { value: ot.magiExcessOverNiit ?? 0, expandIntermediate: true });
+
+      const niitBase = opNode('line-niit-base', 'NIIT Taxable Base', 'min', [
+        inputNode('niit-nii', 'calc-agi', 'Net Investment Income', ot.netInvestmentIncome),
+        magiExcess
+      ], { expandIntermediate: true });
+
+      otherTaxNodes.push(opNode('line-niit-tax', 'Form 8960 NIIT', 'mul', [
+        niitBase,
+        constNode('niit-rate', '3.8% NIIT Rate', 0.038, 'percent')
+      ], { value: ot.niit, expandIntermediate: true }));
+    }
+
+    if (ot.amt > 0) {
+      const amtiNode = opNode('line-amt-amti', 'AMTI (Form 6251)', 'sub', [
+        inputNode('amt-agi', 'calc-agi', 'AGI', summary.agiCalc.result),
+        constNode('amt-ded', 'AMT-Allowed Deductions + QBI', (ot.amtAllowedDeductions ?? 0) + summary.qbiDeduction)
+      ], { value: ot.amti ?? 0, expandIntermediate: true });
+
+      const tmtNode = opNode('line-amt-tmt', 'Tentative Minimum Tax', 'sub', [
+        amtiNode,
+        constNode('amt-exemp', 'AMT Exemption', ot.amtExemption ?? 0)
+      ], { value: ot.tentativeMinimumTax ?? 0, expandIntermediate: true });
+
+      otherTaxNodes.push(opNode('line-amt-tax', 'Form 6251 AMT', 'max', [
+        constNode('zero-amt', '$0', 0),
+        opNode('amt-net', 'TMT − Regular Tax', 'sub', [
+          tmtNode,
+          inputNode('amt-reg-tax', 'calc-tax-before-credits', 'Line 16 Regular Tax', summary.taxBeforeCreditsCalc.result)
+        ])
+      ], { value: ot.amt, expandIntermediate: true }));
+    }
+
+    if (ot.earlyDistributionPenaltyTax > 0) {
+      otherTaxNodes.push(opNode('line-early-dist-tax', 'Form 5329 Early Distribution Penalty', 'mul', [
+        inputNode('early-dist-amt', 'section-federal-other-income', 'Early 1099-R Distribution', ot.earlyDist1099RTotal ?? 0),
+        constNode('early-dist-rate', '10% Penalty Rate', 0.10, 'percent')
+      ], { value: ot.earlyDistributionPenaltyTax, expandIntermediate: true }));
+    }
+
+    const otherTaxesRoot = opNode(
+      'line-other-taxes',
+      'Other Taxes',
+      'add',
+      otherTaxNodes.length > 0 ? otherTaxNodes : [constNode('other-zero', '$0 Other Taxes', 0)],
+      { value: ot.totalOtherTaxes, formLineLabel: 'Form 1040 Line 23' }
+    );
 
     blocks.push({
       id: 'calc-other-taxes',
       stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes',
       title: 'Self-Employment Tax, NIIT & Other Taxes',
       hasImpact: hasAnyOtherTaxes,
-      lines,
+      lines: compileFormulaToLines(otherTaxesRoot, vars),
       variables: vars,
-      sourceIds: ['calc-agi', 'calc-total-w2-wages']
+      sourceIds: Array.from(new Set(['calc-agi', 'calc-total-w2-wages', ...extractSourceIds(otherTaxesRoot)]))
     });
   }
 
@@ -3703,7 +3959,9 @@ export function buildStateCalcBlock(sr: StateReturnCalculation, allStateReturns:
       { label: `${sr.state} Wages & Sourced Income`, sign: '+', amount: sr.stateWages, amountFormatted: formatCurrencyExact(sr.stateWages), isSetUp: sr.stateWages > 0, targetElementId: `state-group-${stateKey}` }
     ]),
     state_ded: makeVar('state_ded', `${sr.state} Deduction`, sr.stateStandardDeduction, [
-      { label: `${sr.state} Standard / Itemized Deduction`, sign: '+', amount: sr.stateStandardDeduction, amountFormatted: formatCurrencyExact(sr.stateStandardDeduction), isSetUp: sr.stateStandardDeduction > 0, targetElementId: `state-${stateKey}-itemized` }
+      { label: `${sr.state} Standard Deduction`, sign: '+', amount: sr.baseStdDeduction ?? sr.stateStandardDeduction, amountFormatted: formatCurrencyExact(sr.baseStdDeduction ?? sr.stateStandardDeduction), isSetUp: (sr.baseStdDeduction ?? sr.stateStandardDeduction) > 0, targetElementId: `auto-state-${stateKey}-std-ded` },
+      ...(sr.stateItemizedUsed ? [{ label: `${sr.state} Itemized Deduction (Carryover)`, sign: 'info' as const, amount: sr.stateItemizedAmount ?? 0, amountFormatted: formatCurrencyExact(sr.stateItemizedAmount ?? 0), isSetUp: (sr.stateItemizedAmount ?? 0) > 0, targetElementId: `auto-state-${stateKey}-itemized` }] : []),
+      ...((sr.statePanelItemized ?? 0) > 0 ? [{ label: `${sr.state} Additional Itemized Panels`, sign: '+' as const, amount: sr.statePanelItemized ?? 0, amountFormatted: formatCurrencyExact(sr.statePanelItemized ?? 0), isSetUp: true, targetElementId: `state-${stateKey}-itemized` }] : [])
     ]),
     ostc_credit: makeVar(
       'ostc_credit',
@@ -3715,7 +3973,7 @@ export function buildStateCalcBlock(sr: StateReturnCalculation, allStateReturns:
         amount: c.creditAllowed,
         amountFormatted: formatCurrencyExact(c.creditAllowed),
         isSetUp: c.creditAllowed > 0,
-        targetElementId: `calc-state-${c.fromState.toLowerCase()}-card`
+        targetElementId: `auto-state-${stateKey}-ostc-${c.fromState.toLowerCase()}`
       })),
       true
     ),
@@ -3745,39 +4003,99 @@ export function buildStateCalcBlock(sr: StateReturnCalculation, allStateReturns:
       resultFormatted: `+${formatCurrencyExact(sr.netOutcome)}`
     });
   } else {
-    // 1. State Taxable Income
-    lines.push({
-      id: `line-state-${stateKey}-taxable`,
-      label: `${sr.state} Taxable Income`,
-      formLineLabel: null,
-      generalTokens: [
-        t(`${sr.state} Taxable Income = max(0, `),
-        v('state_wages', `${sr.state} Income`, sr.stateWages, vars.state_wages.isEmpty),
-        t(' − '),
-        v('state_ded', `${sr.state} Deduction`, sr.stateStandardDeduction, vars.state_ded.isEmpty),
-        t(')')
-      ],
-      pluggedTokens: [
-        t(`${sr.state} Taxable Income = max(0, `),
-        v('state_wages', formatCurrencyExact(sr.stateWages), sr.stateWages, vars.state_wages.isEmpty),
-        t(' − '),
-        v('state_ded', formatCurrencyExact(sr.stateStandardDeduction), sr.stateStandardDeduction, vars.state_ded.isEmpty),
-        t(`) = ${formatCurrencyExact(sr.stateTaxableIncome)}`)
-      ],
-      resultFormatted: formatCurrencyExact(sr.stateTaxableIncome)
+    // 1. State Income Modifications (if any)
+    (sr.modifications || []).forEach((mod, mIdx) => {
+      const sign = mod.amount >= 0 ? '+' : '−';
+      lines.push({
+        id: `line-state-${stateKey}-mod-${mIdx}`,
+        label: mod.label,
+        formLineLabel: null,
+        generalTokens: [t(`${mod.label} = ${sign}${mod.amount >= 0 ? 'Add-Back' : 'Subtraction'} to ${sr.state} Income`)],
+        pluggedTokens: [t(`${mod.label} = ${sign}${formatCurrencyExact(Math.abs(mod.amount))}`)],
+        resultFormatted: formatCurrencyExact(mod.amount)
+      });
     });
 
-    // 2. Tentative State Tax (Before Credits)
-    lines.push({
-      id: `line-state-${stateKey}-tentative`,
-      label: `Tentative ${sr.state} State Tax`,
-      formLineLabel: null,
-      generalTokens: [t(`Tentative ${sr.state} Tax = ${sr.state} Taxable Income × ${sr.state} Tax Brackets`)],
-      pluggedTokens: [t(`Tentative ${sr.state} Tax = ${formatCurrencyExact(sr.stateTaxableIncome)} × ${sr.state} Rates = ${formatCurrencyExact(sr.stateTaxBeforeCredit)}`)],
-      resultFormatted: formatCurrencyExact(sr.stateTaxBeforeCredit)
-    });
+    // 2. State Deduction Selection (when State Itemized vs Standard comparison applies or extra panels exist)
+    const baseDed = sr.baseStdDeduction ?? sr.stateStandardDeduction;
+    if ((sr.stateItemizedAmount ?? 0) > 0 || (sr.statePanelItemized ?? 0) > 0) {
+      const dedNode = opNode(`line-state-${stateKey}-ded-calc`, `${sr.state} Deduction`, 'add', [
+        (sr.stateItemizedAmount ?? 0) > 0
+          ? opNode(`line-state-${stateKey}-ded-choice`, `max(${sr.state} Standard, ${sr.state} Itemized)`, 'max', [
+              inputNode(`st-std-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Standard`, baseDed),
+              inputNode(`st-itm-${stateKey}`, `auto-state-${stateKey}-itemized`, `${sr.state} Itemized`, sr.stateItemizedAmount ?? 0)
+            ])
+          : inputNode(`st-std-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Standard`, baseDed),
+        ...((sr.statePanelItemized ?? 0) > 0 ? [inputNode(`st-sp-itm-${stateKey}`, `state-${stateKey}-itemized`, `${sr.state} Extra Itemized`, sr.statePanelItemized ?? 0)] : [])
+      ], { value: sr.stateStandardDeduction, formLineLabel: null });
+      lines.push(...compileFormulaToLines(dedNode, vars));
+    }
 
-    // 3. Intermediate OSTC lines (one per credited state)
+    // 3. State Taxable Income
+    const taxableNode = opNode(`line-state-${stateKey}-taxable`, `${sr.state} Taxable Income`, 'max', [
+      constNode(`st-zero-${stateKey}`, '$0', 0),
+      opNode(`st-taxable-diff-${stateKey}`, `${sr.state} Income − Deduction`, 'sub', [
+        inputNode(`st-inc-${stateKey}`, `state-group-${stateKey}`, `${sr.state} Income`, sr.stateWages + (sr.statePanelOtherIncome ?? 0) - (sr.statePanelAdjustments ?? 0), { varId: 'state_wages' }),
+        inputNode(`st-ded-${stateKey}`, `auto-state-${stateKey}-std-ded`, `${sr.state} Deduction`, sr.stateStandardDeduction, { varId: 'state_ded' })
+      ])
+    ], { value: sr.stateTaxableIncome, formLineLabel: null });
+    lines.push(...compileFormulaToLines(taxableNode, vars));
+
+    // 4. State Tax Brackets Waterfall OR Flat Rate
+    const incRef = inputNode(`st-taxable-ref-${stateKey}`, blockId, `${sr.state} Taxable Income`, sr.stateTaxableIncome);
+    if (!sr.isFlat && sr.brackets && sr.brackets.length > 0 && sr.stateTaxableIncome > 0) {
+      const slices: BracketSliceNode[] = sr.brackets.map(b => ({
+        index: b.bracketIndex,
+        rate: b.rate,
+        ratePercent: b.ratePercent,
+        range: b.range,
+        bracketWidth: b.bracketWidth ?? Infinity,
+        taxableAmount: b.taxableAmount,
+        taxAmount: b.taxAmount,
+        remainingBefore: b.remainingBefore ?? 0,
+        remainingAfter: b.remainingAfter ?? 0
+      }));
+      const bNode = bracketsNode(
+        `line-state-${stateKey}-tentative`,
+        `Tentative ${sr.state} Tax`,
+        incRef,
+        slices,
+        Math.round((sr.stateTaxBeforeCredit - (sr.surchargeAmount ?? 0) + (sr.stateCreditAmount ?? 0)) * 100) / 100,
+        { formLineLabel: null }
+      );
+      lines.push(...compileFormulaToLines(bNode, vars));
+    } else {
+      const flatRate = sr.flatRate ?? 0;
+      const flatNode = opNode(`line-state-${stateKey}-tentative`, `Tentative ${sr.state} Tax`, 'mul', [
+        incRef,
+        constNode(`st-flat-${stateKey}`, `${sr.state} Flat Rate`, flatRate, 'percent')
+      ], { value: sr.stateTaxBeforeCredit, formLineLabel: null });
+      lines.push(...compileFormulaToLines(flatNode, vars));
+    }
+
+    // 5. State Surcharges / Built-in Credits (MA STCG, CA 1% MH, IL 5% Prop)
+    if ((sr.surchargeAmount ?? 0) > 0 && sr.surchargeLabel) {
+      lines.push({
+        id: `line-state-${stateKey}-surcharge`,
+        label: sr.surchargeLabel,
+        formLineLabel: null,
+        generalTokens: [t(`${sr.surchargeLabel} = Additional State Surtax`)],
+        pluggedTokens: [t(`${sr.surchargeLabel} = +${formatCurrencyExact(sr.surchargeAmount ?? 0)}`)],
+        resultFormatted: formatCurrencyExact(sr.surchargeAmount ?? 0)
+      });
+    }
+    if ((sr.stateCreditAmount ?? 0) > 0 && sr.stateCreditLabel) {
+      lines.push({
+        id: `line-state-${stateKey}-builtin-cred`,
+        label: sr.stateCreditLabel,
+        formLineLabel: null,
+        generalTokens: [t(`${sr.stateCreditLabel} = Statutory State Credit`)],
+        pluggedTokens: [t(`${sr.stateCreditLabel} = −${formatCurrencyExact(sr.stateCreditAmount ?? 0)}`)],
+        resultFormatted: formatCurrencyExact(-(sr.stateCreditAmount ?? 0))
+      });
+    }
+
+    // 6. Intermediate OSTC lines (one per credited state)
     sr.creditedStates.forEach(c => {
       const nrWages = allStateReturns.find(r => r.state === c.fromState)?.stateWages ?? 0;
       lines.push({
@@ -3789,47 +4107,73 @@ export function buildStateCalcBlock(sr: StateReturnCalculation, allStateReturns:
         ],
         pluggedTokens: [
           t(`OSTC (${c.fromState}) = min(${formatCurrencyExact(c.sourceTaxPaid)}, ${formatCurrencyExact(sr.stateTaxBeforeCredit)} × (${formatCurrencyExact(nrWages)} ÷ ${formatCurrencyExact(sr.stateWages)}) = ${formatCurrencyExact(c.homeAttributableTax)}) = `),
-          v('ostc_credit', formatCurrencyExact(c.creditAllowed), c.creditAllowed, false, true)
+          v('ostc_credit', formatCurrencyExact(c.creditAllowed), c.creditAllowed, false)
         ],
         resultFormatted: formatCurrencyExact(c.creditAllowed)
       });
     });
 
-    // 4. Local / Municipal Tax if applicable
+    // 7. Local / Municipal Tax Breakdown (NYC Brackets / Yonkers / MD County / Box 19)
     if (sr.localTaxLiability > 0) {
-      lines.push({
-        id: `line-state-${stateKey}-local`,
-        label: `${sr.stateName} Local / Municipal Tax`,
-        formLineLabel: null,
-        generalTokens: [t(`Local Tax = ${sr.state} Taxable Income × Local Rate`)],
-        pluggedTokens: [t(`Local Tax = ${formatCurrencyExact(sr.localTaxLiability)}`)],
-        resultFormatted: formatCurrencyExact(sr.localTaxLiability)
-      });
+      if (sr.localBrackets && sr.localBrackets.length > 0) {
+        const localSlices: BracketSliceNode[] = sr.localBrackets.map(b => ({
+          index: b.bracketIndex,
+          rate: b.rate,
+          ratePercent: b.ratePercent,
+          range: b.range,
+          bracketWidth: b.bracketWidth ?? Infinity,
+          taxableAmount: b.taxableAmount,
+          taxAmount: b.taxAmount,
+          remainingBefore: b.remainingBefore ?? 0,
+          remainingAfter: b.remainingAfter ?? 0
+        }));
+        const localNode = bracketsNode(
+          `line-state-${stateKey}-local`,
+          sr.localRuleLabel || `${sr.stateName} Local Tax`,
+          incRef,
+          localSlices,
+          sr.localTaxLiability,
+          { formLineLabel: null }
+        );
+        lines.push(...compileFormulaToLines(localNode, vars));
+      } else {
+        lines.push({
+          id: `line-state-${stateKey}-local`,
+          label: sr.localRuleLabel || `${sr.stateName} Local / Municipal Tax`,
+          formLineLabel: null,
+          generalTokens: [t(`Local Tax = ${sr.localRuleLabel || `${sr.state} Taxable Income × Local Rate`}`)],
+          pluggedTokens: [t(`Local Tax = ${formatCurrencyExact(sr.localTaxLiability)}`)],
+          resultFormatted: formatCurrencyExact(sr.localTaxLiability)
+        });
+      }
     }
 
-    // 5. Total State (& Local) Tax Liability
+    // 8. Total State (& Local) Tax Liability
     const hasOstc = sr.creditForOtherStates > 0;
     const hasLocal = sr.localTaxLiability > 0;
+    const hasExtraCred = (sr.statePanelCredits ?? 0) > 0;
     lines.push({
       id: `line-state-${stateKey}-liability`,
       label: `Total ${sr.state} Tax Liability`,
       formLineLabel: null,
       generalTokens: [
         t(`Total ${sr.state} Tax = max(0, Tentative Tax`),
-        ...(hasOstc ? [t(' − '), v('ostc_credit', 'OSTC Credit', sr.creditForOtherStates, false, true)] : []),
+        ...(hasOstc ? [t(' − '), v('ostc_credit', 'OSTC Credit', sr.creditForOtherStates, false)] : []),
+        ...(hasExtraCred ? [t(` − ${sr.state} Credits`)] : []),
         t(')'),
         ...(hasLocal ? [t(' + Local Tax')] : [])
       ],
       pluggedTokens: [
         t(`Total ${sr.state} Tax = ${formatCurrencyExact(sr.stateTaxBeforeCredit)}`),
-        ...(hasOstc ? [t(' − '), v('ostc_credit', formatCurrencyExact(sr.creditForOtherStates), sr.creditForOtherStates, false, true)] : []),
+        ...(hasOstc ? [t(' − '), v('ostc_credit', formatCurrencyExact(sr.creditForOtherStates), sr.creditForOtherStates, false)] : []),
+        ...(hasExtraCred ? [t(` − ${formatCurrencyExact(sr.statePanelCredits ?? 0)}`)] : []),
         ...(hasLocal ? [t(` + ${formatCurrencyExact(sr.localTaxLiability)}`)] : []),
         t(` = ${formatCurrencyExact(sr.stateTaxLiability)}`)
       ],
       resultFormatted: formatCurrencyExact(sr.stateTaxLiability)
     });
 
-    // 6. Final Net Outcome (Refund / Owed)
+    // 9. Final Net Outcome (Refund / Owed)
     lines.push({
       id: `line-state-${stateKey}-outcome`,
       label: sr.isRefund ? `${sr.state} Refund` : `${sr.state} Balance Owed`,
@@ -3856,8 +4200,224 @@ export function buildStateCalcBlock(sr: StateReturnCalculation, allStateReturns:
     isOutput: true,
     lines,
     variables: vars,
-    sourceIds: sr.creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-card`)
+    sourceIds: Array.from(new Set([
+      ...sr.creditedStates.map(c => `calc-state-${c.fromState.toLowerCase()}-card`),
+      ...sr.creditedStates.map(c => `auto-state-${stateKey}-ostc-${c.fromState.toLowerCase()}`),
+      ...(sr.baseStdDeduction ? [`auto-state-${stateKey}-std-ded`] : []),
+      ...(sr.stateItemizedUsed ? [`auto-state-${stateKey}-itemized`] : [])
+    ]))
   };
 }
+
+/**
+ * Generates system-derived (read-only) panels for credits, adjustments, and deductions
+ * that are automatically applied by the tax engine without requiring manual user entry.
+ */
+export function buildAutoPanels(
+  state: TaxAppState,
+  summary: TaxCalculationSummary
+): { federal: AutoPanelItem[]; byState: Record<string, AutoPanelItem[]> } {
+  const federal: AutoPanelItem[] = [];
+  const byState: Record<string, AutoPanelItem[]> = {};
+  const year = state.year || 2024;
+  const status = normalizeFilingStatus(state.filingStatus || 'single');
+
+  // 1. Federal Standard Deduction (always present & applied when Standard > Itemized or method === 'standard')
+  const stdAmt = summary.itemizedCalc.standardDeductionAmount;
+  const age65Count = Math.max(0, Math.min(4, parseInt(String(state.dependents?.age65OrBlindCount), 10) || 0));
+  federal.push({
+    id: 'auto-fed-std-deduction',
+    section: 'itemized',
+    title: 'Federal Standard Deduction',
+    officialTitle: `Form 1040 Line 12 (${year} ${status.replace('_', ' ').toUpperCase()})`,
+    amount: stdAmt,
+    formulaSummary: age65Count > 0 ? `Base Standard + ${age65Count} × Age 65+/Blind Add-on` : 'Statutory Filing Status Standard Deduction',
+    shortExplanation: 'Automatically granted based on your filing status and tax year unless your Schedule A itemized deductions exceed it.',
+    sourceIds: ['select-filing-status', 'select-tax-year'],
+    badgeLabel: summary.itemizedCalc.chosenMethod === 'standard' ? 'Applied (Optimal)' : 'Compared'
+  });
+
+  // 2. ½ Self-Employment Tax Deduction (Schedule 1 Line 15)
+  if (summary.otherTaxesCalc.halfSelfEmploymentTaxDeduction > 0) {
+    federal.push({
+      id: 'auto-fed-half-se',
+      section: 'adjustments',
+      title: '½ Self-Employment Tax Deduction',
+      officialTitle: 'Schedule 1 Line 15 • Deductible Part of SE Tax',
+      amount: summary.otherTaxesCalc.halfSelfEmploymentTaxDeduction,
+      formulaSummary: `50% × ${formatCurrencyExact(summary.otherTaxesCalc.selfEmploymentTax)} (Schedule SE Tax)`,
+      shortExplanation: 'Automatically deducts half of your self-employment tax from Gross Income when computing AGI.',
+      sourceIds: ['section-federal-other-income'],
+      badgeLabel: 'Auto-Calculated'
+    });
+  }
+
+  // 3. 20% Qualified Business Income (QBI) Deduction (Form 8995)
+  if (summary.qbiDeduction > 0) {
+    federal.push({
+      id: 'auto-fed-qbi',
+      section: 'itemized',
+      title: '20% QBI Deduction',
+      officialTitle: 'Form 8995 • Form 1040 Line 13',
+      amount: summary.qbiDeduction,
+      formulaSummary: 'min(20% × Qualified Business Income, 20% × Ordinary Taxable Income)',
+      shortExplanation: 'Automatically deducts up to 20% of qualified Schedule C / Schedule K-1 business income.',
+      sourceIds: ['section-federal-other-income', 'calc-agi'],
+      badgeLabel: 'Auto-Calculated'
+    });
+  }
+
+  // 4. Saver's Credit (Form 8880)
+  if (summary.creditsCalc.saversCredit > 0) {
+    federal.push({
+      id: 'auto-fed-savers-credit',
+      section: 'credits',
+      title: "Saver's Credit",
+      officialTitle: 'Form 8880 • Retirement Savings Contributions Credit',
+      amount: summary.creditsCalc.saversCredit,
+      formulaSummary: '10% / 20% / 50% × Eligible IRA Contribution (based on AGI)',
+      shortExplanation: 'Automatically triggered by your Traditional IRA contribution and AGI eligibility.',
+      sourceIds: ['input-adj-ira', 'calc-agi'],
+      badgeLabel: 'Auto-Calculated'
+    });
+  }
+
+  // 5. Additional Child Tax Credit (Schedule 8812)
+  if (summary.creditsCalc.additionalChildTaxCredit > 0) {
+    federal.push({
+      id: 'auto-fed-actc',
+      section: 'credits',
+      title: 'Additional Child Tax Credit (Refundable)',
+      officialTitle: 'Schedule 8812 • Form 1040 Line 28',
+      amount: summary.creditsCalc.additionalChildTaxCredit,
+      formulaSummary: 'min(Unused CTC, Kids × $1,700, 15% × max(0, Earned Income − $2,500))',
+      shortExplanation: 'Automatically refunds unused Child Tax Credit based on earned income above $2,500.',
+      sourceIds: ['input-children-count', 'calc-total-w2-wages'],
+      badgeLabel: 'Refundable • Auto'
+    });
+  }
+
+  // 6. Earned Income Tax Credit (EITC)
+  if (summary.creditsCalc.eitc > 0) {
+    federal.push({
+      id: 'auto-fed-eitc',
+      section: 'credits',
+      title: 'Earned Income Tax Credit (EITC)',
+      officialTitle: 'Schedule EIC • Form 1040 Line 27',
+      amount: summary.creditsCalc.eitc,
+      formulaSummary: 'Phase-In / Phase-Out Curve by Earned Income, AGI & Qualifying Children',
+      shortExplanation: 'Automatically calculated refundable credit for low-to-moderate earned income.',
+      sourceIds: ['calc-total-w2-wages', 'calc-agi'],
+      badgeLabel: 'Refundable • Auto'
+    });
+  }
+
+  // 7. Excess Social Security Tax Credit (Schedule 3 Line 11)
+  if (summary.ficaCalc.excessSSTaxCredit > 0) {
+    federal.push({
+      id: 'auto-fed-excess-ss',
+      section: 'credits',
+      title: 'Excess Social Security Tax Credit',
+      officialTitle: 'Schedule 3 Line 11 • Multi-Employer Over-Withholding',
+      amount: summary.ficaCalc.excessSSTaxCredit,
+      formulaSummary: 'Total W-2 Box 4 SS Withheld − Annual SS Tax Cap',
+      shortExplanation: 'Automatically credits excess Social Security tax withheld across 2+ employers.',
+      sourceIds: ['calc-total-w2-wages'],
+      badgeLabel: 'Refundable • Auto'
+    });
+  }
+
+  // State Automatic Panels
+  (summary.stateReturnsCalc || []).forEach(sr => {
+    const code = sr.state.toUpperCase();
+    const key = code.toLowerCase();
+    const list: AutoPanelItem[] = [];
+
+    // State Standard Deduction
+    if ((sr.baseStdDeduction ?? 0) > 0) {
+      list.push({
+        id: `auto-state-${key}-std-ded`,
+        section: 'itemized',
+        state: code,
+        title: `${code} Standard Deduction`,
+        officialTitle: `${sr.formName} Standard Deduction`,
+        amount: sr.baseStdDeduction ?? 0,
+        formulaSummary: `Statutory ${code} Standard Deduction (${status.replace('_', ' ').toUpperCase()})`,
+        shortExplanation: `Automatically applied ${code} standard deduction unless ${code} itemized deductions are higher.`,
+        sourceIds: ['select-filing-status'],
+        badgeLabel: sr.stateItemizedUsed ? 'Compared' : 'Applied'
+      });
+    }
+
+    // State Itemized Carryover
+    if ((sr.stateItemizedAmount ?? 0) > 0) {
+      list.push({
+        id: `auto-state-${key}-itemized`,
+        section: 'itemized',
+        state: code,
+        title: `${code} Itemized Deduction (Carryover)`,
+        officialTitle: `${sr.formName} Itemized Schedule`,
+        amount: sr.stateItemizedAmount ?? 0,
+        formulaSummary: 'Allowable Medical + min($10k, Property Tax) + Mortgage + Charity',
+        shortExplanation: `Derived automatically from your Federal Schedule A deductions for ${code}.`,
+        sourceIds: ['calc-itemized-deductions'],
+        badgeLabel: sr.stateItemizedUsed ? 'Applied (Optimal)' : 'Compared'
+      });
+    }
+
+    // State Income Modifications
+    (sr.modifications || []).forEach((mod, idx) => {
+      list.push({
+        id: mod.sourceId || `auto-state-${key}-mod-${idx}`,
+        section: mod.amount >= 0 ? 'other-income' : 'adjustments',
+        state: code,
+        title: mod.label,
+        officialTitle: `${code} Statutory Modification`,
+        amount: Math.abs(mod.amount),
+        formulaSummary: mod.amount >= 0 ? `Add-Back to ${code} Taxable Income` : `Subtraction from ${code} Taxable Income`,
+        shortExplanation: `Automatically applied by ${code} tax conformity rules.`,
+        sourceIds: ['calc-agi'],
+        badgeLabel: 'Auto-Calculated'
+      });
+    });
+
+    // Other State Tax Credit (OSTC) — one panel per credited source state
+    sr.creditedStates.forEach(c => {
+      list.push({
+        id: `auto-state-${key}-ostc-${c.fromState.toLowerCase()}`,
+        section: 'credits',
+        state: code,
+        title: `Other State Tax Credit (${c.fromState} → ${code})`,
+        officialTitle: `${code} Resident Credit for Taxes Paid to ${c.fromState}`,
+        amount: c.creditAllowed,
+        formulaSummary: `min(${formatCurrencyExact(c.sourceTaxPaid)} ${c.fromState} Tax, ${formatCurrencyExact(c.homeAttributableTax)} ${code} Attributable)`,
+        shortExplanation: `Automatically shields you from double state taxation on wages taxed by both ${c.fromState} and ${code}.`,
+        sourceIds: [`calc-state-${c.fromState.toLowerCase()}-card`],
+        badgeLabel: 'OSTC Shield • Auto'
+      });
+    });
+
+    // IL 5% Property Tax Credit
+    if ((sr.stateCreditAmount ?? 0) > 0 && sr.stateCreditLabel) {
+      list.push({
+        id: `auto-state-${key}-builtin-credit`,
+        section: 'credits',
+        state: code,
+        title: sr.stateCreditLabel,
+        officialTitle: `${code} Statutory Credit`,
+        amount: sr.stateCreditAmount ?? 0,
+        formulaSummary: '5% × Real Estate Property Tax Paid',
+        shortExplanation: `Automatically applied ${code} property tax credit from your Schedule A property taxes.`,
+        sourceIds: ['input-itemized-salt'],
+        badgeLabel: 'Auto-Calculated'
+      });
+    }
+
+    byState[code] = list;
+  });
+
+  return { federal, byState };
+}
+
 
 

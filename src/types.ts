@@ -254,6 +254,19 @@ export interface OtherTaxesCalculation extends CalculationResult {
   earlyDistributionPenaltyTax: number; // Form 5329 10% early withdrawal penalty
   netInvestmentIncome: number;
   totalOtherTaxes: number;
+  seTaxableEarnings?: number;
+  seSSPortion?: number;
+  seMedPortion?: number;
+  combinedMedAndSeWages?: number;
+  addMedThreshold?: number;
+  excessMedWages?: number;
+  niitThreshold?: number;
+  magiExcessOverNiit?: number;
+  amti?: number;
+  amtAllowedDeductions?: number;
+  amtExemption?: number;
+  tentativeMinimumTax?: number;
+  earlyDist1099RTotal?: number;
 }
 
 export interface EffectiveRateCalculation {
@@ -285,6 +298,12 @@ export interface StateOtherStateCredit {
   creditAllowed: number;
 }
 
+export interface StateModificationItem {
+  label: string;
+  amount: number;
+  sourceId: string;
+}
+
 export interface StateReturnCalculation extends CalculationResult {
   state: string;
   stateName: string;
@@ -306,6 +325,23 @@ export interface StateReturnCalculation extends CalculationResult {
   netOutcome: number; // withholding - liability (+ refund, - owed)
   isRefund: boolean;
   notes?: string[];
+  isFlat?: boolean;
+  flatRate?: number;
+  brackets?: BracketDetail[];
+  localBrackets?: BracketDetail[];
+  localRuleLabel?: string;
+  modifications?: StateModificationItem[];
+  baseStdDeduction?: number;
+  stateItemizedAmount?: number;
+  stateItemizedUsed?: boolean;
+  statePanelOtherIncome?: number;
+  statePanelAdjustments?: number;
+  statePanelItemized?: number;
+  statePanelCredits?: number;
+  surchargeAmount?: number;
+  surchargeLabel?: string;
+  stateCreditAmount?: number;
+  stateCreditLabel?: string;
 }
 
 export interface UnifiedTaxJurisdictionLine {
@@ -499,4 +535,18 @@ export interface CalcBlockDefinition {
   variables: Record<string, CalcVariableBreakdown>;
   sourceIds: string[];
 }
+
+export interface AutoPanelItem {
+  id: string;
+  section: PanelSectionCategory;
+  state?: string;
+  title: string;
+  officialTitle: string;
+  amount: number;
+  formulaSummary: string;
+  shortExplanation: string;
+  sourceIds: string[];
+  badgeLabel: string;
+}
+
 

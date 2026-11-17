@@ -1,7 +1,7 @@
 /**
  * Actually Free Taxes - Main Application Controller (TypeScript)
  */
-import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlock, formatCurrency, formatCurrencyExact } from './tax-engine.js';
+import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlock, buildAutoPanels, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
 import { renderRatingPill, renderRatingCardHtml, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
 import { PANEL_CATALOG, getPanelCatalogEntry } from './panel-catalog.js';
@@ -330,6 +330,7 @@ class TaxApp {
         this.draftsStore = this.loadDraftsStore();
         this.currentCalcBlocks = [];
         this.currentStateCalcBlocks = [];
+        this.currentAutoPanels = { federal: [], byState: {} };
         this.welcomeTimerId = null;
         this.welcomeSecondsLeft = 5;
         this.init();
@@ -3661,6 +3662,33 @@ class TaxApp {
                 label: `${sr.state} Return to Final Summary`
             });
         });
+        // 16. Automatic Panels & State CalcBlock sourceIds
+        const allAutoPanels = [
+            ...this.currentAutoPanels.federal,
+            ...Object.values(this.currentAutoPanels.byState).flat()
+        ];
+        allAutoPanels.forEach(ap => {
+            (ap.sourceIds || []).forEach(srcId => {
+                connections.push({
+                    id: `conn-auto-${srcId}-to-${ap.id}`,
+                    sourceId: srcId,
+                    targetId: ap.id,
+                    category: ap.state ? 'state' : (ap.section === 'credits' ? 'credits' : 'adjustments'),
+                    label: `${srcId} to ${ap.title}`
+                });
+            });
+        });
+        this.currentStateCalcBlocks.forEach(sb => {
+            (sb.sourceIds || []).forEach(srcId => {
+                connections.push({
+                    id: `conn-stblock-${srcId}-to-${sb.id}`,
+                    sourceId: srcId,
+                    targetId: sb.id,
+                    category: srcId.includes('ostc') ? 'state_credit' : 'state',
+                    label: `${srcId} to ${sb.title}`
+                });
+            });
+        });
         const seenPairs = new Set();
         return connections.filter(conn => {
             const key = `${conn.sourceId}-->${conn.targetId}`;
@@ -3672,6 +3700,8 @@ class TaxApp {
     }
     recalculateAndRender() {
         const taxData = calculateTaxes(this.state);
+        this.currentAutoPanels = buildAutoPanels(this.state, taxData);
+        this.renderFederalAutoPanels();
         this.renderCalculationBlocks(taxData);
         this.renderTaxBrackets(taxData.taxBeforeCreditsCalc.brackets);
         const bracketsCard = document.getElementById('calc-tax-brackets-card');
@@ -4603,6 +4633,43 @@ class TaxApp {
             codes.add(propState.toUpperCase());
         return Array.from(codes);
     }
+    renderAutoPanelCardHtml(item) {
+        return `
+      <div class="tax-panel panel-size-medium auto-panel-card" id="${item.id}" data-auto-panel="true">
+        <div class="panel-top-row">
+          <h3 class="panel-title">${item.title}</h3>
+          <div class="panel-top-actions">
+            <span class="auto-panel-badge">${item.badgeLabel}</span>
+          </div>
+        </div>
+        <div class="panel-official-title">${item.officialTitle}</div>
+        <div class="auto-panel-amount-display">${formatCurrencyExact(item.amount)}</div>
+        <div class="auto-panel-formula">${item.formulaSummary}</div>
+        <div class="panel-short-desc">${item.shortExplanation}</div>
+      </div>
+    `;
+    }
+    renderFederalAutoPanels() {
+        const sections = ['other-income', 'adjustments', 'credits', 'itemized'];
+        sections.forEach(sec => {
+            const secEl = document.getElementById(`section-federal-${sec}`);
+            const grid = secEl?.querySelector('.panels-grid');
+            if (!grid)
+                return;
+            grid.querySelectorAll('.auto-panel-card').forEach(el => el.remove());
+            const items = this.currentAutoPanels.federal.filter(p => p.section === sec);
+            items.forEach(item => {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = this.renderAutoPanelCardHtml(item);
+                const card = wrapper.firstElementChild;
+                card.addEventListener('click', () => {
+                    const curr = this.arrowEngine?.getSelectedNode();
+                    this.arrowEngine?.setSelectedNode(curr === item.id ? null : item.id, item.sourceIds);
+                });
+                grid.appendChild(card);
+            });
+        });
+    }
     renderStateSections(taxData) {
         var _a;
         const container = document.getElementById('state-sections-container');
@@ -4624,41 +4691,45 @@ class TaxApp {
             const stateName = stObj ? stObj.name : code;
             const isResident = code === (this.state.residentState || 'CA').toUpperCase();
             const sr = stateReturns.find(r => r.state.toUpperCase() === code);
+            const stateAutos = this.currentAutoPanels.byState[code] || [];
             const block = document.createElement('div');
             block.className = 'state-group-block';
             block.id = `state-group-${code.toLowerCase()}`;
             let subsectionsHtml = '';
             subsections.forEach(sub => {
                 const items = statePanels.filter(p => p.state.toUpperCase() === code && p.section === sub.cat);
-                const cardsHtml = items.length > 0
-                    ? items.map(item => {
-                        const entry = getStateCatalogEntry(item.itemKey);
-                        if (!entry)
-                            return '';
-                        return `
-                <div class="tax-panel panel-size-${entry.size} input-panel" id="state-panel-${item.id}">
-                  <div class="panel-top-row">
-                    <h3 class="panel-title">${entry.title}</h3>
-                    <div class="panel-top-actions">
-                      ${renderRatingPill(entry.ratingKey, true)}
-                      <button type="button" class="btn-close-panel" data-remove-state-panel="${item.id}" title="Remove panel" aria-label="Remove ${entry.title}">✕</button>
-                    </div>
-                  </div>
-                  <div class="panel-official-title">${entry.officialTitle}</div>
-                  <div class="panel-inputs">
-                    <div class="w2-input-wrapper">
-                      <span class="currency-symbol">$</span>
-                      <input type="number" step="any" class="w2-input state-panel-amount-input" id="input-state-panel-${item.id}" data-state-panel-id="${item.id}" value="${item.amount || 0}" placeholder="0">
-                    </div>
-                  </div>
-                  <div class="panel-short-desc">${entry.shortExplanation}</div>
-                  <button type="button" class="btn-more-info" data-rating-field="${entry.ratingKey}">
-                    <span>More Info</span>
-                    <span class="more-info-icon">ⓘ</span>
-                  </button>
+                const autoItems = stateAutos.filter(p => p.section === sub.cat);
+                const userCardsHtml = items.map(item => {
+                    const entry = getStateCatalogEntry(item.itemKey);
+                    if (!entry)
+                        return '';
+                    return `
+            <div class="tax-panel panel-size-${entry.size} input-panel" id="state-panel-${item.id}">
+              <div class="panel-top-row">
+                <h3 class="panel-title">${entry.title}</h3>
+                <div class="panel-top-actions">
+                  ${renderRatingPill(entry.ratingKey, true)}
+                  <button type="button" class="btn-close-panel" data-remove-state-panel="${item.id}" title="Remove panel" aria-label="Remove ${entry.title}">✕</button>
                 </div>
-              `;
-                    }).join('')
+              </div>
+              <div class="panel-official-title">${entry.officialTitle}</div>
+              <div class="panel-inputs">
+                <div class="w2-input-wrapper">
+                  <span class="currency-symbol">$</span>
+                  <input type="number" step="any" class="w2-input state-panel-amount-input" id="input-state-panel-${item.id}" data-state-panel-id="${item.id}" value="${item.amount || 0}" placeholder="0">
+                </div>
+              </div>
+              <div class="panel-short-desc">${entry.shortExplanation}</div>
+              <button type="button" class="btn-more-info" data-rating-field="${entry.ratingKey}">
+                <span>More Info</span>
+                <span class="more-info-icon">ⓘ</span>
+              </button>
+            </div>
+          `;
+                }).join('');
+                const autoCardsHtml = autoItems.map(ap => this.renderAutoPanelCardHtml(ap)).join('');
+                const cardsHtml = (userCardsHtml + autoCardsHtml)
+                    ? (userCardsHtml + autoCardsHtml)
                     : `<div style="grid-column: 1 / -1; padding: 0.65rem 0.9rem; border: 1px dashed #cbd5e1; border-radius: 8px; color: #64748b; font-size: 0.83rem; background: #f8fafc;">No ${stateName} ${sub.title.toLowerCase()} added. Use the dropdown to add items that apply to you.</div>`;
                 subsectionsHtml += `
           <section class="panel-section state-subsection" id="state-${code.toLowerCase()}-${sub.cat}">
@@ -4790,6 +4861,12 @@ class TaxApp {
                 if (blockId && varId) {
                     this.openVariableBreakdownPopover(blockId, varId, varEl);
                 }
+            });
+        });
+        container.querySelectorAll('.auto-panel-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const curr = this.arrowEngine?.getSelectedNode();
+                this.arrowEngine?.setSelectedNode(curr === card.id ? null : card.id);
             });
         });
     }
