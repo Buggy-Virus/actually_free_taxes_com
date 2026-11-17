@@ -390,11 +390,11 @@ export const FIELD_RATINGS = {
         savingsScore: 3,
         savingsLabel: 'Massive Cash Refund ($$$$$)',
         savingsDescription: 'Up to $2,000 per child credit against taxes, with up to $1,700 refundable in cash (Additional Child Tax Credit) even if your tax liability is $0!',
-        applicability: 'common',
-        applicabilityScore: 3,
+        applicability: 'moderate',
+        applicabilityScore: 2,
         applicabilityPercent: '38% of Filers',
-        applicabilityLabel: 'Common for Families (38%)',
-        applicabilityDescription: 'Applies to parents, guardians, and foster parents of children under 17.',
+        applicabilityLabel: 'Moderate (Parents of Children <17)',
+        applicabilityDescription: 'Applies specifically to parents, legal guardians, and foster parents who supported a qualifying child under age 17 with a valid SSN for more than half the year.',
         recommendation: 'high_savings',
         recommendationTag: 'MASSIVE SAVINGS • $2,000 PER CHILD',
         plainEnglishVerdict: 'Huge money saver for parents! Make sure your child was under 17 at the end of the tax year and lived with you for more than half the year.'
@@ -645,8 +645,8 @@ export const FIELD_RATINGS = {
         applicability: 'niche',
         applicabilityScore: 1,
         applicabilityPercent: '7% of Filers',
-        applicabilityLabel: 'High Medical Costs (7%)',
-        applicabilityDescription: 'Only beneficial if your out-of-pocket medical expenses exceed 7.5% of your AGI.',
+        applicabilityLabel: 'High Medical Costs (>7.5% of AGI)',
+        applicabilityDescription: 'Only affects your return if your out-of-pocket medical expenses exceed 7.5% of your AGI — implying your AGI is relatively low or you incurred significant unreimbursed medical debt.',
         recommendation: 'safe_to_ignore',
         recommendationTag: 'ONLY DEDUCTIBLE IF >7.5% OF AGI',
         plainEnglishVerdict: 'You can only deduct medical expenses that exceed 7.5% of your AGI. For most people with modest medical bills, this is safe to skip.',
@@ -917,72 +917,80 @@ export function getFieldRating(key) {
     };
 }
 /**
+ * Strip any trailing fraction like "(4/4)" or "(3/3)" from a tagline.
+ */
+function stripFraction(text) {
+    return text.replace(/\s*\(\d+\s*\/\s*\d+\)\s*/g, ' ').replace(/\s*\(\d+%\)\s*/g, ' ').trim();
+}
+/**
  * Render the cluster of 3 colored circles representing the field's rating metrics:
- * 1. Safe to ignore / Attention: White (safe to ignore) to Yellow (needs attention).
- * 2. Risk: White (low risk) to Red (high IRS audit risk).
- * 3. Money saving: White ($0) to Green (high cash savings).
- *
- * For anything that maxes out its rating, an exclamation mark '!' is rendered in the center.
+ * 1. Yellow/Orange (Likelihood): How likely the filer has something to put into this panel (1..4; 4 = 90%+ with white '!').
+ * 2. Red (IRS Risk): How upset the IRS will be if incorrect (1..3; 3 = max with white '!').
+ * 3. Green (Money Savings): How much cash this field can save you (0..3; 3 = max with white '!').
  */
 export function renderRatingCircles(keyOrDef) {
     const r = typeof keyOrDef === 'string' ? getFieldRating(keyOrDef) : keyOrDef;
-    const isAttMax = r.importanceScore === 4;
+    const likelihoodScore = Math.max(1, Math.min(4, r.applicabilityScore || 1));
+    const isLikelihoodMax = likelihoodScore === 4;
     const isRiskMax = r.irsRiskScore === 3;
     const isSaveMax = r.savingsScore === 3;
     return `
-    <span class="rating-circles-cluster" aria-label="Attention ${r.importanceScore}/4, Risk ${r.irsRiskScore}/3, Savings ${r.savingsScore}/3">
-      <span class="rating-circle circle-attention circle-att-${r.importanceScore} ${isAttMax ? 'is-max' : ''}" 
-            title="Safe to Ignore / Attention: ${r.importanceLabel} (White = Safe to Ignore ➔ Yellow = Needs Attention${isAttMax ? ' [MAX !]' : ''})">
-        ${isAttMax ? '!' : ''}
+    <span class="rating-circles-cluster" aria-label="Likelihood ${likelihoodScore}/4, Risk ${r.irsRiskScore}/3, Savings ${r.savingsScore}/3">
+      <span class="rating-circle circle-attention circle-att-${likelihoodScore} ${isLikelihoodMax ? 'is-max' : ''}" 
+            title="Likelihood: ${stripFraction(r.applicabilityLabel)} — ${r.applicabilityDescription}">
+        ${isLikelihoodMax ? '!' : ''}
       </span>
       <span class="rating-circle circle-risk circle-risk-${r.irsRiskScore} ${isRiskMax ? 'is-max' : ''}" 
-            title="IRS Audit Risk: ${r.irsRiskLabel} (White = Low Risk ➔ Red = High IRS Risk${isRiskMax ? ' [MAX !]' : ''})">
+            title="IRS Audit Risk: ${stripFraction(r.irsRiskLabel)}">
         ${isRiskMax ? '!' : ''}
       </span>
       <span class="rating-circle circle-savings circle-save-${r.savingsScore} ${isSaveMax ? 'is-max' : ''}" 
-            title="Money Savings: ${r.savingsLabel} (White = $0 Savings ➔ Green = High Tax Savings${isSaveMax ? ' [MAX !]' : ''})">
+            title="Money Savings: ${stripFraction(r.savingsLabel)}">
         ${isSaveMax ? '!' : ''}
       </span>
     </span>
   `.trim();
 }
 /**
- * Render a compact inline badge chip to place next to an input label, featuring the 3 rating circles.
+ * Render the 3 max-level circles with white '!' for the W-2 header.
  */
-export function renderRatingPill(key, compact = false) {
-    const r = getFieldRating(key);
-    let badgeClass = 'badge-priority-must';
-    let shortText = 'Must be 100% Accurate';
-    if (r.recommendation === 'high_savings') {
-        badgeClass = 'badge-priority-saver';
-        shortText = 'Money Saver';
-    }
-    else if (r.recommendation === 'safe_to_ignore') {
-        badgeClass = 'badge-priority-skip';
-        shortText = 'Safe to Ignore if Blank';
-    }
-    else if (r.recommendation === 'verify_paper') {
-        badgeClass = 'badge-priority-verify';
-        shortText = 'Verify with Form';
-    }
-    const circlesHtml = renderRatingCircles(r);
-    if (compact) {
-        return `
-      <span class="field-rating-pill compact ${badgeClass}" data-rating-field="${r.fieldKey}" role="button" tabindex="0" title="${r.fieldTitle} (${shortText}) — Click for Risk & Guidance Breakdown">
-        ${circlesHtml}
-      </span>
-    `.trim();
-    }
+export function renderW2HeaderCircles() {
     return `
-    <span class="field-rating-pill ${badgeClass}" data-rating-field="${r.fieldKey}" role="button" tabindex="0" title="${r.fieldTitle} — Click for IRS Risk & Guidance Breakdown">
-      ${circlesHtml}
-      <span class="pill-text">${shortText}</span>
-      <span class="pill-info-icon" aria-label="More Info">ⓘ</span>
+    <span class="rating-circles-cluster w2-header-circles" title="Form W-2 must be filled out 100% accurately — the IRS receives Copy A directly from your employer.">
+      <span class="rating-circle circle-attention circle-att-4 is-max">!</span>
+      <span class="rating-circle circle-risk circle-risk-3 is-max">!</span>
+      <span class="rating-circle circle-savings circle-save-3 is-max">!</span>
     </span>
   `.trim();
 }
 /**
- * Generate the comprehensive interactive scorecard modal / popover HTML.
+ * Render the rating square placed inline with a panel title.
+ * Contains only the 3 colored circles inside the square matching the panel's overall rating (no text, no info icon).
+ */
+export function renderRatingPill(key, _compact = true) {
+    const r = getFieldRating(key);
+    let badgeClass = 'badge-priority-must';
+    if (r.recommendation === 'high_savings') {
+        badgeClass = 'badge-priority-saver';
+    }
+    else if (r.recommendation === 'safe_to_ignore') {
+        badgeClass = 'badge-priority-skip';
+    }
+    else if (r.recommendation === 'verify_paper') {
+        badgeClass = 'badge-priority-verify';
+    }
+    const circlesHtml = renderRatingCircles(r);
+    return `
+    <span class="field-rating-pill compact ${badgeClass}" data-rating-field="${r.fieldKey}" role="button" tabindex="0" title="${r.fieldTitle} — Click for Guidance &amp; Details">
+      ${circlesHtml}
+    </span>
+  `.trim();
+}
+/**
+ * Generate the comprehensive interactive scorecard modal HTML.
+ * Top: 3 equal-height gray rows (one per colored circle) with circle on far left,
+ * bolded tagline (no fraction), longer explanation, and centered segmented meter at bottom.
+ * Bottom: Full field explanation ("What does this mean?", "Where to find it", "Why it matters", "Pro-Tip").
  */
 export function renderRatingCardHtml(key) {
     const r = getFieldRating(key);
@@ -994,13 +1002,22 @@ export function renderRatingCardHtml(key) {
         }
         return `<div class="rating-meter">${bars}</div>`;
     };
-    const getRiskColor = (score) => score >= 3 ? 'meter-red' : (score === 2 ? 'meter-amber' : 'meter-green');
-    const getImpColor = (score) => score >= 4 ? 'meter-red' : (score >= 3 ? 'meter-amber' : 'meter-blue');
-    const getSaveColor = (score) => score >= 3 ? 'meter-green' : (score >= 2 ? 'meter-teal' : 'meter-gray');
-    const getAppColor = (score) => score >= 3 ? 'meter-purple' : 'meter-slate';
-    const isAttMax = r.importanceScore === 4;
+    const likelihoodScore = Math.max(1, Math.min(4, r.applicabilityScore || 1));
+    const isLikelihoodMax = likelihoodScore === 4;
     const isRiskMax = r.irsRiskScore === 3;
     const isSaveMax = r.savingsScore === 3;
+    const getRiskColor = (score) => score >= 3 ? 'meter-red' : (score === 2 ? 'meter-amber' : 'meter-green');
+    const getLikelihoodColor = (score) => score >= 4 ? 'meter-orange' : (score >= 3 ? 'meter-amber' : 'meter-yellow');
+    const getSaveColor = (score) => score >= 3 ? 'meter-green' : (score >= 2 ? 'meter-teal' : 'meter-gray');
+    const likelihoodTagline = stripFraction(r.applicabilityLabel) || 'Who This Applies To';
+    const riskTagline = stripFraction(r.irsRiskLabel) || 'IRS Audit Risk';
+    const savingsTagline = stripFraction(r.savingsLabel) || 'Money Savings Potential';
+    const exp = r.explanation || {
+        whatItMeans: r.fieldTitle,
+        whereToFind: `Check your official ${r.formName}.`,
+        whyItMatters: r.importanceDescription,
+        exampleOrTip: r.plainEnglishVerdict
+    };
     return `
     <div class="field-guidance-card" id="guidance-card-${r.fieldKey}">
       <div class="guidance-card-header">
@@ -1008,118 +1025,75 @@ export function renderRatingCardHtml(key) {
           <div class="guidance-form-tag">${r.formName}</div>
           <div class="guidance-field-title">${r.fieldTitle}</div>
         </div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem;">
-          <div class="guidance-rec-badge ${r.recommendation}">
-            ${r.recommendationTag}
+        <div class="guidance-rec-badge ${r.recommendation}">
+          ${r.recommendationTag}
+        </div>
+      </div>
+
+      <!-- Three Equal-Height Gray Rows for the Three Colored Circles -->
+      <div class="guidance-scorecard-rows">
+        <!-- Row 1: Yellow/Orange Circle (Likelihood / Who This Applies To) -->
+        <div class="scorecard-row">
+          <div class="scorecard-row-main">
+            <span class="rating-circle circle-attention circle-att-${likelihoodScore} ${isLikelihoodMax ? 'is-max' : ''}">
+              ${isLikelihoodMax ? '!' : ''}
+            </span>
+            <strong class="scorecard-row-tagline">${likelihoodTagline}</strong>
+            <span class="scorecard-row-desc">${r.applicabilityDescription}</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: #64748b;">
-            <span>Rating:</span>
-            ${renderRatingCircles(r)}
+          <div class="scorecard-row-meter">
+            ${renderMeter(likelihoodScore, 4, getLikelihoodColor(likelihoodScore))}
+          </div>
+        </div>
+
+        <!-- Row 2: Red Circle (IRS Audit Risk) -->
+        <div class="scorecard-row">
+          <div class="scorecard-row-main">
+            <span class="rating-circle circle-risk circle-risk-${r.irsRiskScore} ${isRiskMax ? 'is-max' : ''}">
+              ${isRiskMax ? '!' : ''}
+            </span>
+            <strong class="scorecard-row-tagline">${riskTagline}</strong>
+            <span class="scorecard-row-desc">${r.irsRiskDescription}</span>
+          </div>
+          <div class="scorecard-row-meter">
+            ${renderMeter(r.irsRiskScore, 3, getRiskColor(r.irsRiskScore))}
+          </div>
+        </div>
+
+        <!-- Row 3: Green Circle (Money Savings Potential) -->
+        <div class="scorecard-row">
+          <div class="scorecard-row-main">
+            <span class="rating-circle circle-savings circle-save-${r.savingsScore} ${isSaveMax ? 'is-max' : ''}">
+              ${isSaveMax ? '!' : ''}
+            </span>
+            <strong class="scorecard-row-tagline">${savingsTagline}</strong>
+            <span class="scorecard-row-desc">${r.savingsDescription}</span>
+          </div>
+          <div class="scorecard-row-meter">
+            ${renderMeter(r.savingsScore, 3, getSaveColor(r.savingsScore))}
           </div>
         </div>
       </div>
 
-      <!-- Quick Explanation of Rating Circles -->
-      <div class="modal-circle-legend-banner">
-        <div class="legend-chip-item">
-          <span class="rating-circle circle-attention circle-att-4 is-max">!</span>
-          <span><strong>Attention:</strong> White (safe to ignore) ➔ Yellow (needs attention)</span>
-        </div>
-        <div class="legend-chip-item">
-          <span class="rating-circle circle-risk circle-risk-3 is-max">!</span>
-          <span><strong>Risk:</strong> White (low risk) ➔ Red (high IRS audit risk)</span>
-        </div>
-        <div class="legend-chip-item">
-          <span class="rating-circle circle-savings circle-save-3 is-max">!</span>
-          <span><strong>Savings:</strong> White ($0) ➔ Green (high cash savings)</span>
-        </div>
-        <div class="legend-chip-item" style="color: #64748b; font-style: italic;">
-          <span>(! in circle = Max Rating)</span>
-        </div>
-      </div>
-
-      <div class="guidance-scorecard-grid">
-        <!-- 1. Importance Dimension -->
-        <div class="scorecard-cell">
-          <div class="cell-header">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span class="rating-circle circle-attention circle-att-${r.importanceScore} ${isAttMax ? 'is-max' : ''}">
-                ${isAttMax ? '!' : ''}
-              </span>
-              <div>
-                <span class="cell-label">1. Safe to Ignore / Attention</span>
-                <div class="circle-legend-subtext">White = Safe to Ignore ➔ Yellow = Needs Attention</div>
-              </div>
-            </div>
-            <span class="cell-score">${r.importanceLabel}</span>
+      <!-- Longer Field Information (Previously in "What is this?" expander) -->
+      <div class="modal-field-details">
+        <div class="explain-body">
+          <div class="explain-section">
+            <span class="explain-label">What does this mean?</span>
+            <p class="explain-text">${exp.whatItMeans}</p>
           </div>
-          ${renderMeter(r.importanceScore, 4, getImpColor(r.importanceScore))}
-          <div class="cell-tip">
-            <strong>If left blank:</strong> ${r.importanceDescription}
+          <div class="explain-section">
+            <span class="explain-label">Where to find it:</span>
+            <p class="explain-text">${exp.whereToFind}</p>
           </div>
-        </div>
-
-        <!-- 2. IRS Risk Dimension -->
-        <div class="scorecard-cell">
-          <div class="cell-header">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span class="rating-circle circle-risk circle-risk-${r.irsRiskScore} ${isRiskMax ? 'is-max' : ''}">
-                ${isRiskMax ? '!' : ''}
-              </span>
-              <div>
-                <span class="cell-label">2. IRS &amp; Audit Risk</span>
-                <div class="circle-legend-subtext">White = Low Risk ➔ Red = High IRS Risk</div>
-              </div>
-            </div>
-            <span class="cell-score">${r.irsRiskLabel}</span>
+          <div class="explain-section">
+            <span class="explain-label">Why it matters for your taxes:</span>
+            <p class="explain-text">${exp.whyItMatters}</p>
           </div>
-          ${renderMeter(r.irsRiskScore, 3, getRiskColor(r.irsRiskScore))}
-          <div class="cell-tip">
-            <strong>If incorrect:</strong> ${r.irsRiskDescription}
+          <div class="explain-section explain-tip-box">
+            <span class="explain-label">📌 Pro-Tip / Verdict:</span>
+            <p class="explain-text">${exp.exampleOrTip}</p>
           </div>
-        </div>
-
-        <!-- 3. Savings Potential Dimension -->
-        <div class="scorecard-cell">
-          <div class="cell-header">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span class="rating-circle circle-savings circle-save-${r.savingsScore} ${isSaveMax ? 'is-max' : ''}">
-                ${isSaveMax ? '!' : ''}
-              </span>
-              <div>
-                <span class="cell-label">3. Money Savings Potential</span>
-                <div class="circle-legend-subtext">White = $0 ➔ Green = High Savings</div>
-              </div>
-            </div>
-            <span class="cell-score">${r.savingsLabel}</span>
-          </div>
-          ${renderMeter(r.savingsScore, 3, getSaveColor(r.savingsScore))}
-          <div class="cell-tip">
-            <strong>Money impact:</strong> ${r.savingsDescription}
-          </div>
-        </div>
-
-        <!-- 4. Frequency / Applicability Dimension -->
-        <div class="scorecard-cell">
-          <div class="cell-header">
-            <div>
-              <span class="cell-label">4. Applicability &amp; Frequency</span>
-              <div class="circle-legend-subtext">Taxpayer demographic prevalence</div>
-            </div>
-            <span class="cell-score">${r.applicabilityPercent}</span>
-          </div>
-          ${renderMeter(r.applicabilityScore, 4, getAppColor(r.applicabilityScore))}
-          <div class="cell-tip">
-            <strong>Who this applies to:</strong> ${r.applicabilityDescription}
-          </div>
-        </div>
-      </div>
-
-      <!-- Bottom Plain-English Verdict -->
-      <div class="guidance-verdict-banner ${r.recommendation}">
-        <span class="verdict-icon">💡</span>
-        <div class="verdict-text">
-          <strong>Tax Guidance Verdict:</strong> ${r.plainEnglishVerdict}
         </div>
       </div>
     </div>

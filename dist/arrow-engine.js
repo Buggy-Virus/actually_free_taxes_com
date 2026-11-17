@@ -7,6 +7,8 @@ export class ArrowEngine {
         this.connections = [];
         this.activeSourceId = null;
         this.activeTargetId = null;
+        this.selectedNodeId = null;
+        this.displayMode = 'always';
         this.animationFrame = null;
         this.colors = {
             wages: '#10b981',
@@ -26,20 +28,36 @@ export class ArrowEngine {
             default: '#3b82f6' // Blue
         };
         this.svg = svgElement;
-        this.showAll = options.showAll !== undefined ? options.showAll : true;
-        this.initMarkers();
+        if (options.displayMode) {
+            this.displayMode = options.displayMode;
+        }
+        else if (options.showAll === false) {
+            this.displayMode = 'selection';
+        }
+        else {
+            this.displayMode = 'always';
+        }
+        // Create or reuse a high z-index highlight SVG layer so highlighted arrows sit on top of everything
+        let hl = document.getElementById('arrow-canvas-highlight');
+        if (!hl) {
+            hl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            hl.id = 'arrow-canvas-highlight';
+            this.svg.parentNode?.insertBefore(hl, this.svg.nextSibling);
+        }
+        this.highlightSvg = hl;
+        this.initMarkers(this.svg, '');
+        this.initMarkers(this.highlightSvg, 'hl-');
         this.bindEvents();
     }
-    initMarkers() {
-        let defs = this.svg.querySelector('defs');
+    initMarkers(targetSvg, prefix) {
+        let defs = targetSvg.querySelector('defs');
         if (!defs) {
             defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-            this.svg.appendChild(defs);
+            targetSvg.appendChild(defs);
         }
-        // Create markers for each color
         Object.entries(this.colors).forEach(([name, color]) => {
             const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-            marker.setAttribute('id', `arrowhead-${name}`);
+            marker.setAttribute('id', `${prefix}arrowhead-${name}`);
             marker.setAttribute('viewBox', '0 0 12 12');
             marker.setAttribute('refX', '9');
             marker.setAttribute('refY', '6');
@@ -75,19 +93,30 @@ export class ArrowEngine {
     }
     setActiveSource(sourceId) {
         this.activeSourceId = sourceId;
-        this.updateHighlightStyles();
+        this.scheduleRedraw();
     }
     setActiveTarget(targetId) {
         this.activeTargetId = targetId;
-        this.updateHighlightStyles();
+        this.scheduleRedraw();
+    }
+    setSelectedNode(nodeId) {
+        this.selectedNodeId = nodeId;
+        this.scheduleRedraw();
+    }
+    getSelectedNode() {
+        return this.selectedNodeId;
     }
     clearActive() {
         this.activeSourceId = null;
         this.activeTargetId = null;
-        this.updateHighlightStyles();
+        this.scheduleRedraw();
     }
     setShowAll(val) {
-        this.showAll = Boolean(val);
+        this.displayMode = val ? 'always' : 'selection';
+        this.scheduleRedraw();
+    }
+    setDisplayMode(mode) {
+        this.displayMode = mode;
         this.scheduleRedraw();
     }
     scheduleRedraw() {
@@ -99,10 +128,24 @@ export class ArrowEngine {
     updateSvgDimensions() {
         const docWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth);
         const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight);
-        this.svg.setAttribute('width', String(docWidth));
-        this.svg.setAttribute('height', String(docHeight));
-        this.svg.style.width = `${docWidth}px`;
-        this.svg.style.height = `${docHeight}px`;
+        [this.svg, this.highlightSvg].forEach(el => {
+            el.setAttribute('width', String(docWidth));
+            el.setAttribute('height', String(docHeight));
+            el.style.width = `${docWidth}px`;
+            el.style.height = `${docHeight}px`;
+        });
+    }
+    isConnectionHighlighted(conn) {
+        if (this.selectedNodeId && (conn.sourceId === this.selectedNodeId || conn.targetId === this.selectedNodeId)) {
+            return true;
+        }
+        if (this.activeSourceId && (conn.sourceId === this.activeSourceId || conn.targetId === this.activeSourceId)) {
+            return true;
+        }
+        if (this.activeTargetId && (conn.targetId === this.activeTargetId || conn.sourceId === this.activeTargetId)) {
+            return true;
+        }
+        return false;
     }
     redraw() {
         this.updateSvgDimensions();
@@ -110,6 +153,14 @@ export class ArrowEngine {
         this.svg.innerHTML = '';
         if (defs)
             this.svg.appendChild(defs);
+        const hlDefs = this.highlightSvg.querySelector('defs');
+        this.highlightSvg.innerHTML = '';
+        if (hlDefs)
+            this.highlightSvg.appendChild(hlDefs);
+        if (this.displayMode === 'off') {
+            this.updateHighlightStyles();
+            return;
+        }
         const docScrollX = window.pageXOffset || document.documentElement.scrollLeft;
         const docScrollY = window.pageYOffset || document.documentElement.scrollTop;
         // Find main content container bounds for gutters
@@ -128,9 +179,9 @@ export class ArrowEngine {
             const tRect = targetEl.getBoundingClientRect();
             if (sRect.width === 0 || tRect.width === 0)
                 return false;
-            const isConnectedToActive = (this.activeSourceId && (conn.sourceId === this.activeSourceId || conn.targetId === this.activeSourceId)) ||
-                (this.activeTargetId && (conn.targetId === this.activeTargetId || conn.sourceId === this.activeTargetId));
-            return this.showAll || isConnectedToActive;
+            if (this.displayMode === 'always')
+                return true;
+            return this.isConnectionHighlighted(conn);
         });
         const preparedList = [];
         visibleConnections.forEach(conn => {
@@ -138,8 +189,7 @@ export class ArrowEngine {
             const targetEl = document.getElementById(conn.targetId);
             const sourceRect = sourceEl.getBoundingClientRect();
             const targetRect = targetEl.getBoundingClientRect();
-            const isConnectedToActive = Boolean((this.activeSourceId && (conn.sourceId === this.activeSourceId || conn.targetId === this.activeSourceId)) ||
-                (this.activeTargetId && (conn.targetId === this.activeTargetId || conn.sourceId === this.activeTargetId)));
+            const isConnectedToActive = this.isConnectionHighlighted(conn);
             const colorCategory = conn.category || 'default';
             const strokeColor = this.colors[colorCategory] || this.colors.default;
             const sMidX = sourceRect.left + docScrollX + (sourceRect.width / 2);
@@ -185,6 +235,7 @@ export class ArrowEngine {
         const baseRightGutter = docMainRight + 18;
         const laneSpacing = 11;
         const targetPortCount = {};
+        const anyActive = Boolean(this.activeSourceId || this.activeTargetId || this.selectedNodeId);
         const renderArrow = (p, laneIndex) => {
             const { conn, targetEl, sourceRect, targetRect, side, isHighlighted, colorCategory, strokeColor } = p;
             const targetKey = `${conn.targetId}-${side}`;
@@ -214,11 +265,9 @@ export class ArrowEngine {
                 pathData = `M ${sX} ${sY} L ${tX} ${tY}`;
             }
             else if (side === 'left') {
-                // Go LEFT out to laneX, down laneX, then RIGHT into target
                 pathData = `M ${sX} ${sY} L ${laneX + R} ${sY} Q ${laneX} ${sY}, ${laneX} ${sY + dirY * R} L ${laneX} ${tY - dirY * R} Q ${laneX} ${tY}, ${laneX + R} ${tY} L ${tX} ${tY}`;
             }
             else {
-                // Go RIGHT out to laneX, down laneX, then LEFT into target
                 pathData = `M ${sX} ${sY} L ${laneX - R} ${sY} Q ${laneX} ${sY}, ${laneX} ${sY + dirY * R} L ${laneX} ${tY - dirY * R} Q ${laneX} ${tY}, ${laneX - R} ${tY} L ${tX} ${tY}`;
             }
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -250,16 +299,17 @@ export class ArrowEngine {
                 glow.setAttribute('stroke-linecap', 'round');
                 g.appendChild(glow);
             }
+            const markerPrefix = isHighlighted ? 'hl-' : '';
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', pathData);
             path.setAttribute('fill', 'none');
             path.setAttribute('stroke', strokeColor);
             path.setAttribute('stroke-width', isHighlighted ? '3.5' : '2.2');
-            path.setAttribute('stroke-opacity', isHighlighted ? '1' : (this.activeSourceId || this.activeTargetId ? '0.2' : '0.8'));
+            path.setAttribute('stroke-opacity', isHighlighted ? '1' : (anyActive ? '0.2' : '0.75'));
             path.setAttribute('stroke-linecap', 'round');
-            path.setAttribute('marker-end', `url(#arrowhead-${colorCategory})`);
+            path.setAttribute('marker-end', `url(#${markerPrefix}arrowhead-${colorCategory})`);
             path.setAttribute('class', `arrow-line ${isHighlighted ? 'flowing' : ''}`);
-            if (isHighlighted || this.showAll) {
+            if (isHighlighted || this.displayMode === 'always') {
                 path.setAttribute('stroke-dasharray', isHighlighted ? '8 4' : '6 4');
             }
             g.appendChild(path);
@@ -284,35 +334,50 @@ export class ArrowEngine {
                 setTimeout(() => targetEl.classList.remove('flash-highlight'), 1200);
             });
             g.appendChild(hitArea);
-            this.svg.appendChild(g);
+            // Highlighted arrows go on top of everything; unhighlighted go behind panels
+            if (isHighlighted) {
+                this.highlightSvg.appendChild(g);
+            }
+            else {
+                this.svg.appendChild(g);
+            }
         };
         leftConns.forEach((p, idx) => renderArrow(p, idx));
         rightConns.forEach((p, idx) => renderArrow(p, idx));
         this.updateHighlightStyles();
     }
     updateHighlightStyles() {
-        document.querySelectorAll('.data-source-active, .data-target-active').forEach(el => {
-            el.classList.remove('data-source-active', 'data-target-active');
+        document.querySelectorAll('.data-source-active, .data-target-active, .calc-selected').forEach(el => {
+            el.classList.remove('data-source-active', 'data-target-active', 'calc-selected');
         });
-        if (this.activeSourceId) {
-            const srcEl = document.getElementById(this.activeSourceId);
-            if (srcEl)
-                srcEl.classList.add('data-source-active');
-            this.connections.filter(c => c.sourceId === this.activeSourceId).forEach(c => {
+        const activeIds = new Set();
+        if (this.activeSourceId)
+            activeIds.add(this.activeSourceId);
+        if (this.activeTargetId)
+            activeIds.add(this.activeTargetId);
+        if (this.selectedNodeId) {
+            const selEl = document.getElementById(this.selectedNodeId);
+            if (selEl)
+                selEl.classList.add('calc-selected');
+            activeIds.add(this.selectedNodeId);
+        }
+        activeIds.forEach(id => {
+            this.connections.filter(c => c.sourceId === id).forEach(c => {
+                const srcEl = document.getElementById(c.sourceId);
                 const tgtEl = document.getElementById(c.targetId);
+                if (srcEl)
+                    srcEl.classList.add('data-source-active');
                 if (tgtEl)
                     tgtEl.classList.add('data-target-active');
             });
-        }
-        if (this.activeTargetId) {
-            const tgtEl = document.getElementById(this.activeTargetId);
-            if (tgtEl)
-                tgtEl.classList.add('data-target-active');
-            this.connections.filter(c => c.targetId === this.activeTargetId).forEach(c => {
+            this.connections.filter(c => c.targetId === id).forEach(c => {
                 const srcEl = document.getElementById(c.sourceId);
+                const tgtEl = document.getElementById(c.targetId);
                 if (srcEl)
                     srcEl.classList.add('data-source-active');
+                if (tgtEl)
+                    tgtEl.classList.add('data-target-active');
             });
-        }
+        });
     }
 }

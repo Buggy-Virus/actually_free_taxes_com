@@ -3,18 +3,21 @@
  * Draws animated, color-coded SVG Bezier arrows connecting input fields to downstream calculations.
  */
 
-import { ConnectionDef, ArrowColorCategory } from './types.js';
+import { ConnectionDef, ArrowColorCategory, ArrowDisplayMode } from './types.js';
 
 export interface ArrowEngineOptions {
   showAll?: boolean;
+  displayMode?: ArrowDisplayMode;
 }
 
 export class ArrowEngine {
   private svg: SVGSVGElement;
+  private highlightSvg: SVGSVGElement;
   private connections: ConnectionDef[] = [];
   private activeSourceId: string | null = null;
   private activeTargetId: string | null = null;
-  private showAll: boolean;
+  private selectedNodeId: string | null = null;
+  private displayMode: ArrowDisplayMode = 'always';
   private animationFrame: number | null = null;
   private resizeObserver?: ResizeObserver;
 
@@ -38,23 +41,38 @@ export class ArrowEngine {
 
   constructor(svgElement: SVGSVGElement, options: ArrowEngineOptions = {}) {
     this.svg = svgElement;
-    this.showAll = options.showAll !== undefined ? options.showAll : true;
+    if (options.displayMode) {
+      this.displayMode = options.displayMode;
+    } else if (options.showAll === false) {
+      this.displayMode = 'selection';
+    } else {
+      this.displayMode = 'always';
+    }
 
-    this.initMarkers();
+    // Create or reuse a high z-index highlight SVG layer so highlighted arrows sit on top of everything
+    let hl = document.getElementById('arrow-canvas-highlight') as SVGSVGElement | null;
+    if (!hl) {
+      hl = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as SVGSVGElement;
+      hl.id = 'arrow-canvas-highlight';
+      this.svg.parentNode?.insertBefore(hl, this.svg.nextSibling);
+    }
+    this.highlightSvg = hl;
+
+    this.initMarkers(this.svg, '');
+    this.initMarkers(this.highlightSvg, 'hl-');
     this.bindEvents();
   }
 
-  private initMarkers(): void {
-    let defs = this.svg.querySelector('defs');
+  private initMarkers(targetSvg: SVGSVGElement, prefix: string): void {
+    let defs = targetSvg.querySelector('defs');
     if (!defs) {
       defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-      this.svg.appendChild(defs);
+      targetSvg.appendChild(defs);
     }
 
-    // Create markers for each color
     Object.entries(this.colors).forEach(([name, color]) => {
       const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-      marker.setAttribute('id', `arrowhead-${name}`);
+      marker.setAttribute('id', `${prefix}arrowhead-${name}`);
       marker.setAttribute('viewBox', '0 0 12 12');
       marker.setAttribute('refX', '9');
       marker.setAttribute('refY', '6');
@@ -97,22 +115,36 @@ export class ArrowEngine {
 
   public setActiveSource(sourceId: string | null): void {
     this.activeSourceId = sourceId;
-    this.updateHighlightStyles();
+    this.scheduleRedraw();
   }
 
   public setActiveTarget(targetId: string | null): void {
     this.activeTargetId = targetId;
-    this.updateHighlightStyles();
+    this.scheduleRedraw();
+  }
+
+  public setSelectedNode(nodeId: string | null): void {
+    this.selectedNodeId = nodeId;
+    this.scheduleRedraw();
+  }
+
+  public getSelectedNode(): string | null {
+    return this.selectedNodeId;
   }
 
   public clearActive(): void {
     this.activeSourceId = null;
     this.activeTargetId = null;
-    this.updateHighlightStyles();
+    this.scheduleRedraw();
   }
 
   public setShowAll(val: boolean): void {
-    this.showAll = Boolean(val);
+    this.displayMode = val ? 'always' : 'selection';
+    this.scheduleRedraw();
+  }
+
+  public setDisplayMode(mode: ArrowDisplayMode): void {
+    this.displayMode = mode;
     this.scheduleRedraw();
   }
 
@@ -126,10 +158,25 @@ export class ArrowEngine {
   private updateSvgDimensions(): void {
     const docWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth);
     const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight);
-    this.svg.setAttribute('width', String(docWidth));
-    this.svg.setAttribute('height', String(docHeight));
-    this.svg.style.width = `${docWidth}px`;
-    this.svg.style.height = `${docHeight}px`;
+    [this.svg, this.highlightSvg].forEach(el => {
+      el.setAttribute('width', String(docWidth));
+      el.setAttribute('height', String(docHeight));
+      el.style.width = `${docWidth}px`;
+      el.style.height = `${docHeight}px`;
+    });
+  }
+
+  private isConnectionHighlighted(conn: ConnectionDef): boolean {
+    if (this.selectedNodeId && (conn.sourceId === this.selectedNodeId || conn.targetId === this.selectedNodeId)) {
+      return true;
+    }
+    if (this.activeSourceId && (conn.sourceId === this.activeSourceId || conn.targetId === this.activeSourceId)) {
+      return true;
+    }
+    if (this.activeTargetId && (conn.targetId === this.activeTargetId || conn.sourceId === this.activeTargetId)) {
+      return true;
+    }
+    return false;
   }
 
   private redraw(): void {
@@ -138,6 +185,15 @@ export class ArrowEngine {
     const defs = this.svg.querySelector('defs');
     this.svg.innerHTML = '';
     if (defs) this.svg.appendChild(defs);
+
+    const hlDefs = this.highlightSvg.querySelector('defs');
+    this.highlightSvg.innerHTML = '';
+    if (hlDefs) this.highlightSvg.appendChild(hlDefs);
+
+    if (this.displayMode === 'off') {
+      this.updateHighlightStyles();
+      return;
+    }
 
     const docScrollX = window.pageXOffset || document.documentElement.scrollLeft;
     const docScrollY = window.pageYOffset || document.documentElement.scrollTop;
@@ -158,11 +214,8 @@ export class ArrowEngine {
       const tRect = targetEl.getBoundingClientRect();
       if (sRect.width === 0 || tRect.width === 0) return false;
 
-      const isConnectedToActive =
-        (this.activeSourceId && (conn.sourceId === this.activeSourceId || conn.targetId === this.activeSourceId)) ||
-        (this.activeTargetId && (conn.targetId === this.activeTargetId || conn.sourceId === this.activeTargetId));
-
-      return this.showAll || isConnectedToActive;
+      if (this.displayMode === 'always') return true;
+      return this.isConnectionHighlighted(conn);
     });
 
     interface PreparedConn {
@@ -185,10 +238,7 @@ export class ArrowEngine {
       const sourceRect = sourceEl.getBoundingClientRect();
       const targetRect = targetEl.getBoundingClientRect();
 
-      const isConnectedToActive = Boolean(
-        (this.activeSourceId && (conn.sourceId === this.activeSourceId || conn.targetId === this.activeSourceId)) ||
-        (this.activeTargetId && (conn.targetId === this.activeTargetId || conn.sourceId === this.activeTargetId))
-      );
+      const isConnectedToActive = this.isConnectionHighlighted(conn);
 
       const colorCategory: ArrowColorCategory = conn.category || 'default';
       const strokeColor = this.colors[colorCategory] || this.colors.default;
@@ -240,6 +290,7 @@ export class ArrowEngine {
     const laneSpacing = 11;
 
     const targetPortCount: Record<string, number> = {};
+    const anyActive = Boolean(this.activeSourceId || this.activeTargetId || this.selectedNodeId);
 
     const renderArrow = (p: PreparedConn, laneIndex: number) => {
       const { conn, targetEl, sourceRect, targetRect, side, isHighlighted, colorCategory, strokeColor } = p;
@@ -275,10 +326,8 @@ export class ArrowEngine {
       if (absDy < 8) {
         pathData = `M ${sX} ${sY} L ${tX} ${tY}`;
       } else if (side === 'left') {
-        // Go LEFT out to laneX, down laneX, then RIGHT into target
         pathData = `M ${sX} ${sY} L ${laneX + R} ${sY} Q ${laneX} ${sY}, ${laneX} ${sY + dirY * R} L ${laneX} ${tY - dirY * R} Q ${laneX} ${tY}, ${laneX + R} ${tY} L ${tX} ${tY}`;
       } else {
-        // Go RIGHT out to laneX, down laneX, then LEFT into target
         pathData = `M ${sX} ${sY} L ${laneX - R} ${sY} Q ${laneX} ${sY}, ${laneX} ${sY + dirY * R} L ${laneX} ${tY - dirY * R} Q ${laneX} ${tY}, ${laneX - R} ${tY} L ${tX} ${tY}`;
       }
 
@@ -315,17 +364,18 @@ export class ArrowEngine {
         g.appendChild(glow);
       }
 
+      const markerPrefix = isHighlighted ? 'hl-' : '';
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', pathData);
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', strokeColor);
       path.setAttribute('stroke-width', isHighlighted ? '3.5' : '2.2');
-      path.setAttribute('stroke-opacity', isHighlighted ? '1' : (this.activeSourceId || this.activeTargetId ? '0.2' : '0.8'));
+      path.setAttribute('stroke-opacity', isHighlighted ? '1' : (anyActive ? '0.2' : '0.75'));
       path.setAttribute('stroke-linecap', 'round');
-      path.setAttribute('marker-end', `url(#arrowhead-${colorCategory})`);
+      path.setAttribute('marker-end', `url(#${markerPrefix}arrowhead-${colorCategory})`);
       path.setAttribute('class', `arrow-line ${isHighlighted ? 'flowing' : ''}`);
 
-      if (isHighlighted || this.showAll) {
+      if (isHighlighted || this.displayMode === 'always') {
         path.setAttribute('stroke-dasharray', isHighlighted ? '8 4' : '6 4');
       }
 
@@ -354,7 +404,13 @@ export class ArrowEngine {
       });
 
       g.appendChild(hitArea);
-      this.svg.appendChild(g);
+
+      // Highlighted arrows go on top of everything; unhighlighted go behind panels
+      if (isHighlighted) {
+        this.highlightSvg.appendChild(g);
+      } else {
+        this.svg.appendChild(g);
+      }
     };
 
     leftConns.forEach((p, idx) => renderArrow(p, idx));
@@ -364,28 +420,32 @@ export class ArrowEngine {
   }
 
   private updateHighlightStyles(): void {
-    document.querySelectorAll('.data-source-active, .data-target-active').forEach(el => {
-      el.classList.remove('data-source-active', 'data-target-active');
+    document.querySelectorAll('.data-source-active, .data-target-active, .calc-selected').forEach(el => {
+      el.classList.remove('data-source-active', 'data-target-active', 'calc-selected');
     });
 
-    if (this.activeSourceId) {
-      const srcEl = document.getElementById(this.activeSourceId);
-      if (srcEl) srcEl.classList.add('data-source-active');
+    const activeIds = new Set<string>();
+    if (this.activeSourceId) activeIds.add(this.activeSourceId);
+    if (this.activeTargetId) activeIds.add(this.activeTargetId);
+    if (this.selectedNodeId) {
+      const selEl = document.getElementById(this.selectedNodeId);
+      if (selEl) selEl.classList.add('calc-selected');
+      activeIds.add(this.selectedNodeId);
+    }
 
-      this.connections.filter(c => c.sourceId === this.activeSourceId).forEach(c => {
+    activeIds.forEach(id => {
+      this.connections.filter(c => c.sourceId === id).forEach(c => {
+        const srcEl = document.getElementById(c.sourceId);
         const tgtEl = document.getElementById(c.targetId);
+        if (srcEl) srcEl.classList.add('data-source-active');
         if (tgtEl) tgtEl.classList.add('data-target-active');
       });
-    }
-
-    if (this.activeTargetId) {
-      const tgtEl = document.getElementById(this.activeTargetId);
-      if (tgtEl) tgtEl.classList.add('data-target-active');
-
-      this.connections.filter(c => c.targetId === this.activeTargetId).forEach(c => {
+      this.connections.filter(c => c.targetId === id).forEach(c => {
         const srcEl = document.getElementById(c.sourceId);
+        const tgtEl = document.getElementById(c.targetId);
         if (srcEl) srcEl.classList.add('data-source-active');
+        if (tgtEl) tgtEl.classList.add('data-target-active');
       });
-    }
+    });
   }
 }

@@ -26,14 +26,23 @@ export interface W2Data {
   id: number;
   employer: string;
   ein: string;
+  employeeSsn?: string;
+  controlNumber?: string;
+  employeeName?: string;
+  employeeAddress?: string;
   box1: number; // Wages, tips, other compensation
   box2: number; // Federal income tax withheld
   box3: number; // Social security wages
   box4: number; // Social security tax withheld
   box5: number; // Medicare wages and tips
   box6: number; // Medicare tax withheld
+  box7?: number; // Social security tips
+  box8?: number; // Allocated tips
+  box10?: number; // Dependent care benefits
+  box11?: number; // Nonqualified plans
   box12Code?: string;
   box12Amount?: number;
+  box14?: string; // Other
   states: StateTaxLine[];
 }
 
@@ -116,6 +125,13 @@ export interface Dependents {
 
 export type DeductionMethod = 'auto' | 'standard' | 'itemized';
 
+export interface StateSpecificInputs {
+  otherIncome?: number;
+  adjustments?: number;
+  credits?: number;
+  itemizedDeductions?: number;
+}
+
 export interface TaxAppState {
   year: TaxYear;
   filingStatus: FilingStatus;
@@ -126,6 +142,7 @@ export interface TaxAppState {
   dependents: Dependents;
   itemizedDeductions?: ItemizedDeductionsInput;
   deductionMethod?: DeductionMethod;
+  stateSpecific?: Record<string, StateSpecificInputs>;
   showAllArrows: boolean;
 }
 
@@ -402,3 +419,59 @@ export interface FieldRatingDefinition {
   plainEnglishVerdict: string;
   explanation?: FieldExplanation;
 }
+
+export type ArrowDisplayMode = 'always' | 'selection' | 'off';
+export type PanelSize = 'sm' | 'lg' | 'full';
+export type PanelSectionCategory = 'other-income' | 'adjustments' | 'credits' | 'itemized';
+
+export interface FormulaToken {
+  type: 'text' | 'var';
+  text?: string;
+  varId?: string;
+  label?: string;
+  valueFormatted?: string;
+  isEmpty?: boolean;
+}
+
+export interface CalcVariableContributor {
+  label: string;
+  sign: '+' | '-' | '×' | 'info';
+  amount: number;
+  amountFormatted: string;
+  isSetUp: boolean;
+  targetElementId: string;
+  panelKey?: string;
+  panelSection?: PanelSectionCategory;
+}
+
+export interface CalcVariableBreakdown {
+  varId: string;
+  label: string;
+  totalValue: number;
+  totalFormatted: string;
+  isEmpty: boolean;
+  contributors: CalcVariableContributor[];
+}
+
+export interface CalcLineItem {
+  id: string;
+  label: string;
+  formLineLabel: string | null;
+  isIntermediate?: boolean;
+  generalTokens: FormulaToken[];
+  pluggedTokens: FormulaToken[];
+  resultFormatted: string;
+  isEmpty?: boolean;
+}
+
+export interface CalcBlockDefinition {
+  id: string;
+  stepLabel: string;
+  title: string;
+  hasImpact: boolean;
+  isOutput?: boolean;
+  lines: CalcLineItem[];
+  variables: Record<string, CalcVariableBreakdown>;
+  sourceIds: string[];
+}
+

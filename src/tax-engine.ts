@@ -26,7 +26,12 @@ import {
   ItemizedDeductionCalculation,
   CapitalGainsCalculation,
   CreditsCalculation,
-  TaxCalculationSummary
+  TaxCalculationSummary,
+  CalcBlockDefinition,
+  CalcLineItem,
+  CalcVariableBreakdown,
+  CalcVariableContributor,
+  FormulaToken
 } from './types.js';
 
 export type CoreFilingStatus = 'single' | 'married_joint' | 'married_separate' | 'head_of_household';
@@ -2602,3 +2607,956 @@ export function calculateStateReturnsAndUnifiedSummary(
 
   return { stateReturnsCalc: allStateReturns, unifiedSummaryCalc };
 }
+
+/**
+ * Pure, UI-independent clustered calculation block builder.
+ * Produces structured calculation blocks, form-line tags, intermediate math lines,
+ * and clickable variable contributor breakdowns without touching any DOM element.
+ */
+export function buildCalculationBlocks(state: TaxAppState, summary: TaxCalculationSummary): CalcBlockDefinition[] {
+  const year = state.year || 2024;
+  const effectiveStatus = normalizeFilingStatus(state.filingStatus || 'single');
+  const rules = TAX_CONSTANTS[year] || TAX_CONSTANTS[2024];
+  const w2s = state.w2s || [];
+  const sources = state.otherIncome?.sources || [];
+
+  const t = (text: string): FormulaToken => ({ type: 'text', text });
+  const v = (varId: string, label: string, value: number, isEmpty: boolean, exact: boolean = false): FormulaToken => ({
+    type: 'var',
+    varId,
+    label,
+    valueFormatted: exact ? formatCurrencyExact(value) : formatCurrency(value),
+    isEmpty
+  });
+
+  // Helper to build a variable breakdown
+  const makeVar = (
+    varId: string,
+    label: string,
+    totalValue: number,
+    contributors: CalcVariableContributor[],
+    exact: boolean = false
+  ): CalcVariableBreakdown => {
+    const hasAnySetup = contributors.some(c => c.isSetUp && c.amount !== 0);
+    return {
+      varId,
+      label,
+      totalValue,
+      totalFormatted: exact ? formatCurrencyExact(totalValue) : formatCurrency(totalValue),
+      isEmpty: !hasAnySetup && totalValue === 0,
+      contributors
+    };
+  };
+
+  // Precompute key values from state
+  const totalW2Wages = summary.w2WagesCalc.result;
+  const interestDirect = Number(state.otherIncome?.interest) || 0;
+  const interest1099 = sources.filter(s => s.type === '1099-INT').reduce((s, x) => s + Math.max(0, (Number(x.amount) || 0) - Math.max(0, Number(x.accruedInterestPaid) || 0)), 0);
+  const totalInterest = interestDirect + interest1099;
+  const totalDiv = sources.filter(s => s.type === '1099-DIV').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const totalNecGross = sources.filter(s => s.type === '1099-NEC').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const schedCExp = Math.max(0, Number(state.otherIncome?.scheduleCExpenses) || 0);
+  const netNec = Math.max(0, totalNecGross - schedCExp);
+  const totalOther1099 = sources
+    .filter(s => !['1099-INT', '1099-DIV', '1099-NEC', 'SSA-1099', 'Schedule K-1'].includes(s.type))
+    .reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const k1Total = sources.filter(s => s.type === 'Schedule K-1').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const ssaGross = sources.filter(s => s.type === 'SSA-1099').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+
+  const stGain = Number(state.otherIncome?.capitalGains?.shortTerm) || 0;
+  const ltGain = Number(state.otherIncome?.capitalGains?.longTerm) || 0;
+  const collectiblesGain = Math.max(0, Number(state.otherIncome?.capitalGains?.collectiblesGain) || 0);
+  const sec1250Gain = Math.max(0, Number(state.otherIncome?.capitalGains?.unrecaptured1250Gain) || 0);
+  const capLossLimit = effectiveStatus === 'married_separate' ? -1500 : -3000;
+
+  const grossRents = Math.max(0, Number(state.otherIncome?.scheduleERental?.grossRents) || 0);
+  const rentalExp = Math.max(0, Number(state.otherIncome?.scheduleERental?.expenses) || 0);
+  const rentalDepr = Math.max(0, Number(state.otherIncome?.scheduleERental?.depreciation) || 0);
+
+  const adjStudentLoan = Math.max(0, Number(state.adjustments?.studentLoan) || 0);
+  const adjIra = Math.max(0, Number(state.adjustments?.ira) || 0);
+  const adjHsa = Math.max(0, Number(state.adjustments?.hsa) || 0);
+  const adjEducator = Math.max(0, Number(state.adjustments?.educatorExpenses) || 0);
+  const adjSeRet = Math.max(0, Number(state.adjustments?.seRetirement) || 0);
+  const adjSeHealth = Math.max(0, Number(state.adjustments?.seHealthInsurance) || 0);
+  const adjAlimony = Math.max(0, Number(state.adjustments?.alimonyPaid) || 0);
+  const halfSeTax = summary.otherTaxesCalc.halfSelfEmploymentTaxDeduction;
+
+  const medRaw = Math.max(0, Number(state.itemizedDeductions?.medicalExpenses) || 0);
+  const realEstateRaw = Math.max(0, Number(state.itemizedDeductions?.realEstateTax) || 0);
+  const mortgageRaw = Math.max(0, Number(state.itemizedDeductions?.mortgageInterest) || 0);
+  const charityRaw = Math.max(0, Number(state.itemizedDeductions?.charity) || 0);
+  const gamblingLossesRaw = Math.max(0, Number(state.itemizedDeductions?.gamblingLosses) || 0);
+
+  const agi = summary.agiCalc.result;
+  const medFloor = Math.round(agi * 0.075 * 100) / 100;
+  const stateLocalTaxesForSalt = summary.stateTaxCalc.totalStateWithheld + summary.stateTaxCalc.totalLocalWithheld;
+  const rawSalt = stateLocalTaxesForSalt + realEstateRaw;
+
+  const hasAnyW2Activity = w2s.some(w => (Number(w.box1) || 0) !== 0 || (Number(w.box2) || 0) !== 0 || (Number(w.box4) || 0) !== 0 || (Number(w.box6) || 0) !== 0);
+  const hasAnyCapGains = stGain !== 0 || ltGain !== 0 || collectiblesGain !== 0 || sec1250Gain !== 0;
+  const hasAnySchedE = grossRents !== 0 || rentalExp !== 0 || rentalDepr !== 0 || k1Total !== 0;
+  const hasAnyOtherIncome = totalInterest !== 0 || totalDiv !== 0 || totalNecGross !== 0 || schedCExp !== 0 || totalOther1099 !== 0 || ssaGross !== 0 || hasAnyCapGains || hasAnySchedE;
+  const hasAnyAdjustments = summary.adjustmentsCalc.result !== 0;
+  const hasAnyItemized = medRaw !== 0 || realEstateRaw !== 0 || mortgageRaw !== 0 || charityRaw !== 0 || gamblingLossesRaw !== 0 || state.deductionMethod === 'itemized';
+  const hasAnyCreditsInput =
+    (Number(state.dependents?.childrenCount) || 0) > 0 ||
+    (Number(state.dependents?.otherDependentsCount) || 0) > 0 ||
+    (Number(state.dependents?.childCareExpenses) || 0) > 0 ||
+    (Number(state.dependents?.educationExpensesAotc) || 0) > 0 ||
+    (Number(state.dependents?.educationExpensesLlc) || 0) > 0 ||
+    (Number(state.dependents?.foreignTaxCredit) || 0) > 0 ||
+    (Number(state.dependents?.cleanEnergyCredit) || 0) > 0 ||
+    summary.creditsCalc.totalNonRefundableCredits > 0 ||
+    summary.creditsCalc.totalRefundableCredits > 0;
+  const hasAnyOtherTaxes = summary.otherTaxesCalc.totalOtherTaxes > 0 || summary.ficaCalc.excessSSTaxCredit > 0;
+  const hasAnyOverallImpact = hasAnyW2Activity || hasAnyOtherIncome || hasAnyAdjustments || hasAnyCreditsInput || (Number(state.dependents?.estimatedTaxPayments) || 0) > 0;
+
+  const blocks: CalcBlockDefinition[] = [];
+
+  // BLOCK 1: W-2 Wage & Payroll Summary (Clustered: Box 1 Wages + FICA Payroll)
+  {
+    const w2WageContribs: CalcVariableContributor[] = w2s.map((w, idx) => ({
+      label: `W-2 #${idx + 1} (${w.employer || 'Employer'}) Box 1`,
+      sign: '+',
+      amount: Number(w.box1) || 0,
+      amountFormatted: formatCurrencyExact(Number(w.box1) || 0),
+      isSetUp: (Number(w.box1) || 0) !== 0,
+      targetElementId: `w2-${w.id}-box1`
+    }));
+    const w2FedWhContribs: CalcVariableContributor[] = w2s.map((w, idx) => ({
+      label: `W-2 #${idx + 1} (${w.employer || 'Employer'}) Box 2`,
+      sign: '+',
+      amount: Number(w.box2) || 0,
+      amountFormatted: formatCurrencyExact(Number(w.box2) || 0),
+      isSetUp: (Number(w.box2) || 0) !== 0,
+      targetElementId: `w2-${w.id}-box2`
+    }));
+    const totalW2FedWh = w2s.reduce((s, w) => s + (Number(w.box2) || 0), 0);
+
+    const vars: Record<string, CalcVariableBreakdown> = {
+      w2_wages: makeVar('w2_wages', 'W-2 Box 1 Wages', totalW2Wages, w2WageContribs),
+      w2_withholding: makeVar('w2_withholding', 'W-2 Box 2 Federal Withholding', totalW2FedWh, w2FedWhContribs, true),
+      ss_tax: makeVar('ss_tax', 'Social Security Tax (Box 4)', summary.ficaCalc.ssTax, w2s.map((w, idx) => ({
+        label: `W-2 #${idx + 1} Box 4`,
+        sign: '+',
+        amount: Number(w.box4) || 0,
+        amountFormatted: formatCurrencyExact(Number(w.box4) || 0),
+        isSetUp: (Number(w.box4) || 0) !== 0,
+        targetElementId: `w2-${w.id}-box4`
+      })), true),
+      med_tax: makeVar('med_tax', 'Medicare Tax (Box 6)', summary.ficaCalc.medTax, w2s.map((w, idx) => ({
+        label: `W-2 #${idx + 1} Box 6`,
+        sign: '+',
+        amount: Number(w.box6) || 0,
+        amountFormatted: formatCurrencyExact(Number(w.box6) || 0),
+        isSetUp: (Number(w.box6) || 0) !== 0,
+        targetElementId: `w2-${w.id}-box6`
+      })), true)
+    };
+
+    const lines: CalcLineItem[] = [
+      {
+        id: 'line-w2-wages',
+        label: 'Total W-2 Wages',
+        formLineLabel: 'Form 1040 Line 1a',
+        generalTokens: [t('Total W-2 Wages = '), v('w2_wages', '∑ W-2 Box 1', totalW2Wages, vars.w2_wages.isEmpty)],
+        pluggedTokens: [t('Total W-2 Wages = '), v('w2_wages', formatCurrency(totalW2Wages), totalW2Wages, vars.w2_wages.isEmpty)],
+        resultFormatted: formatCurrency(totalW2Wages)
+      },
+      {
+        id: 'line-w2-withholding',
+        label: 'W-2 Federal Tax Withheld',
+        formLineLabel: 'Form 1040 Line 25a',
+        generalTokens: [t('W-2 Withholding = '), v('w2_withholding', '∑ W-2 Box 2', totalW2FedWh, vars.w2_withholding.isEmpty, true)],
+        pluggedTokens: [t('W-2 Withholding = '), v('w2_withholding', formatCurrencyExact(totalW2FedWh), totalW2FedWh, vars.w2_withholding.isEmpty, true)],
+        resultFormatted: formatCurrencyExact(totalW2FedWh)
+      },
+      {
+        id: 'line-fica-total',
+        label: 'FICA Payroll Taxes (SS + Medicare)',
+        formLineLabel: null,
+        isIntermediate: true,
+        generalTokens: [
+          t('Total FICA = '),
+          v('ss_tax', 'SS Tax (6.2%)', summary.ficaCalc.ssTax, vars.ss_tax.isEmpty, true),
+          t(' + '),
+          v('med_tax', 'Medicare Tax (1.45%)', summary.ficaCalc.medTax, vars.med_tax.isEmpty, true)
+        ],
+        pluggedTokens: [
+          t('Total FICA = '),
+          v('ss_tax', formatCurrencyExact(summary.ficaCalc.ssTax), summary.ficaCalc.ssTax, vars.ss_tax.isEmpty, true),
+          t(' + '),
+          v('med_tax', formatCurrencyExact(summary.ficaCalc.medTax), summary.ficaCalc.medTax, vars.med_tax.isEmpty, true),
+          t(` = ${formatCurrencyExact(summary.ficaCalc.totalFica)}`)
+        ],
+        resultFormatted: formatCurrencyExact(summary.ficaCalc.totalFica)
+      }
+    ];
+
+    blocks.push({
+      id: 'calc-total-w2-wages',
+      stepLabel: 'Step 1 • Wage & Payroll Aggregation',
+      title: 'W-2 Wages, Withholding & FICA',
+      hasImpact: hasAnyW2Activity,
+      lines,
+      variables: vars,
+      sourceIds: w2s.flatMap(w => [`w2-${w.id}-box1`, `w2-${w.id}-box2`, `w2-${w.id}-box4`, `w2-${w.id}-box6`])
+    });
+  }
+
+  // BLOCK 2: Capital Gains & Losses (Schedule D)
+  {
+    const vars: Record<string, CalcVariableBreakdown> = {
+      st_gain: makeVar('st_gain', 'Short-Term Capital Gains/Losses', stGain, [{
+        label: 'Short-Term Net (Schedule D Part I)',
+        sign: stGain < 0 ? '-' : '+',
+        amount: Math.abs(stGain),
+        amountFormatted: formatCurrency(stGain),
+        isSetUp: stGain !== 0,
+        targetElementId: 'input-capital-gains-st',
+        panelKey: 'capital-gains',
+        panelSection: 'other-income'
+      }]),
+      lt_gain: makeVar('lt_gain', 'Long-Term Capital Gains/Losses', ltGain, [{
+        label: 'Long-Term Net (Schedule D Part II)',
+        sign: ltGain < 0 ? '-' : '+',
+        amount: Math.abs(ltGain),
+        amountFormatted: formatCurrency(ltGain),
+        isSetUp: ltGain !== 0,
+        targetElementId: 'input-capital-gains-lt',
+        panelKey: 'capital-gains',
+        panelSection: 'other-income'
+      }])
+    };
+    const rawNet = stGain + ltGain;
+    const lines: CalcLineItem[] = [
+      {
+        id: 'line-cap-raw',
+        label: 'Combined Capital Gain / (Loss)',
+        formLineLabel: null,
+        isIntermediate: true,
+        generalTokens: [
+          t('Combined Net = '),
+          v('st_gain', 'Short-Term', stGain, vars.st_gain.isEmpty),
+          t(' + '),
+          v('lt_gain', 'Long-Term', ltGain, vars.lt_gain.isEmpty)
+        ],
+        pluggedTokens: [
+          t('Combined Net = '),
+          v('st_gain', formatCurrency(stGain), stGain, vars.st_gain.isEmpty),
+          t(' + '),
+          v('lt_gain', formatCurrency(ltGain), ltGain, vars.lt_gain.isEmpty),
+          t(` = ${formatCurrency(rawNet)}`)
+        ],
+        resultFormatted: formatCurrency(rawNet)
+      },
+      {
+        id: 'line-cap-allowable',
+        label: 'Allowable Capital Gain / (Loss)',
+        formLineLabel: 'Form 1040 Line 7',
+        generalTokens: [
+          t(`Allowable = max(${formatCurrency(capLossLimit)}, `),
+          v('st_gain', 'Short-Term', stGain, vars.st_gain.isEmpty),
+          t(' + '),
+          v('lt_gain', 'Long-Term', ltGain, vars.lt_gain.isEmpty),
+          t(')')
+        ],
+        pluggedTokens: [
+          t(`Allowable = max(${formatCurrency(capLossLimit)}, ${formatCurrency(rawNet)}) = ${formatCurrency(summary.capitalGainsCalc.result)}`)
+        ],
+        resultFormatted: formatCurrency(summary.capitalGainsCalc.result)
+      }
+    ];
+    blocks.push({
+      id: 'calc-capital-gains',
+      stepLabel: 'Step 2a • Schedule D / Form 8949',
+      title: 'Capital Gains & Loss Limitation',
+      hasImpact: hasAnyCapGains,
+      lines,
+      variables: vars,
+      sourceIds: ['input-capital-gains-st', 'input-capital-gains-lt']
+    });
+  }
+
+  // BLOCK 3: Schedule E Rental & K-1
+  {
+    const vars: Record<string, CalcVariableBreakdown> = {
+      sched_e_rents: makeVar('sched_e_rents', 'Gross Rental Income', grossRents, [{
+        label: 'Schedule E Gross Rents',
+        sign: '+',
+        amount: grossRents,
+        amountFormatted: formatCurrency(grossRents),
+        isSetUp: grossRents !== 0,
+        targetElementId: 'input-sched-e-rents',
+        panelKey: 'schedule-e-rental',
+        panelSection: 'other-income'
+      }]),
+      sched_e_exp: makeVar('sched_e_exp', 'Rental Operating Expenses', rentalExp, [{
+        label: 'Schedule E Operating Expenses',
+        sign: '-',
+        amount: rentalExp,
+        amountFormatted: formatCurrency(rentalExp),
+        isSetUp: rentalExp !== 0,
+        targetElementId: 'input-sched-e-expenses',
+        panelKey: 'schedule-e-rental',
+        panelSection: 'other-income'
+      }]),
+      sched_e_depr: makeVar('sched_e_depr', 'MACRS Depreciation', rentalDepr, [{
+        label: 'Form 4562 Depreciation',
+        sign: '-',
+        amount: rentalDepr,
+        amountFormatted: formatCurrency(rentalDepr),
+        isSetUp: rentalDepr !== 0,
+        targetElementId: 'input-sched-e-depreciation',
+        panelKey: 'schedule-e-rental',
+        panelSection: 'other-income'
+      }])
+    };
+
+    const lines: CalcLineItem[] = [
+      {
+        id: 'line-sched-e-net',
+        label: 'Net Rental Income Before PAL',
+        formLineLabel: null,
+        isIntermediate: true,
+        generalTokens: [
+          t('Net Rental = '),
+          v('sched_e_rents', 'Gross Rents', grossRents, vars.sched_e_rents.isEmpty),
+          t(' − '),
+          v('sched_e_exp', 'Expenses', rentalExp, vars.sched_e_exp.isEmpty),
+          t(' − '),
+          v('sched_e_depr', 'Depreciation', rentalDepr, vars.sched_e_depr.isEmpty)
+        ],
+        pluggedTokens: [
+          t('Net Rental = '),
+          v('sched_e_rents', formatCurrency(grossRents), grossRents, vars.sched_e_rents.isEmpty),
+          t(' − '),
+          v('sched_e_exp', formatCurrency(rentalExp), rentalExp, vars.sched_e_exp.isEmpty),
+          t(' − '),
+          v('sched_e_depr', formatCurrency(rentalDepr), rentalDepr, vars.sched_e_depr.isEmpty),
+          t(` = ${formatCurrency(summary.scheduleECalc.netBeforePal)}`)
+        ],
+        resultFormatted: formatCurrency(summary.scheduleECalc.netBeforePal)
+      },
+      {
+        id: 'line-sched-e-allowable',
+        label: 'Allowable Schedule E Income / (Loss)',
+        formLineLabel: 'Schedule 1 Line 5',
+        generalTokens: [t('Allowable Schedule E (after Form 8582 $25k PAL phaseout) + K-1 Income')],
+        pluggedTokens: [t(`Allowable Schedule E = ${formatCurrency(summary.scheduleECalc.allowableNet)}`)],
+        resultFormatted: formatCurrency(summary.scheduleECalc.allowableNet)
+      }
+    ];
+
+    blocks.push({
+      id: 'calc-schedule-e',
+      stepLabel: 'Step 2b • Schedule E / Form 4562',
+      title: 'Rental Real Estate & K-1 Income',
+      hasImpact: hasAnySchedE,
+      lines,
+      variables: vars,
+      sourceIds: ['input-sched-e-rents', 'input-sched-e-expenses', 'input-sched-e-depreciation']
+    });
+  }
+
+  // BLOCK 4: Gross Income, Adjustments & AGI (Clustered Core Pipeline)
+  {
+    const interestContribs: CalcVariableContributor[] = [
+      {
+        label: '1099-INT Taxable Interest',
+        sign: '+',
+        amount: interestDirect,
+        amountFormatted: formatCurrency(interestDirect),
+        isSetUp: interestDirect !== 0,
+        targetElementId: 'input-other-interest',
+        panelKey: '1099-int',
+        panelSection: 'other-income'
+      },
+      ...sources.filter(s => s.type === '1099-INT').map(s => ({
+        label: `1099-INT (${s.payer || 'Bank'})`,
+        sign: '+' as const,
+        amount: Math.max(0, (Number(s.amount) || 0) - Math.max(0, Number(s.accruedInterestPaid) || 0)),
+        amountFormatted: formatCurrency(Math.max(0, (Number(s.amount) || 0) - Math.max(0, Number(s.accruedInterestPaid) || 0))),
+        isSetUp: (Number(s.amount) || 0) !== 0,
+        targetElementId: `input-source-${s.id}-amount`,
+        panelKey: '1099-int',
+        panelSection: 'other-income' as const
+      }))
+    ];
+
+    const other1099Contribs: CalcVariableContributor[] = [
+      {
+        label: '1099-DIV Dividends',
+        sign: '+',
+        amount: totalDiv,
+        amountFormatted: formatCurrency(totalDiv),
+        isSetUp: totalDiv !== 0,
+        targetElementId: 'section-federal-other-income',
+        panelKey: '1099-div',
+        panelSection: 'other-income'
+      },
+      {
+        label: '1099-NEC Self-Employment',
+        sign: '+',
+        amount: totalNecGross,
+        amountFormatted: formatCurrency(totalNecGross),
+        isSetUp: totalNecGross !== 0,
+        targetElementId: 'section-federal-other-income',
+        panelKey: '1099-nec',
+        panelSection: 'other-income'
+      },
+      {
+        label: 'Schedule C Business Expenses',
+        sign: '-',
+        amount: schedCExp,
+        amountFormatted: formatCurrency(schedCExp),
+        isSetUp: schedCExp !== 0,
+        targetElementId: 'input-sched-c-expenses',
+        panelKey: 'schedule-c-expenses',
+        panelSection: 'other-income'
+      },
+      {
+        label: 'Other 1099s (1099-R, 1099-G, W-2G, Misc)',
+        sign: '+',
+        amount: totalOther1099,
+        amountFormatted: formatCurrency(totalOther1099),
+        isSetUp: totalOther1099 !== 0,
+        targetElementId: 'section-federal-other-income',
+        panelKey: '1099-r',
+        panelSection: 'other-income'
+      }
+    ];
+    const otherIncomeCombined = totalDiv + netNec + totalOther1099;
+
+    const adjContribs: CalcVariableContributor[] = [
+      { label: 'Student Loan Interest', sign: '+', amount: adjStudentLoan, amountFormatted: formatCurrency(adjStudentLoan), isSetUp: adjStudentLoan !== 0, targetElementId: 'input-adj-student-loan', panelKey: 'adj-student-loan', panelSection: 'adjustments' },
+      { label: 'Traditional IRA', sign: '+', amount: adjIra, amountFormatted: formatCurrency(adjIra), isSetUp: adjIra !== 0, targetElementId: 'input-adj-ira', panelKey: 'adj-ira', panelSection: 'adjustments' },
+      { label: 'HSA Contributions', sign: '+', amount: adjHsa, amountFormatted: formatCurrency(adjHsa), isSetUp: adjHsa !== 0, targetElementId: 'input-adj-hsa', panelKey: 'adj-hsa', panelSection: 'adjustments' },
+      { label: 'Educator Expenses', sign: '+', amount: adjEducator, amountFormatted: formatCurrency(adjEducator), isSetUp: adjEducator !== 0, targetElementId: 'input-adj-educator', panelKey: 'adj-educator', panelSection: 'adjustments' },
+      { label: 'SEP / Solo 401(k)', sign: '+', amount: adjSeRet, amountFormatted: formatCurrency(adjSeRet), isSetUp: adjSeRet !== 0, targetElementId: 'input-adj-se-retirement', panelKey: 'adj-se-retirement', panelSection: 'adjustments' },
+      { label: 'SE Health Insurance', sign: '+', amount: adjSeHealth, amountFormatted: formatCurrency(adjSeHealth), isSetUp: adjSeHealth !== 0, targetElementId: 'input-adj-se-health', panelKey: 'adj-se-health', panelSection: 'adjustments' },
+      { label: 'Alimony Paid', sign: '+', amount: adjAlimony, amountFormatted: formatCurrency(adjAlimony), isSetUp: adjAlimony !== 0, targetElementId: 'input-adj-alimony', panelKey: 'adj-alimony', panelSection: 'adjustments' },
+      { label: '½ Self-Employment Tax (Auto)', sign: '+', amount: halfSeTax, amountFormatted: formatCurrencyExact(halfSeTax), isSetUp: halfSeTax !== 0, targetElementId: 'section-federal-other-income', panelKey: '1099-nec', panelSection: 'other-income' }
+    ];
+
+    const vars: Record<string, CalcVariableBreakdown> = {
+      w2_wages: makeVar('w2_wages', 'W-2 Wages', totalW2Wages, w2s.map((w, idx) => ({
+        label: `W-2 #${idx + 1} Box 1`,
+        sign: '+',
+        amount: Number(w.box1) || 0,
+        amountFormatted: formatCurrency(Number(w.box1) || 0),
+        isSetUp: (Number(w.box1) || 0) !== 0,
+        targetElementId: `w2-${w.id}-box1`
+      }))),
+      interest_inc: makeVar('interest_inc', 'Taxable Interest', totalInterest, interestContribs),
+      other_1099: makeVar('other_1099', '1099 & Business Income', otherIncomeCombined, other1099Contribs),
+      cap_gains: makeVar('cap_gains', 'Net Capital Gains', summary.capitalGainsCalc.result, [
+        { label: 'Short-Term Cap Gains', sign: stGain < 0 ? '-' : '+', amount: Math.abs(stGain), amountFormatted: formatCurrency(stGain), isSetUp: stGain !== 0, targetElementId: 'input-capital-gains-st', panelKey: 'capital-gains', panelSection: 'other-income' },
+        { label: 'Long-Term Cap Gains', sign: ltGain < 0 ? '-' : '+', amount: Math.abs(ltGain), amountFormatted: formatCurrency(ltGain), isSetUp: ltGain !== 0, targetElementId: 'input-capital-gains-lt', panelKey: 'capital-gains', panelSection: 'other-income' }
+      ]),
+      sched_e: makeVar('sched_e', 'Schedule E / K-1', summary.scheduleECalc.allowableNet, [
+        { label: 'Gross Rents', sign: '+', amount: grossRents, amountFormatted: formatCurrency(grossRents), isSetUp: grossRents !== 0, targetElementId: 'input-sched-e-rents', panelKey: 'schedule-e-rental', panelSection: 'other-income' },
+        { label: 'Rental Expenses & Depr', sign: '-', amount: rentalExp + rentalDepr, amountFormatted: formatCurrency(rentalExp + rentalDepr), isSetUp: (rentalExp + rentalDepr) !== 0, targetElementId: 'input-sched-e-expenses', panelKey: 'schedule-e-rental', panelSection: 'other-income' },
+        { label: 'Schedule K-1 Income', sign: '+', amount: k1Total, amountFormatted: formatCurrency(k1Total), isSetUp: k1Total !== 0, targetElementId: 'section-federal-other-income', panelKey: 'schedule-k1', panelSection: 'other-income' }
+      ]),
+      adjustments_total: makeVar('adjustments_total', 'Adjustments to Income', summary.adjustmentsCalc.result, adjContribs, true),
+      gross_income: makeVar('gross_income', 'Total Gross Income', summary.grossIncomeCalc.result, [
+        { label: 'W-2 Wages', sign: '+', amount: totalW2Wages, amountFormatted: formatCurrency(totalW2Wages), isSetUp: totalW2Wages !== 0, targetElementId: 'w2-0-box1' },
+        { label: 'Taxable Interest', sign: '+', amount: totalInterest, amountFormatted: formatCurrency(totalInterest), isSetUp: totalInterest !== 0, targetElementId: 'input-other-interest', panelKey: '1099-int', panelSection: 'other-income' },
+        { label: '1099 / Business Net', sign: '+', amount: otherIncomeCombined, amountFormatted: formatCurrency(otherIncomeCombined), isSetUp: otherIncomeCombined !== 0, targetElementId: 'section-federal-other-income' },
+        { label: 'Capital Gains / Losses', sign: summary.capitalGainsCalc.result < 0 ? '-' : '+', amount: Math.abs(summary.capitalGainsCalc.result), amountFormatted: formatCurrency(summary.capitalGainsCalc.result), isSetUp: summary.capitalGainsCalc.result !== 0, targetElementId: 'input-capital-gains-st', panelKey: 'capital-gains', panelSection: 'other-income' },
+        { label: 'Schedule E / K-1', sign: summary.scheduleECalc.allowableNet < 0 ? '-' : '+', amount: Math.abs(summary.scheduleECalc.allowableNet), amountFormatted: formatCurrency(summary.scheduleECalc.allowableNet), isSetUp: summary.scheduleECalc.allowableNet !== 0, targetElementId: 'input-sched-e-rents', panelKey: 'schedule-e-rental', panelSection: 'other-income' }
+      ])
+    };
+
+    const lines: CalcLineItem[] = [
+      {
+        id: 'line-gross-income',
+        label: 'Total Gross Income',
+        formLineLabel: 'Form 1040 Line 9',
+        generalTokens: [
+          t('Gross Income = '),
+          v('w2_wages', 'W-2 Wages', totalW2Wages, vars.w2_wages.isEmpty),
+          t(' + '),
+          v('interest_inc', 'Interest', totalInterest, vars.interest_inc.isEmpty),
+          t(' + '),
+          v('other_1099', '1099/Business', otherIncomeCombined, vars.other_1099.isEmpty),
+          t(' + '),
+          v('cap_gains', 'Cap Gains', summary.capitalGainsCalc.result, vars.cap_gains.isEmpty),
+          t(' + '),
+          v('sched_e', 'Sched E', summary.scheduleECalc.allowableNet, vars.sched_e.isEmpty)
+        ],
+        pluggedTokens: [
+          t('Gross Income = '),
+          v('w2_wages', formatCurrency(totalW2Wages), totalW2Wages, vars.w2_wages.isEmpty),
+          t(' + '),
+          v('interest_inc', formatCurrency(totalInterest), totalInterest, vars.interest_inc.isEmpty),
+          t(' + '),
+          v('other_1099', formatCurrency(otherIncomeCombined), otherIncomeCombined, vars.other_1099.isEmpty),
+          t(' + '),
+          v('cap_gains', formatCurrency(summary.capitalGainsCalc.result), summary.capitalGainsCalc.result, vars.cap_gains.isEmpty),
+          t(' + '),
+          v('sched_e', formatCurrency(summary.scheduleECalc.allowableNet), summary.scheduleECalc.allowableNet, vars.sched_e.isEmpty),
+          t(` = ${formatCurrencyExact(summary.grossIncomeCalc.result)}`)
+        ],
+        resultFormatted: formatCurrencyExact(summary.grossIncomeCalc.result)
+      },
+      {
+        id: 'line-adjustments',
+        label: 'Total Adjustments (Above-the-Line)',
+        formLineLabel: 'Form 1040 Line 10',
+        generalTokens: [t('Adjustments = '), v('adjustments_total', '∑ Schedule 1 Adjustments', summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true)],
+        pluggedTokens: [t('Adjustments = '), v('adjustments_total', formatCurrencyExact(summary.adjustmentsCalc.result), summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true)],
+        resultFormatted: formatCurrencyExact(summary.adjustmentsCalc.result)
+      },
+      {
+        id: 'line-agi',
+        label: 'Adjusted Gross Income (AGI)',
+        formLineLabel: 'Form 1040 Line 11',
+        generalTokens: [
+          t('AGI = '),
+          v('gross_income', 'Gross Income', summary.grossIncomeCalc.result, vars.gross_income.isEmpty),
+          t(' − '),
+          v('adjustments_total', 'Adjustments', summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true)
+        ],
+        pluggedTokens: [
+          t('AGI = '),
+          v('gross_income', formatCurrencyExact(summary.grossIncomeCalc.result), summary.grossIncomeCalc.result, vars.gross_income.isEmpty),
+          t(' − '),
+          v('adjustments_total', formatCurrencyExact(summary.adjustmentsCalc.result), summary.adjustmentsCalc.result, vars.adjustments_total.isEmpty, true),
+          t(` = ${formatCurrencyExact(agi)}`)
+        ],
+        resultFormatted: formatCurrencyExact(agi)
+      }
+    ];
+
+    blocks.push({
+      id: 'calc-agi',
+      stepLabel: 'Step 3 • Gross Income, Adjustments & AGI',
+      title: 'Gross Income & Adjusted Gross Income (AGI)',
+      hasImpact: hasAnyOverallImpact,
+      isOutput: true,
+      lines,
+      variables: vars,
+      sourceIds: ['calc-total-w2-wages', 'calc-capital-gains', 'calc-schedule-e', 'input-other-interest', 'input-adj-student-loan', 'input-adj-ira', 'input-adj-hsa']
+    });
+  }
+
+  // BLOCK 5: Schedule A Itemized Deductions (with full Medical 7.5% AGI floor math & SALT $10k cap math)
+  {
+    const vars: Record<string, CalcVariableBreakdown> = {
+      agi_val: makeVar('agi_val', 'Adjusted Gross Income (AGI)', agi, [
+        { label: 'Form 1040 Line 11 AGI', sign: 'info', amount: agi, amountFormatted: formatCurrencyExact(agi), isSetUp: agi !== 0, targetElementId: 'calc-agi' }
+      ], true),
+      med_expenses: makeVar('med_expenses', 'Medical & Dental Expenses', medRaw, [{
+        label: 'Medical & Dental Expenses Paid',
+        sign: '+',
+        amount: medRaw,
+        amountFormatted: formatCurrency(medRaw),
+        isSetUp: medRaw !== 0,
+        targetElementId: 'input-itemized-medical',
+        panelKey: 'itemized-medical',
+        panelSection: 'itemized'
+      }]),
+      state_local_tax: makeVar('state_local_tax', 'State & Local Income Taxes', stateLocalTaxesForSalt, w2s.flatMap(w => (w.states || []).map(st => ({
+        label: `W-2 ${st.state} Box 17 + Box 19`,
+        sign: '+' as const,
+        amount: (Number(st.stateTaxWithheld) || 0) + (Number(st.localTaxWithheld) || 0),
+        amountFormatted: formatCurrency((Number(st.stateTaxWithheld) || 0) + (Number(st.localTaxWithheld) || 0)),
+        isSetUp: ((Number(st.stateTaxWithheld) || 0) + (Number(st.localTaxWithheld) || 0)) !== 0,
+        targetElementId: `w2-${w.id}-state-${st.id}-box17`
+      })))),
+      real_estate_tax: makeVar('real_estate_tax', 'Real Estate / Property Taxes', realEstateRaw, [{
+        label: 'Real Estate Taxes Paid',
+        sign: '+',
+        amount: realEstateRaw,
+        amountFormatted: formatCurrency(realEstateRaw),
+        isSetUp: realEstateRaw !== 0,
+        targetElementId: 'input-itemized-real-estate',
+        panelKey: 'itemized-real-estate',
+        panelSection: 'itemized'
+      }]),
+      mortgage_int: makeVar('mortgage_int', 'Mortgage Interest', mortgageRaw, [{
+        label: 'Form 1098 Mortgage Interest',
+        sign: '+',
+        amount: mortgageRaw,
+        amountFormatted: formatCurrency(mortgageRaw),
+        isSetUp: mortgageRaw !== 0,
+        targetElementId: 'input-itemized-mortgage',
+        panelKey: 'itemized-mortgage',
+        panelSection: 'itemized'
+      }]),
+      charity_contrib: makeVar('charity_contrib', 'Charitable Contributions', charityRaw, [{
+        label: 'Charitable Donations',
+        sign: '+',
+        amount: charityRaw,
+        amountFormatted: formatCurrency(charityRaw),
+        isSetUp: charityRaw !== 0,
+        targetElementId: 'input-itemized-charity',
+        panelKey: 'itemized-charity',
+        panelSection: 'itemized'
+      }])
+    };
+
+    const lines: CalcLineItem[] = [
+      {
+        id: 'line-med-floor',
+        label: 'Medical 7.5% AGI Floor',
+        formLineLabel: 'Schedule A Line 3',
+        isIntermediate: true,
+        generalTokens: [t('Medical Floor = '), v('agi_val', 'AGI', agi, vars.agi_val.isEmpty, true), t(' × 0.075')],
+        pluggedTokens: [t('Medical Floor = '), v('agi_val', formatCurrencyExact(agi), agi, vars.agi_val.isEmpty, true), t(` × 0.075 = ${formatCurrencyExact(medFloor)}`)],
+        resultFormatted: formatCurrencyExact(medFloor)
+      },
+      {
+        id: 'line-med-deductible',
+        label: 'Deductible Medical Expenses',
+        formLineLabel: 'Schedule A Line 4',
+        generalTokens: [t('Deductible Medical = max(0, '), v('med_expenses', 'Medical Expenses', medRaw, vars.med_expenses.isEmpty), t(' − '), t('Medical Floor)')],
+        pluggedTokens: [t('Deductible Medical = max(0, '), v('med_expenses', formatCurrency(medRaw), medRaw, vars.med_expenses.isEmpty), t(` − ${formatCurrencyExact(medFloor)}) = ${formatCurrencyExact(summary.itemizedCalc.allowableMedical)}`)],
+        resultFormatted: formatCurrencyExact(summary.itemizedCalc.allowableMedical)
+      },
+      {
+        id: 'line-salt-cap',
+        label: 'SALT Deduction (Capped at $10,000)',
+        formLineLabel: 'Schedule A Line 5e',
+        generalTokens: [t('SALT = min($10,000, '), v('state_local_tax', 'State/Local Tax', stateLocalTaxesForSalt, vars.state_local_tax.isEmpty), t(' + '), v('real_estate_tax', 'Property Tax', realEstateRaw, vars.real_estate_tax.isEmpty), t(')')],
+        pluggedTokens: [t('SALT = min($10,000, '), v('state_local_tax', formatCurrency(stateLocalTaxesForSalt), stateLocalTaxesForSalt, vars.state_local_tax.isEmpty), t(' + '), v('real_estate_tax', formatCurrency(realEstateRaw), realEstateRaw, vars.real_estate_tax.isEmpty), t(` = ${formatCurrency(rawSalt)}) = ${formatCurrency(summary.itemizedCalc.allowableSalt)}`)],
+        resultFormatted: formatCurrency(summary.itemizedCalc.allowableSalt)
+      },
+      {
+        id: 'line-sched-a-total',
+        label: 'Total Itemized Deductions',
+        formLineLabel: 'Schedule A Line 17',
+        generalTokens: [
+          t('Total Itemized = Deductible Medical + SALT + '),
+          v('mortgage_int', 'Mortgage Interest', mortgageRaw, vars.mortgage_int.isEmpty),
+          t(' + '),
+          v('charity_contrib', 'Charity', charityRaw, vars.charity_contrib.isEmpty)
+        ],
+        pluggedTokens: [
+          t(`Total Itemized = ${formatCurrencyExact(summary.itemizedCalc.allowableMedical)} + ${formatCurrency(summary.itemizedCalc.allowableSalt)} + `),
+          v('mortgage_int', formatCurrency(mortgageRaw), mortgageRaw, vars.mortgage_int.isEmpty),
+          t(' + '),
+          v('charity_contrib', formatCurrency(charityRaw), charityRaw, vars.charity_contrib.isEmpty),
+          t(` = ${formatCurrencyExact(summary.itemizedCalc.totalItemized)}`)
+        ],
+        resultFormatted: formatCurrencyExact(summary.itemizedCalc.totalItemized)
+      }
+    ];
+
+    blocks.push({
+      id: 'calc-itemized-deductions',
+      stepLabel: 'Step 4a • Schedule A Itemized Deductions',
+      title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',
+      hasImpact: hasAnyItemized,
+      lines,
+      variables: vars,
+      sourceIds: ['calc-agi', 'input-itemized-medical', 'input-itemized-real-estate', 'input-itemized-mortgage', 'input-itemized-charity']
+    });
+  }
+
+  // BLOCK 6: Standard vs Itemized Deduction & Taxable Income (Clustered)
+  {
+    const vars: Record<string, CalcVariableBreakdown> = {
+      agi_val: makeVar('agi_val', 'Adjusted Gross Income (AGI)', agi, [
+        { label: 'Form 1040 Line 11 AGI', sign: '+', amount: agi, amountFormatted: formatCurrencyExact(agi), isSetUp: agi !== 0, targetElementId: 'calc-agi' }
+      ], true),
+      std_ded: makeVar('std_ded', 'Standard Deduction', summary.itemizedCalc.standardDeduction, [
+        { label: `Filing Status (${filingStatusLabel(state.filingStatus)})`, sign: '+', amount: rules.standardDeduction[effectiveStatus], amountFormatted: formatCurrency(rules.standardDeduction[effectiveStatus]), isSetUp: true, targetElementId: 'select-filing-status' },
+        { label: 'Age 65+ / Blind Extra', sign: '+', amount: summary.itemizedCalc.standardDeduction - rules.standardDeduction[effectiveStatus], amountFormatted: formatCurrency(summary.itemizedCalc.standardDeduction - rules.standardDeduction[effectiveStatus]), isSetUp: (Number(state.dependents?.age65OrBlindCount) || 0) > 0, targetElementId: 'input-age65-blind', panelKey: 'cred-age-blind', panelSection: 'credits' }
+      ]),
+      item_ded: makeVar('item_ded', 'Itemized Deductions', summary.itemizedCalc.totalItemized, [
+        { label: 'Medical (Over 7.5% AGI)', sign: '+', amount: summary.itemizedCalc.allowableMedical, amountFormatted: formatCurrencyExact(summary.itemizedCalc.allowableMedical), isSetUp: medRaw > 0, targetElementId: 'input-itemized-medical', panelKey: 'itemized-medical', panelSection: 'itemized' },
+        { label: 'SALT (Capped $10k)', sign: '+', amount: summary.itemizedCalc.allowableSalt, amountFormatted: formatCurrency(summary.itemizedCalc.allowableSalt), isSetUp: rawSalt > 0, targetElementId: 'input-itemized-real-estate', panelKey: 'itemized-real-estate', panelSection: 'itemized' },
+        { label: 'Mortgage Interest', sign: '+', amount: mortgageRaw, amountFormatted: formatCurrency(mortgageRaw), isSetUp: mortgageRaw > 0, targetElementId: 'input-itemized-mortgage', panelKey: 'itemized-mortgage', panelSection: 'itemized' },
+        { label: 'Charity', sign: '+', amount: charityRaw, amountFormatted: formatCurrency(charityRaw), isSetUp: charityRaw > 0, targetElementId: 'input-itemized-charity', panelKey: 'itemized-charity', panelSection: 'itemized' }
+      ], true),
+      qbi_ded: makeVar('qbi_ded', 'QBI Deduction (20% Sec. 199A)', summary.qbiDeduction, [
+        { label: 'Net Schedule C + K-1 QBI × 20%', sign: '+', amount: summary.qbiDeduction, amountFormatted: formatCurrencyExact(summary.qbiDeduction), isSetUp: summary.qbiDeduction > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-nec', panelSection: 'other-income' }
+      ], true)
+    };
+
+    const lines: CalcLineItem[] = [
+      {
+        id: 'line-deduction',
+        label: `Applied Deduction (${summary.itemizedCalc.chosenMethod === 'itemized' ? 'Itemized' : 'Standard'})`,
+        formLineLabel: 'Form 1040 Line 12',
+        generalTokens: [
+          t('Deduction = max('),
+          v('std_ded', 'Standard', summary.itemizedCalc.standardDeduction, vars.std_ded.isEmpty),
+          t(', '),
+          v('item_ded', 'Itemized', summary.itemizedCalc.totalItemized, vars.item_ded.isEmpty, true),
+          t(')')
+        ],
+        pluggedTokens: [
+          t('Deduction = '),
+          v('std_ded', formatCurrency(summary.itemizedCalc.standardDeduction), summary.itemizedCalc.standardDeduction, vars.std_ded.isEmpty),
+          t(' vs '),
+          v('item_ded', formatCurrencyExact(summary.itemizedCalc.totalItemized), summary.itemizedCalc.totalItemized, vars.item_ded.isEmpty, true),
+          t(` ➔ ${formatCurrencyExact(summary.deductionCalc.result)}`)
+        ],
+        resultFormatted: formatCurrencyExact(summary.deductionCalc.result)
+      },
+      ...(summary.qbiDeduction > 0 ? [{
+        id: 'line-qbi',
+        label: 'Qualified Business Income Deduction',
+        formLineLabel: 'Form 1040 Line 13',
+        generalTokens: [t('QBI = 20% × Qualified Business Income '), v('qbi_ded', 'QBI', summary.qbiDeduction, vars.qbi_ded.isEmpty, true)],
+        pluggedTokens: [t('QBI = '), v('qbi_ded', formatCurrencyExact(summary.qbiDeduction), summary.qbiDeduction, vars.qbi_ded.isEmpty, true)],
+        resultFormatted: formatCurrencyExact(summary.qbiDeduction)
+      }] : []),
+      {
+        id: 'line-taxable-income',
+        label: 'Taxable Income',
+        formLineLabel: 'Form 1040 Line 15',
+        generalTokens: [
+          t('Taxable Income = max(0, '),
+          v('agi_val', 'AGI', agi, vars.agi_val.isEmpty, true),
+          t(' − Deduction'),
+          ...(summary.qbiDeduction > 0 ? [t(' − '), v('qbi_ded', 'QBI', summary.qbiDeduction, vars.qbi_ded.isEmpty, true)] : []),
+          t(')')
+        ],
+        pluggedTokens: [
+          t('Taxable Income = max(0, '),
+          v('agi_val', formatCurrencyExact(agi), agi, vars.agi_val.isEmpty, true),
+          t(` − ${formatCurrencyExact(summary.deductionCalc.result)}`),
+          ...(summary.qbiDeduction > 0 ? [t(` − ${formatCurrencyExact(summary.qbiDeduction)}`)] : []),
+          t(`) = ${formatCurrencyExact(summary.taxableIncomeCalc.result)}`)
+        ],
+        resultFormatted: formatCurrencyExact(summary.taxableIncomeCalc.result)
+      }
+    ];
+
+    blocks.push({
+      id: 'calc-taxable-income',
+      stepLabel: 'Step 4 • Deductions & Taxable Income',
+      title: 'Deduction & Taxable Income',
+      hasImpact: hasAnyOverallImpact,
+      lines,
+      variables: vars,
+      sourceIds: ['calc-agi', 'select-filing-status', ...(hasAnyItemized ? ['calc-itemized-deductions'] : [])]
+    });
+  }
+
+  // BLOCK 7: Tax Before Credits (Brackets)
+  {
+    const vars: Record<string, CalcVariableBreakdown> = {
+      taxable_inc: makeVar('taxable_inc', 'Taxable Income', summary.taxableIncomeCalc.result, [
+        { label: 'Form 1040 Line 15 Taxable Income', sign: '+', amount: summary.taxableIncomeCalc.result, amountFormatted: formatCurrencyExact(summary.taxableIncomeCalc.result), isSetUp: summary.taxableIncomeCalc.result > 0, targetElementId: 'calc-taxable-income' }
+      ], true)
+    };
+
+    const lines: CalcLineItem[] = [
+      {
+        id: 'line-tax-before-credits',
+        label: 'Tax from Brackets & Preferential Rates',
+        formLineLabel: 'Form 1040 Line 16',
+        generalTokens: [t('Tentative Tax = ∑(Bracket Slices of '), v('taxable_inc', 'Taxable Income', summary.taxableIncomeCalc.result, vars.taxable_inc.isEmpty, true), t(' × Rate)')],
+        pluggedTokens: [t(`${summary.taxBeforeCreditsCalc.pluggedFormula}`)],
+        resultFormatted: formatCurrencyExact(summary.taxBeforeCreditsCalc.result)
+      }
+    ];
+
+    blocks.push({
+      id: 'calc-tax-before-credits',
+      stepLabel: 'Step 5 • Tax Brackets',
+      title: 'Federal Income Tax (Before Credits)',
+      hasImpact: hasAnyOverallImpact && summary.taxableIncomeCalc.result > 0,
+      lines,
+      variables: vars,
+      sourceIds: ['calc-taxable-income', 'select-filing-status']
+    });
+  }
+
+  // BLOCK 8: Tax Credits (Nonrefundable & Refundable)
+  {
+    const kids = Number(state.dependents?.childrenCount) || 0;
+    const otherDeps = Number(state.dependents?.otherDependentsCount) || 0;
+    const care = Number(state.dependents?.childCareExpenses) || 0;
+    const aotc = Number(state.dependents?.educationExpensesAotc) || 0;
+    const llc = Number(state.dependents?.educationExpensesLlc) || 0;
+    const ftc = Number(state.dependents?.foreignTaxCredit) || 0;
+    const clean = Number(state.dependents?.cleanEnergyCredit) || 0;
+
+    const vars: Record<string, CalcVariableBreakdown> = {
+      nonref_credits: makeVar('nonref_credits', 'Nonrefundable Credits', summary.creditsCalc.totalNonRefundableCredits, [
+        { label: `Child Tax Credit (${kids} kids)`, sign: '+', amount: summary.creditsCalc.childTaxCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.childTaxCredit), isSetUp: kids > 0, targetElementId: 'input-children-count', panelKey: 'cred-children', panelSection: 'credits' },
+        { label: `Other Dependents ($500 × ${otherDeps})`, sign: '+', amount: summary.creditsCalc.otherDependentsCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.otherDependentsCredit), isSetUp: otherDeps > 0, targetElementId: 'input-other-dependents', panelKey: 'cred-other-dependents', panelSection: 'credits' },
+        { label: 'Child & Dependent Care (Form 2441)', sign: '+', amount: summary.creditsCalc.childCareCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.childCareCredit), isSetUp: care > 0, targetElementId: 'input-child-care', panelKey: 'cred-child-care', panelSection: 'credits' },
+        { label: 'Education Credits (Nonrefundable)', sign: '+', amount: summary.creditsCalc.educationCreditNonRefundable, amountFormatted: formatCurrencyExact(summary.creditsCalc.educationCreditNonRefundable), isSetUp: aotc > 0 || llc > 0, targetElementId: 'input-edu-aotc', panelKey: 'cred-aotc', panelSection: 'credits' },
+        { label: "Saver's Credit (Form 8880)", sign: '+', amount: summary.creditsCalc.saversCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.saversCredit), isSetUp: summary.creditsCalc.saversCredit > 0, targetElementId: 'input-adj-ira', panelKey: 'adj-ira', panelSection: 'adjustments' },
+        { label: 'Foreign Tax Credit (Form 1116)', sign: '+', amount: summary.creditsCalc.foreignTaxCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.foreignTaxCredit), isSetUp: ftc > 0, targetElementId: 'input-foreign-tax-credit', panelKey: 'cred-foreign-tax', panelSection: 'credits' },
+        { label: 'Clean Energy Credit (Form 5695)', sign: '+', amount: summary.creditsCalc.cleanEnergyCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.cleanEnergyCredit), isSetUp: clean > 0, targetElementId: 'input-clean-energy-credit', panelKey: 'cred-clean-energy', panelSection: 'credits' }
+      ], true),
+      ref_credits: makeVar('ref_credits', 'Refundable Credits', summary.creditsCalc.totalRefundableCredits, [
+        { label: 'Additional Child Tax Credit (Sched 8812)', sign: '+', amount: summary.creditsCalc.additionalChildTaxCredit, amountFormatted: formatCurrencyExact(summary.creditsCalc.additionalChildTaxCredit), isSetUp: summary.creditsCalc.additionalChildTaxCredit > 0, targetElementId: 'input-children-count', panelKey: 'cred-children', panelSection: 'credits' },
+        { label: 'Earned Income Tax Credit (EITC)', sign: '+', amount: summary.creditsCalc.eitc, amountFormatted: formatCurrencyExact(summary.creditsCalc.eitc), isSetUp: summary.creditsCalc.eitc > 0, targetElementId: 'input-children-count', panelKey: 'cred-children', panelSection: 'credits' },
+        { label: 'Refundable AOTC (40%, Form 8863)', sign: '+', amount: summary.creditsCalc.educationCreditRefundable, amountFormatted: formatCurrencyExact(summary.creditsCalc.educationCreditRefundable), isSetUp: summary.creditsCalc.educationCreditRefundable > 0, targetElementId: 'input-edu-aotc', panelKey: 'cred-aotc', panelSection: 'credits' }
+      ], true)
+    };
+
+    const lines: CalcLineItem[] = [
+      {
+        id: 'line-nonref-credits',
+        label: 'Total Nonrefundable Credits',
+        formLineLabel: 'Form 1040 Line 19–20',
+        generalTokens: [t('Nonrefundable Credits = '), v('nonref_credits', '∑ Credits (Capped at Tax)', summary.creditsCalc.totalNonRefundableCredits, vars.nonref_credits.isEmpty, true)],
+        pluggedTokens: [t('Nonrefundable Credits = '), v('nonref_credits', formatCurrencyExact(summary.creditsCalc.totalNonRefundableCredits), summary.creditsCalc.totalNonRefundableCredits, vars.nonref_credits.isEmpty, true)],
+        resultFormatted: formatCurrencyExact(summary.creditsCalc.totalNonRefundableCredits)
+      },
+      {
+        id: 'line-ref-credits',
+        label: 'Total Refundable Credits (ACTC / EITC / AOTC)',
+        formLineLabel: 'Form 1040 Line 27–29',
+        generalTokens: [t('Refundable Credits = '), v('ref_credits', 'ACTC + EITC + 40% AOTC', summary.creditsCalc.totalRefundableCredits, vars.ref_credits.isEmpty, true)],
+        pluggedTokens: [t('Refundable Credits = '), v('ref_credits', formatCurrencyExact(summary.creditsCalc.totalRefundableCredits), summary.creditsCalc.totalRefundableCredits, vars.ref_credits.isEmpty, true)],
+        resultFormatted: formatCurrencyExact(summary.creditsCalc.totalRefundableCredits)
+      }
+    ];
+
+    blocks.push({
+      id: 'calc-total-credits',
+      stepLabel: 'Step 6 • Tax Credits',
+      title: 'Nonrefundable & Refundable Credits',
+      hasImpact: hasAnyCreditsInput,
+      lines,
+      variables: vars,
+      sourceIds: ['calc-tax-before-credits', 'input-children-count']
+    });
+  }
+
+  // BLOCK 9: Other Taxes (SE Tax, NIIT, Add'l Medicare, AMT, Early Dist)
+  {
+    const ot = summary.otherTaxesCalc;
+    const vars: Record<string, CalcVariableBreakdown> = {
+      se_tax: makeVar('se_tax', 'Self-Employment Tax (Sched SE)', ot.selfEmploymentTax, [
+        { label: 'Net 1099-NEC × 0.9235 × 15.3%', sign: '+', amount: ot.selfEmploymentTax, amountFormatted: formatCurrencyExact(ot.selfEmploymentTax), isSetUp: ot.selfEmploymentTax > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-nec', panelSection: 'other-income' }
+      ], true),
+      niit_addl: makeVar('niit_addl', 'NIIT & Addl Medicare / AMT', ot.niit + ot.additionalMedicareTax + ot.amt + ot.earlyDistributionPenaltyTax, [
+        { label: 'Form 8959 Additional Medicare (0.9%)', sign: '+', amount: ot.additionalMedicareTax, amountFormatted: formatCurrencyExact(ot.additionalMedicareTax), isSetUp: ot.additionalMedicareTax > 0, targetElementId: 'calc-agi' },
+        { label: 'Form 8960 NIIT (3.8%)', sign: '+', amount: ot.niit, amountFormatted: formatCurrencyExact(ot.niit), isSetUp: ot.niit > 0, targetElementId: 'calc-agi' },
+        { label: 'Form 6251 AMT', sign: '+', amount: ot.amt, amountFormatted: formatCurrencyExact(ot.amt), isSetUp: ot.amt > 0, targetElementId: 'calc-agi' },
+        { label: 'Form 5329 10% Early Distribution', sign: '+', amount: ot.earlyDistributionPenaltyTax, amountFormatted: formatCurrencyExact(ot.earlyDistributionPenaltyTax), isSetUp: ot.earlyDistributionPenaltyTax > 0, targetElementId: 'section-federal-other-income', panelKey: '1099-r', panelSection: 'other-income' }
+      ], true)
+    };
+
+    const lines: CalcLineItem[] = [
+      {
+        id: 'line-other-taxes',
+        label: 'Total Other Taxes',
+        formLineLabel: 'Form 1040 Line 23',
+        generalTokens: [
+          t('Other Taxes = '),
+          v('se_tax', 'SE Tax', ot.selfEmploymentTax, vars.se_tax.isEmpty, true),
+          t(' + '),
+          v('niit_addl', 'NIIT / Addl Med / AMT / 5329', ot.niit + ot.additionalMedicareTax + ot.amt + ot.earlyDistributionPenaltyTax, vars.niit_addl.isEmpty, true)
+        ],
+        pluggedTokens: [
+          t('Other Taxes = '),
+          v('se_tax', formatCurrencyExact(ot.selfEmploymentTax), ot.selfEmploymentTax, vars.se_tax.isEmpty, true),
+          t(' + '),
+          v('niit_addl', formatCurrencyExact(ot.niit + ot.additionalMedicareTax + ot.amt + ot.earlyDistributionPenaltyTax), ot.niit + ot.additionalMedicareTax + ot.amt + ot.earlyDistributionPenaltyTax, vars.niit_addl.isEmpty, true),
+          t(` = ${formatCurrencyExact(ot.totalOtherTaxes)}`)
+        ],
+        resultFormatted: formatCurrencyExact(ot.totalOtherTaxes)
+      }
+    ];
+
+    blocks.push({
+      id: 'calc-other-taxes',
+      stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes',
+      title: 'Self-Employment Tax, NIIT & Other Taxes',
+      hasImpact: hasAnyOtherTaxes,
+      lines,
+      variables: vars,
+      sourceIds: ['calc-agi', 'calc-total-w2-wages']
+    });
+  }
+
+  // BLOCK 10: Final Federal Tax, Payments & Refund/Owed Verdict (Clustered Output)
+  {
+    const estPay = Math.max(0, Number(state.dependents?.estimatedTaxPayments) || 0);
+    const vars: Record<string, CalcVariableBreakdown> = {
+      tax_before_cred: makeVar('tax_before_cred', 'Tax Before Credits', summary.taxBeforeCreditsCalc.result, [
+        { label: 'Form 1040 Line 16 Tax', sign: '+', amount: summary.taxBeforeCreditsCalc.result, amountFormatted: formatCurrencyExact(summary.taxBeforeCreditsCalc.result), isSetUp: summary.taxBeforeCreditsCalc.result > 0, targetElementId: 'calc-tax-before-credits' }
+      ], true),
+      nonref_cred: makeVar('nonref_cred', 'Nonrefundable Credits', summary.creditsCalc.totalNonRefundableCredits, [
+        { label: 'Form 1040 Line 19–20 Credits', sign: '-', amount: summary.creditsCalc.totalNonRefundableCredits, amountFormatted: formatCurrencyExact(summary.creditsCalc.totalNonRefundableCredits), isSetUp: summary.creditsCalc.totalNonRefundableCredits > 0, targetElementId: 'calc-total-credits' }
+      ], true),
+      other_taxes: makeVar('other_taxes', 'Other Taxes', summary.otherTaxesCalc.totalOtherTaxes, [
+        { label: 'Form 1040 Line 23 Other Taxes', sign: '+', amount: summary.otherTaxesCalc.totalOtherTaxes, amountFormatted: formatCurrencyExact(summary.otherTaxesCalc.totalOtherTaxes), isSetUp: summary.otherTaxesCalc.totalOtherTaxes > 0, targetElementId: 'calc-other-taxes' }
+      ], true),
+      payments_total: makeVar('payments_total', 'Total Payments & Refundable Credits', summary.withholdingCalc.result, [
+        ...w2s.map((w, idx) => ({
+          label: `W-2 #${idx + 1} Box 2 Federal Withholding`,
+          sign: '+' as const,
+          amount: Number(w.box2) || 0,
+          amountFormatted: formatCurrencyExact(Number(w.box2) || 0),
+          isSetUp: (Number(w.box2) || 0) !== 0,
+          targetElementId: `w2-${w.id}-box2`
+        })),
+        { label: 'Estimated Tax Payments (1040-ES)', sign: '+', amount: estPay, amountFormatted: formatCurrencyExact(estPay), isSetUp: estPay > 0, targetElementId: 'input-estimated-payments', panelKey: 'cred-estimated-payments', panelSection: 'credits' },
+        { label: 'Excess SS Tax Credit (Sched 3 Line 11)', sign: '+', amount: summary.ficaCalc.excessSSTaxCredit, amountFormatted: formatCurrencyExact(summary.ficaCalc.excessSSTaxCredit), isSetUp: summary.ficaCalc.excessSSTaxCredit > 0, targetElementId: 'calc-total-w2-wages' },
+        { label: 'Refundable Credits (ACTC/EITC/AOTC)', sign: '+', amount: summary.creditsCalc.totalRefundableCredits, amountFormatted: formatCurrencyExact(summary.creditsCalc.totalRefundableCredits), isSetUp: summary.creditsCalc.totalRefundableCredits > 0, targetElementId: 'calc-total-credits' }
+      ], true)
+    };
+
+    const lines: CalcLineItem[] = [
+      {
+        id: 'line-total-tax',
+        label: 'Total Federal Tax Liability',
+        formLineLabel: 'Form 1040 Line 24',
+        generalTokens: [
+          t('Total Tax = max(0, '),
+          v('tax_before_cred', 'Line 16 Tax', summary.taxBeforeCreditsCalc.result, vars.tax_before_cred.isEmpty, true),
+          t(' − '),
+          v('nonref_cred', 'Nonref Credits', summary.creditsCalc.totalNonRefundableCredits, vars.nonref_cred.isEmpty, true),
+          t(') + '),
+          v('other_taxes', 'Other Taxes', summary.otherTaxesCalc.totalOtherTaxes, vars.other_taxes.isEmpty, true)
+        ],
+        pluggedTokens: [
+          t('Total Tax = max(0, '),
+          v('tax_before_cred', formatCurrencyExact(summary.taxBeforeCreditsCalc.result), summary.taxBeforeCreditsCalc.result, vars.tax_before_cred.isEmpty, true),
+          t(' − '),
+          v('nonref_cred', formatCurrencyExact(summary.creditsCalc.totalNonRefundableCredits), summary.creditsCalc.totalNonRefundableCredits, vars.nonref_cred.isEmpty, true),
+          t(') + '),
+          v('other_taxes', formatCurrencyExact(summary.otherTaxesCalc.totalOtherTaxes), summary.otherTaxesCalc.totalOtherTaxes, vars.other_taxes.isEmpty, true),
+          t(` = ${formatCurrencyExact(summary.totalTaxCalc.result)}`)
+        ],
+        resultFormatted: formatCurrencyExact(summary.totalTaxCalc.result)
+      },
+      {
+        id: 'line-total-payments',
+        label: 'Total Payments & Refundable Credits',
+        formLineLabel: 'Form 1040 Line 33',
+        generalTokens: [t('Total Payments = '), v('payments_total', 'Withholding + Est. Payments + Refundable Credits', summary.withholdingCalc.result, vars.payments_total.isEmpty, true)],
+        pluggedTokens: [t('Total Payments = '), v('payments_total', formatCurrencyExact(summary.withholdingCalc.result), summary.withholdingCalc.result, vars.payments_total.isEmpty, true)],
+        resultFormatted: formatCurrencyExact(summary.withholdingCalc.result)
+      },
+      {
+        id: 'line-final-outcome',
+        label: summary.finalResultCalc.isRefund ? 'Federal Tax Refund' : 'Federal Tax Balance Owed',
+        formLineLabel: summary.finalResultCalc.isRefund ? 'Form 1040 Line 34 / 35a' : 'Form 1040 Line 37',
+        generalTokens: [t('Net Outcome = Total Payments − Total Tax')],
+        pluggedTokens: [t(`${formatCurrencyExact(summary.withholdingCalc.result)} − ${formatCurrencyExact(summary.totalTaxCalc.result)} = ${summary.finalResultCalc.isRefund ? '+' : '-'}${formatCurrencyExact(summary.finalResultCalc.result)}`)],
+        resultFormatted: `${summary.finalResultCalc.isRefund ? '+' : '-'}${formatCurrencyExact(summary.finalResultCalc.result)}`
+      }
+    ];
+
+    blocks.push({
+      id: 'calc-final-verdict',
+      stepLabel: 'Step 8 • Federal Bottom Line',
+      title: 'Total Tax, Payments & Federal Refund / Owed',
+      hasImpact: hasAnyOverallImpact,
+      isOutput: true,
+      lines,
+      variables: vars,
+      sourceIds: ['calc-tax-before-credits', 'calc-total-w2-wages', ...(hasAnyCreditsInput ? ['calc-total-credits'] : []), ...(hasAnyOtherTaxes ? ['calc-other-taxes'] : [])]
+    });
+  }
+
+  return blocks;
+}
+

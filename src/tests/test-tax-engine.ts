@@ -1,6 +1,6 @@
-import { calculateTaxes, formatCurrency, formatCurrencyExact } from '../tax-engine.js';
+import { calculateTaxes, buildCalculationBlocks, formatCurrency, formatCurrencyExact } from '../tax-engine.js';
 import { TaxAppState } from '../types.js';
-import { getFieldRating, renderRatingPill, renderRatingCardHtml, renderRatingCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from '../field-ratings.js';
+import { getFieldRating, renderRatingPill, renderRatingCardHtml, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from '../field-ratings.js';
 import assert from 'assert';
 
 console.log("Running TypeScript Tax Engine Verification Suite...\n");
@@ -293,34 +293,35 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   const b2ExclamationCount = (b2Circles.match(/>\s*!\s*<\/span>/g) || []).length;
   assert.strictEqual(b2ExclamationCount, 3, 'Box 2 has all 3 max ratings with ! (Attention, Risk, and Savings)');
 
-  // Verify Circle Generation for Student Loan (White attention, White risk, Green max savings !)
+  // Verify Circle Generation for Student Loan (Likelihood 2, Risk 1, Green max savings !)
   const loanCircles = renderRatingCircles('adj-student-loan');
-  assert(loanCircles.includes('circle-attention circle-att-1'), 'Student loan attention is 1 (white / safe to ignore)');
-  assert(!loanCircles.includes('circle-att-1 is-max'), 'Student loan attention is not max');
+  assert(loanCircles.includes('circle-attention circle-att-2'), 'Student loan likelihood is 2 (moderate)');
+  assert(!loanCircles.includes('circle-att-2 is-max'), 'Student loan likelihood is not max');
   assert(loanCircles.includes('circle-risk circle-risk-1'), 'Student loan risk is 1 (white / low risk)');
   assert(!loanCircles.includes('circle-risk-1 is-max'), 'Student loan risk is not max');
   assert(loanCircles.includes('circle-savings circle-save-3 is-max'), 'Student loan savings is max 3 (green !)');
   const loanExclamationCount = (loanCircles.match(/>\s*!\s*<\/span>/g) || []).length;
   assert.strictEqual(loanExclamationCount, 1, 'Student loan deduction has exactly 1 max rating with ! (Savings)');
 
-  // Verify Pill HTML incorporates the rating circles
+  // Verify W-2 Header Circles has all 3 max '!'
+  const w2HeaderCircles = renderW2HeaderCircles();
+  assert.strictEqual((w2HeaderCircles.match(/>\s*!\s*<\/span>/g) || []).length, 3, 'W-2 header has 3 max ! circles');
+
+  // Verify Compact Square Pill HTML (circles only, no text, no info icon)
   const pillHtml = renderRatingPill('w2-box1');
   assert(pillHtml.includes('rating-circles-cluster'), 'Pill contains circles cluster');
-  assert(pillHtml.includes('Must be 100% Accurate'), 'Renders accurate pill text');
+  assert(!pillHtml.includes('pill-text'), 'Compact pill has no text');
+  assert(!pillHtml.includes('pill-info-icon'), 'Compact pill has no info icon');
   assert(pillHtml.includes('data-rating-field="w2-box1"'), 'Pill has data-rating-field');
 
-  // Verify Scorecard Modal HTML incorporates the rating circles and legend banner
+  // Verify 3-Row Info Modal HTML (no legend banner, no fractions in taglines, 3 gray rows + field details)
   const cardHtml = renderRatingCardHtml('w2-box2');
-  assert(cardHtml.includes('modal-circle-legend-banner'), 'Modal includes circle legend banner');
-  assert(cardHtml.includes('White (safe to ignore) ➔ Yellow (needs attention)'), 'Legend explains yellow attention');
-  assert(cardHtml.includes('White (low risk) ➔ Red (high IRS audit risk)'), 'Legend explains red risk');
-  assert(cardHtml.includes('White ($0) ➔ Green (high cash savings)'), 'Legend explains green savings');
-  assert(cardHtml.includes('If left blank:'), 'Includes importance dimension');
-  assert(cardHtml.includes('IRS &amp; Audit Risk'), 'Includes IRS risk dimension');
-  assert(cardHtml.includes('Savings Potential'), 'Includes savings dimension');
-  assert(cardHtml.includes('Applicability &amp; Frequency'), 'Includes applicability dimension');
+  assert(!cardHtml.includes('modal-circle-legend-banner'), 'Modal has no redundant circle legend banner');
+  assert(cardHtml.includes('guidance-scorecard-rows'), 'Modal has 3-row scorecard');
+  assert.strictEqual((cardHtml.match(/class="scorecard-row"/g) || []).length, 3, 'Modal has exactly 3 equal-height gray rows');
+  assert(cardHtml.includes('modal-field-details'), 'Modal includes full field explanation below rows');
 
-  console.log("✓ TS Test 6: Field Ratings & IRS Risk Engine (with Color Circles & '!' on Max) verified correctly!");
+  console.log("✓ TS Test 6: Field Ratings & IRS Risk Engine (3-Circle Likelihood/Risk/Savings & 3-Row Modal) verified correctly!");
 }
 
 // Test Case 7: Advanced Features — HSA, Capital Loss Limit (-$3k cap), Schedule C Business Expenses & Itemized Deductions (Schedule A)
@@ -915,6 +916,46 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   console.log("✓ TS Test 14: All newly supported Federal & 50-State tax features (QSS, 65+/Blind, SSA-1099, 1099-R, K-1 QBI, SE Tax, Credits, WA LTCG, NH I&D, MA 8.5% STCG, SC 44% LTCG) verified!");
 }
 
-console.log("\nAll 14 TypeScript test suites PASSED with 100% accuracy!\n");
+// Test Case 15: Pure Clustered Calculation Blocks, Impact Filtering, Medical 7.5% Floor Math & Variable Breakdown
+{
+  const blankState: TaxAppState = {
+    year: 2024,
+    filingStatus: 'single',
+    residentState: 'CA',
+    w2s: [{ id: 0, employer: '', ein: '', box1: 0, box2: 0, box3: 0, box4: 0, box5: 0, box6: 0, states: [] }],
+    otherIncome: { interest: 0, sources: [] },
+    adjustments: { studentLoan: 0, ira: 0, hsa: 0 },
+    dependents: { childrenCount: 0 },
+    showAllArrows: true
+  };
+  const blankSummary = calculateTaxes(blankState);
+  const blankBlocks = buildCalculationBlocks(blankState, blankSummary);
+  assert.strictEqual(blankBlocks.filter(b => b.hasImpact).length, 0, 'Blank return spawns 0 impact calculation blocks');
+
+  const medState: TaxAppState = {
+    ...blankState,
+    w2s: [{ id: 0, employer: 'Acme', ein: '12-3456789', box1: 80000, box2: 9000, box3: 80000, box4: 4960, box5: 80000, box6: 1160, states: [] }],
+    itemizedDeductions: { medicalExpenses: 10000, realEstateTax: 0, mortgageInterest: 0, charity: 0 }
+  };
+  const medSummary = calculateTaxes(medState);
+  const medBlocks = buildCalculationBlocks(medState, medSummary);
+
+  const schedABlock = medBlocks.find(b => b.id === 'calc-itemized-deductions')!;
+  assert(schedABlock && schedABlock.hasImpact, 'Schedule A block appears when medical expenses > 0');
+  const floorLine = schedABlock.lines.find(l => l.id === 'line-med-floor')!;
+  assert(floorLine && floorLine.isIntermediate, 'Schedule A includes intermediate Medical 7.5% AGI Floor line');
+  assert.strictEqual(floorLine.resultFormatted, '$6,000', '7.5% of $80,000 AGI = $6,000');
+  const dedMedLine = schedABlock.lines.find(l => l.id === 'line-med-deductible')!;
+  assert.strictEqual(dedMedLine.formLineLabel, 'Schedule A Line 4', 'Deductible Medical aligns with Schedule A Line 4');
+  assert.strictEqual(dedMedLine.resultFormatted, '$4,000', '$10,000 - $6,000 = $4,000');
+
+  const agiBlock = medBlocks.find(b => b.id === 'calc-agi')!;
+  assert.strictEqual(agiBlock.variables.interest_inc.isEmpty, true, 'Interest variable is marked empty when 0');
+  assert(agiBlock.variables.w2_wages.contributors.some(c => c.sign === '+' && c.isSetUp), 'W-2 wages variable lists + contributor');
+
+  console.log("✓ TS Test 15: Clustered Calculation Blocks, Impact Filtering, Medical 7.5% Math & Variable Breakdowns verified!");
+}
+
+console.log("\nAll 15 TypeScript test suites PASSED with 100% accuracy!\n");
 
 

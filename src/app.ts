@@ -9,17 +9,25 @@ import {
   W2Data,
   StateTaxLine,
   IncomeSource,
+  IncomeSourceType,
   ConnectionDef,
   TaxCalculationSummary,
   BracketDetail,
   CalculationResult,
   DeductionMethod,
   StateReturnCalculation,
-  StateOtherStateCredit
+  StateOtherStateCredit,
+  ArrowDisplayMode,
+  CalcBlockDefinition,
+  CalcVariableBreakdown,
+  CalcVariableContributor,
+  FormulaToken,
+  PanelSectionCategory
 } from './types.js';
-import { calculateTaxes, formatCurrency, formatCurrencyExact } from './tax-engine.js';
+import { calculateTaxes, buildCalculationBlocks, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
-import { renderRatingPill, renderRatingCardHtml, getFieldRating, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
+import { renderRatingPill, renderRatingCardHtml, getFieldRating, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
+import { PANEL_CATALOG, PanelCatalogEntry, getPanelCatalogEntry } from './panel-catalog.js';
 
 export const US_STATES = [
   { code: 'AL', name: 'Alabama', noIncomeTax: false },
@@ -89,6 +97,9 @@ interface CollapseState {
 
 interface UiPrefs {
   showAllArrows?: boolean;
+  arrowDisplayMode?: ArrowDisplayMode;
+  showEmptyCalcBlocks?: boolean;
+  openPanels?: Record<string, boolean>;
   ratingFilter?: string;
   expandAllExplanations?: boolean;
 }
@@ -258,22 +269,28 @@ class TaxApp {
   private collapseState: CollapseState = this.loadCollapseState();
   private uiPrefs: UiPrefs = this.loadUiPrefs();
   private draftsStore: SavedDraftsStore = this.loadDraftsStore();
+  private currentCalcBlocks: CalcBlockDefinition[] = [];
 
   private loadUiPrefs(): UiPrefs {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-      return {};
+      return { arrowDisplayMode: 'always', showEmptyCalcBlocks: false, openPanels: { '1099-int': true } };
     }
     try {
       const raw = localStorage.getItem(STORAGE_KEY_UI_PREFS);
-      if (!raw) return {};
+      if (!raw) return { arrowDisplayMode: 'always', showEmptyCalcBlocks: false, openPanels: { '1099-int': true } };
       const parsed = JSON.parse(raw) as Partial<UiPrefs>;
       return {
         showAllArrows: typeof parsed.showAllArrows === 'boolean' ? parsed.showAllArrows : undefined,
+        arrowDisplayMode: parsed.arrowDisplayMode === 'always' || parsed.arrowDisplayMode === 'selection' || parsed.arrowDisplayMode === 'off'
+          ? parsed.arrowDisplayMode
+          : (parsed.showAllArrows === false ? 'selection' : 'always'),
+        showEmptyCalcBlocks: typeof parsed.showEmptyCalcBlocks === 'boolean' ? parsed.showEmptyCalcBlocks : false,
+        openPanels: parsed.openPanels && typeof parsed.openPanels === 'object' ? parsed.openPanels : { '1099-int': true },
         ratingFilter: typeof parsed.ratingFilter === 'string' ? parsed.ratingFilter : undefined,
         expandAllExplanations: typeof parsed.expandAllExplanations === 'boolean' ? parsed.expandAllExplanations : undefined
       };
     } catch {
-      return {};
+      return { arrowDisplayMode: 'always', showEmptyCalcBlocks: false, openPanels: { '1099-int': true } };
     }
   }
 
@@ -373,7 +390,9 @@ class TaxApp {
   private init(): void {
     const svgEl = document.getElementById('arrow-canvas') as unknown as SVGSVGElement;
     if (svgEl) {
-      this.arrowEngine = new ArrowEngine(svgEl, { showAll: this.state.showAllArrows });
+      this.arrowEngine = new ArrowEngine(svgEl, {
+        displayMode: this.uiPrefs.arrowDisplayMode || 'always'
+      });
     }
 
     // Check TOS acceptance on first page open
@@ -395,15 +414,16 @@ class TaxApp {
       this.loadDraft();
     }
 
-    if (typeof this.uiPrefs.showAllArrows === 'boolean') {
-      this.state.showAllArrows = this.uiPrefs.showAllArrows;
-      this.arrowEngine?.setShowAll(this.state.showAllArrows);
-    }
+    const mode = this.uiPrefs.arrowDisplayMode || (this.state.showAllArrows ? 'always' : 'selection');
+    this.arrowEngine?.setDisplayMode(mode);
 
+    this.syncOpenPanelsWithState();
     this.renderDraftSelector();
     this.renderW2Forms();
-    this.renderIncomeSources();
+    this.renderFederalPanelSections();
+    this.renderStateSections();
     this.syncAllDomInputs();
+    this.bindMenuBarEvents();
     this.bindGlobalEvents();
     this.recalculateAndRender();
 
@@ -611,16 +631,28 @@ class TaxApp {
   }
 
   private renderDraftSelector(): void {
-    const select = document.getElementById('select-draft') as HTMLSelectElement | null;
-    if (!select) return;
-    select.innerHTML = '';
-    this.draftsStore.drafts.forEach(draft => {
-      const opt = document.createElement('option');
-      opt.value = draft.id;
-      opt.textContent = draft.name;
-      if (draft.id === this.draftsStore.activeId) opt.selected = true;
-      select.appendChild(opt);
-    });
+    const active = this.getActiveDraft();
+    const labelEl = document.getElementById('active-draft-label');
+    if (labelEl) {
+      labelEl.textContent = active ? active.name : 'Draft 1';
+    }
+
+    const listEl = document.getElementById('menu-drafts-list');
+    if (listEl) {
+      listEl.innerHTML = '';
+      this.draftsStore.drafts.forEach(draft => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `menu-item ${draft.id === this.draftsStore.activeId ? 'active-draft-item' : ''}`;
+        btn.setAttribute('role', 'menuitem');
+        btn.innerHTML = `<span>${draft.name}</span>${draft.id === this.draftsStore.activeId ? '<span>✓</span>' : ''}`;
+        btn.addEventListener('click', () => {
+          this.switchDraft(draft.id);
+          document.querySelectorAll('.menu-dropdown.open').forEach(el => el.classList.remove('open'));
+        });
+        listEl.appendChild(btn);
+      });
+    }
   }
 
   private applyDraftEntry(draft: SavedDraftEntry): void {
@@ -633,9 +665,11 @@ class TaxApp {
       : { cards: {}, sections: {} };
     this.saveCollapseState();
     this.updateIdCounters();
+    this.syncOpenPanelsWithState();
     this.renderDraftSelector();
     this.renderW2Forms();
-    this.renderIncomeSources();
+    this.renderFederalPanelSections();
+    this.renderStateSections();
     this.syncAllDomInputs();
     this.recalculateAndRender();
   }
@@ -810,17 +844,61 @@ class TaxApp {
         activeId: 'draft-1',
         drafts: [{ id: 'draft-1', name: 'Draft 1', updatedAt: Date.now(), state: JSON.parse(JSON.stringify(this.state)) }]
       };
+      this.uiPrefs.openPanels = { '1099-int': true };
+      this.saveUiPrefs();
+      this.syncOpenPanelsWithState();
       this.renderDraftSelector();
       this.updateIdCounters();
-      this.syncAllDomInputs();
       this.renderW2Forms();
-      this.renderIncomeSources();
+      this.renderFederalPanelSections();
+      this.renderStateSections();
+      this.syncAllDomInputs();
       this.recalculateAndRender();
       const statusText = document.getElementById('storage-status-text');
       if (statusText) {
         statusText.textContent = "Saved data cleared. Started fresh.";
       }
     }
+  }
+
+  public deleteAllDataConfirmed(): void {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(STORAGE_KEY_DRAFT);
+        localStorage.removeItem(STORAGE_KEY_DRAFTS);
+        localStorage.removeItem(STORAGE_KEY_COLLAPSE);
+      } catch (e) {
+        console.warn("Could not clear localStorage:", e);
+      }
+    }
+    this.collapseState = { cards: {}, sections: {} };
+    this.state = getDefaultTaxAppState();
+    this.state.w2s = [{
+      id: 0,
+      employer: '',
+      ein: '',
+      box1: 0,
+      box2: 0,
+      box3: 0,
+      box4: 0,
+      box5: 0,
+      box6: 0,
+      states: [{ id: 0, state: this.state.residentState || 'CA', stateId: '', stateWages: 0, stateTaxWithheld: 0, localWages: 0, localTaxWithheld: 0, localityName: '' }]
+    }];
+    this.draftsStore = {
+      activeId: 'draft-1',
+      drafts: [{ id: 'draft-1', name: 'Draft 1', updatedAt: Date.now(), state: JSON.parse(JSON.stringify(this.state)) }]
+    };
+    this.uiPrefs.openPanels = { '1099-int': true };
+    this.saveUiPrefs();
+    this.syncOpenPanelsWithState();
+    this.renderDraftSelector();
+    this.updateIdCounters();
+    this.renderW2Forms();
+    this.renderFederalPanelSections();
+    this.renderStateSections();
+    this.syncAllDomInputs();
+    this.recalculateAndRender();
   }
 
   public exportDraft(): void {
@@ -952,9 +1030,11 @@ class TaxApp {
     this.saveCollapseState();
     this.state = newState;
     this.updateIdCounters();
-    this.syncAllDomInputs();
+    this.syncOpenPanelsWithState();
     this.renderW2Forms();
-    this.renderIncomeSources();
+    this.renderFederalPanelSections();
+    this.renderStateSections();
+    this.syncAllDomInputs();
     this.recalculateAndRender();
     const statusText = document.getElementById('storage-status-text');
     if (statusText) statusText.textContent = statusMsg;
@@ -2809,9 +2889,11 @@ class TaxApp {
       this.state.dependents.childrenCount = 0;
     }
 
-    this.syncAllDomInputs();
+    this.syncOpenPanelsWithState();
     this.renderW2Forms();
-    this.renderIncomeSources();
+    this.renderFederalPanelSections();
+    this.renderStateSections();
+    this.syncAllDomInputs();
     this.recalculateAndRender();
   }
 
@@ -2839,14 +2921,10 @@ class TaxApp {
     container.innerHTML = '';
 
     this.state.w2s.forEach((w2: W2Data, index: number) => {
-      const card = document.createElement('div');
-      card.className = 'w2-literal-card';
-      card.id = `w2-card-${w2.id}`;
-
       if (!w2.states || w2.states.length === 0) {
         w2.states = [{
           id: 0,
-          state: 'CA',
+          state: this.state.residentState || 'CA',
           stateId: '',
           stateWages: w2.box1,
           stateTaxWithheld: 0,
@@ -2856,391 +2934,254 @@ class TaxApp {
         }];
       }
 
-      const st0 = w2.states[0];
-      const st1 = w2.states.length > 1 ? w2.states[1] : null;
-      const extraStates = w2.states.length > 2 ? w2.states.slice(2) : [];
+      const group = document.createElement('div');
+      group.className = 'w2-employer-group';
+      group.id = `w2-card-${w2.id}`;
 
-      // Extra states HTML for states 3+
-      const extraStatesHtml = extraStates.length > 0 ? `
-        <div class="w2-extra-states-container">
-          <div style="font-size: 0.8rem; font-weight: 800; color: #334155; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-            <span>Additional State & Local Lines (States 3+)</span>
-            <button type="button" class="btn btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" data-add-state="${w2.id}">
-              + Add Another State Line
-            </button>
-          </div>
-          <div class="w2-grid" style="grid-template-columns: 1fr 1.2fr 1.2fr 1.2fr 1fr 1fr auto;">
-            ${extraStates.map(st => `
-              <div class="w2-box priority-must">
-                <div class="w2-box-header"><span class="w2-box-label">Box 15 State</span></div>
-                <select class="state-select-input" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="state">
-                  ${this.renderStateOptions(st.state)}
-                </select>
-              </div>
-              <div class="w2-box priority-skip">
-                <div class="w2-box-header"><span class="w2-box-label">Box 15 ID</span></div>
-                <input type="text" class="w2-input-text" value="${st.stateId}" placeholder="ID No." data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateId">
-              </div>
-              <div class="w2-box priority-must" id="w2-${w2.id}-state-${st.id}-box16-container">
-                <div class="w2-box-header">
-                  <span class="w2-box-label">Box 16 Wages</span>
-                  ${renderRatingPill('w2-box16')}
-                </div>
-                <div class="w2-input-wrapper">
-                  <span class="currency-symbol">$</span>
-                  <input type="number" step="any" class="w2-input" id="w2-${w2.id}-state-${st.id}-box16" value="${st.stateWages}" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateWages">
-                </div>
-              </div>
-              <div class="w2-box highlight-state priority-must priority-saver" id="w2-${w2.id}-state-${st.id}-box17-container">
-                <div class="w2-box-header">
-                  <span class="w2-box-label">Box 17 Tax</span>
-                  ${renderRatingPill('w2-box17')}
-                </div>
-                <div class="w2-input-wrapper">
-                  <span class="currency-symbol">$</span>
-                  <input type="number" step="any" class="w2-input" id="w2-${w2.id}-state-${st.id}-box17" value="${st.stateTaxWithheld}" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateTaxWithheld">
-                </div>
-              </div>
-              <div class="w2-box priority-skip">
-                <div class="w2-box-header"><span class="w2-box-label">Box 18 Local Wg</span></div>
-                <div class="w2-input-wrapper">
-                  <span class="currency-symbol">$</span>
-                  <input type="number" step="any" class="w2-input" value="${st.localWages}" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="localWages">
-                </div>
-              </div>
-              <div class="w2-box priority-skip">
-                <div class="w2-box-header"><span class="w2-box-label">Box 19/20 Local</span></div>
-                <div class="w2-input-wrapper">
-                  <span class="currency-symbol">$</span>
-                  <input type="number" step="any" class="w2-input" value="${st.localTaxWithheld}" placeholder="Tax" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="localTaxWithheld">
-                </div>
-              </div>
-              <div style="display: flex; align-items: center; justify-content: center; padding: 0 0.5rem; background: white;">
-                <button type="button" class="btn btn-sm" style="color: #ef4444; padding: 0.2rem 0.4rem;" data-remove-state="${w2.id}:${st.id}">✕</button>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      ` : '';
-
-      card.innerHTML = `
-        <!-- Card Header Toolbar -->
-        <div class="w2-literal-toolbar">
-          <div class="toolbar-left">
-            <span class="doc-badge">Official IRS W-2 Overlay</span>
-            <span class="w2-title">W-2 #${index + 1}: ${w2.employer || 'Employer'}</span>
-            <div class="state-tag-list">
-              ${w2.states.map(s => `<span class="state-tag">${s.state}</span>`).join('')}
+      const stateW2CardsHtml = w2.states.map((st, sIdx) => `
+        <div class="w2-literal-card state-w2-overlay-card" id="w2-${w2.id}-state-card-${st.id}">
+          <div class="w2-literal-toolbar">
+            <div class="toolbar-left">
+              <span class="doc-badge" style="background: rgba(139, 92, 246, 0.25); border-color: rgba(139, 92, 246, 0.5);">State W-2 #${sIdx + 1}</span>
+              <span class="w2-title">${w2.employer || 'Employer'} — ${st.state} State Copy</span>
+            </div>
+            <div class="toolbar-right">
+              ${w2.states.length > 1 ? `
+                <button type="button" class="btn btn-sm" style="color: #fca5a5; border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.1); font-weight: 700; font-size: 0.8rem;" data-remove-state="${w2.id}:${st.id}">
+                  ✕ Remove State W-2
+                </button>
+              ` : ''}
             </div>
           </div>
-          <div class="toolbar-right">
-            <button type="button" class="btn btn-sm" style="background: rgba(255,255,255,0.15); color: #ffffff; border-color: rgba(255,255,255,0.3); font-weight: 700; font-size: 0.8rem;" data-add-state="${w2.id}">
-              + Add State Line
-            </button>
+
+          <div class="w2-literal-scroll">
+            <div class="w2-literal-container" id="w2-${w2.id}-state-${st.id}-doc-canvas">
+              <div class="w2-overlay-box box-a">
+                <input type="text" class="w2-overlay-input" value="${w2.employeeSsn || ''}" placeholder="***-**-1234" data-w2-field="employeeSsn" data-w2-id="${w2.id}">
+              </div>
+              <div class="w2-overlay-box box-b">
+                <input type="text" class="w2-overlay-input" value="${w2.ein}" placeholder="00-0000000" data-w2-field="ein" data-w2-id="${w2.id}">
+              </div>
+              <div class="w2-overlay-box box-c">
+                <textarea class="w2-overlay-textarea" data-w2-field="employer" data-w2-id="${w2.id}" placeholder="Employer Name, Address, City, State ZIP">${w2.employer}</textarea>
+              </div>
+              <div class="w2-overlay-box box-e">
+                <input type="text" class="w2-overlay-input" placeholder="Employee Name" value="${w2.employeeName || ''}" data-w2-field="employeeName" data-w2-id="${w2.id}">
+              </div>
+
+              <!-- State Row 1: Boxes 15-20 for this State W-2 -->
+              <div class="w2-overlay-box row1-box-15-state box-highlight-state" id="w2-${w2.id}-state-${st.id}-box15-state">
+                <select class="w2-overlay-select" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="state" style="text-align: center; font-weight: 800;">
+                  ${this.renderStateOptions(st.state, true)}
+                </select>
+              </div>
+              <div class="w2-overlay-box row1-box-15-id">
+                <input type="text" class="w2-overlay-input" value="${st.stateId}" placeholder="State ID No." data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateId">
+              </div>
+              <div class="w2-overlay-box row1-box-16 box-highlight-state" id="w2-${w2.id}-state-${st.id}-box16-container">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-state-${st.id}-box16" value="${st.stateWages}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateWages">
+                </div>
+              </div>
+              <div class="w2-overlay-box row1-box-17 box-highlight-state" id="w2-${w2.id}-state-${st.id}-box17-container">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-state-${st.id}-box17" value="${st.stateTaxWithheld}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="stateTaxWithheld">
+                </div>
+              </div>
+              <div class="w2-overlay-box row1-box-18">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" value="${st.localWages}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="localWages">
+                </div>
+              </div>
+              <div class="w2-overlay-box row1-box-19">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" value="${st.localTaxWithheld}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="localTaxWithheld">
+                </div>
+              </div>
+              <div class="w2-overlay-box row1-box-20">
+                <input type="text" class="w2-overlay-input" value="${st.localityName}" placeholder="Locality" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="localityName">
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      group.innerHTML = `
+        <div class="w2-employer-header">
+          <div class="w2-employer-title-wrap">
+            <h3 style="margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a;">
+              Employer #${index + 1}: ${w2.employer || 'New Employer'}
+            </h3>
+            ${renderW2HeaderCircles()}
+          </div>
+          <div>
             ${this.state.w2s.length > 1 ? `
-              <button type="button" class="btn btn-sm" style="color: #fca5a5; border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.1); font-weight: 700; font-size: 0.8rem;" data-remove-w2="${w2.id}">
-                ✕ Remove W-2
+              <button type="button" class="btn btn-sm" style="color: #dc2626; border-color: #fecaca; background: #fef2f2; font-weight: 700;" data-remove-w2="${w2.id}">
+                ✕ Remove Employer
               </button>
             ` : ''}
           </div>
         </div>
 
-        <!-- Scrollable Document Canvas with Literal IRS Form W-2 Background -->
-        <div class="w2-literal-scroll">
-          <div class="w2-literal-container" id="w2-${w2.id}-doc-canvas">
-            <!-- Box a: Employee's Social Security Number -->
-            <div class="w2-overlay-box box-a">
-              <input type="text" class="w2-overlay-input" value="***-**-1234" readonly style="letter-spacing: 0.1em; color: #475569;">
+        <!-- Federal W-2 PDF Overlay -->
+        <div class="w2-literal-card">
+          <div class="w2-literal-toolbar">
+            <div class="toolbar-left">
+              <span class="doc-badge">Federal Form W-2</span>
+              <span class="w2-title">${w2.employer || 'Employer'} — Federal Copy</span>
             </div>
+          </div>
 
-            <!-- Box b: Employer Identification Number (EIN) -->
-            <div class="w2-overlay-box box-b">
-              <div class="w2-overlay-header">
-                ${renderRatingPill('w2-ein', true)}
-                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-ein`, '')}
-              </div>
-              <input type="text" class="w2-overlay-input" value="${w2.ein}" data-w2-field="ein" data-w2-id="${w2.id}" placeholder="00-0000000">
-            </div>
-
-            <!-- Box c: Employer's name, address, and ZIP code -->
-            <div class="w2-overlay-box box-c">
-              <textarea class="w2-overlay-textarea" data-w2-field="employer" data-w2-id="${w2.id}" placeholder="Employer Name, Address, City, State ZIP">${w2.employer}</textarea>
-            </div>
-
-            <!-- Box d: Control number -->
-            <div class="w2-overlay-box box-d">
-              <input type="text" class="w2-overlay-input" placeholder="Optional" value="">
-            </div>
-
-            <!-- Box e: Employee's first name and initial, last name -->
-            <div class="w2-overlay-box box-e">
-              <input type="text" class="w2-overlay-input" placeholder="Employee Name" value="Jane Q. Taxpayer">
-            </div>
-
-            <!-- Box f: Employee's address and ZIP code -->
-            <div class="w2-overlay-box box-f">
-              <input type="text" class="w2-overlay-input" placeholder="123 Main St, Apt 4B, City, State ZIP" value="123 Taxpayer Way, San Francisco, CA 94105">
-            </div>
-
-            <!-- Box 1: Wages, tips, other compensation (KEY ARROW SOURCE) -->
-            <div class="w2-overlay-box box-1 box-highlight-wages" id="w2-${w2.id}-box1-container">
-              <div class="w2-overlay-header">
-                ${renderRatingPill('w2-box1', true)}
-                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box1`, '')}
-              </div>
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box1" value="${w2.box1}" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 2: Federal income tax withheld (KEY ARROW SOURCE) -->
-            <div class="w2-overlay-box box-2 box-highlight-withholding" id="w2-${w2.id}-box2-container">
-              <div class="w2-overlay-header">
-                ${renderRatingPill('w2-box2', true)}
-                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box2`, '')}
-              </div>
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box2" value="${w2.box2}" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 3: Social security wages -->
-            <div class="w2-overlay-box box-3 box-highlight-ss" id="w2-${w2.id}-box3-container">
-              <div class="w2-overlay-header">
-                ${renderRatingPill('w2-box3', true)}
-                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box3`, '')}
-              </div>
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box3" value="${w2.box3}" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 4: Social security tax withheld (KEY ARROW SOURCE) -->
-            <div class="w2-overlay-box box-4 box-highlight-ss" id="w2-${w2.id}-box4-container">
-              <div class="w2-overlay-header">
-                ${renderRatingPill('w2-box3', true)}
-              </div>
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box4" value="${w2.box4}" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 5: Medicare wages and tips -->
-            <div class="w2-overlay-box box-5 box-highlight-medicare" id="w2-${w2.id}-box5-container">
-              <div class="w2-overlay-header">
-                ${renderRatingPill('w2-box5', true)}
-                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box5`, '')}
-              </div>
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box5" value="${w2.box5}" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 6: Medicare tax withheld (KEY ARROW SOURCE) -->
-            <div class="w2-overlay-box box-6 box-highlight-medicare" id="w2-${w2.id}-box6-container">
-              <div class="w2-overlay-header">
-                ${renderRatingPill('w2-box5', true)}
-              </div>
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box6" value="${w2.box6}" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 7: Social security tips -->
-            <div class="w2-overlay-box box-7">
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" value="" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 8: Allocated tips -->
-            <div class="w2-overlay-box box-8">
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" value="" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 10: Dependent care benefits -->
-            <div class="w2-overlay-box box-10">
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" value="" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 11: Nonqualified plans -->
-            <div class="w2-overlay-box box-11">
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" value="" placeholder="0">
-              </div>
-            </div>
-
-            <!-- Box 12: Deferred Compensation / Benefits (Code & Amount) -->
-            <div class="w2-overlay-box box-12" id="w2-${w2.id}-box12-container">
-              <div class="w2-overlay-header">
-                ${renderRatingPill('w2-box12', true)}
-                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-box12`, '')}
-              </div>
-              <div style="display: flex; gap: 4px; align-items: center; width: 100%;">
-                <input type="text" class="w2-overlay-input" style="width: 44px; text-transform: uppercase; text-align: center; font-weight: 800;" value="${w2.box12Code || ''}" placeholder="Code" data-w2-id="${w2.id}" data-w2-field="box12Code">
-                <div class="w2-overlay-input-wrap" style="flex: 1;">
-                  <span class="w2-overlay-curr">$</span>
-                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12-amt" value="${w2.box12Amount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12Amount">
-                </div>
-              </div>
-            </div>
-
-            <!-- Box 14: Other (e.g. SDI / VPDI) -->
-            <div class="w2-overlay-box box-14">
-              <input type="text" class="w2-overlay-input" placeholder="CA SDI / VPDI / Other" value="">
-            </div>
-
-            <!-- STATE ROW 1: Boxes 15-20 (Overlaid directly on printed Row 1) -->
-            <div class="w2-overlay-box row1-box-15-state box-highlight-state" id="w2-${w2.id}-state-${st0.id}-box15-state">
-              <div class="w2-overlay-header">${renderRatingPill('w2-box15-state', true)}</div>
-              <select class="w2-overlay-select" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="state" style="text-align: center; font-weight: 800;">
-                ${this.renderStateOptions(st0.state, true)}
-              </select>
-            </div>
-
-            <div class="w2-overlay-box row1-box-15-id">
-              <input type="text" class="w2-overlay-input" value="${st0.stateId}" placeholder="State ID No." data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="stateId">
-            </div>
-
-            <div class="w2-overlay-box row1-box-16 box-highlight-state" id="w2-${w2.id}-state-${st0.id}-box16-container">
-              <div class="w2-overlay-header">
-                ${renderRatingPill('w2-box16', true)}
-                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st0.id}-box16`, '')}
-              </div>
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-state-${st0.id}-box16" value="${st0.stateWages}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="stateWages">
-              </div>
-            </div>
-
-            <div class="w2-overlay-box row1-box-17 box-highlight-state" id="w2-${w2.id}-state-${st0.id}-box17-container">
-              <div class="w2-overlay-header">
-                ${renderRatingPill('w2-box17', true)}
-                ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st0.id}-box17`, '')}
-              </div>
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-state-${st0.id}-box17" value="${st0.stateTaxWithheld}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="stateTaxWithheld">
-              </div>
-            </div>
-
-            <div class="w2-overlay-box row1-box-18">
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" value="${st0.localWages}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="localWages">
-              </div>
-            </div>
-
-            <div class="w2-overlay-box row1-box-19">
-              <div class="w2-overlay-input-wrap">
-                <span class="w2-overlay-curr">$</span>
-                <input type="number" step="any" class="w2-overlay-input num" value="${st0.localTaxWithheld}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="localTaxWithheld">
-              </div>
-            </div>
-
-            <div class="w2-overlay-box row1-box-20">
-              <input type="text" class="w2-overlay-input" value="${st0.localityName}" placeholder="Locality" data-w2-id="${w2.id}" data-state-id="${st0.id}" data-state-field="localityName">
-            </div>
-
-            <!-- STATE ROW 2: Boxes 15-20 (Overlaid directly on printed Row 2) -->
-            ${st1 ? `
-              <div class="w2-overlay-box row2-box-15-state box-highlight-state" id="w2-${w2.id}-state-${st1.id}-box15-state">
-                <div class="w2-overlay-header">${renderRatingPill('w2-box15-state', true)}</div>
-                <select class="w2-overlay-select" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="state" style="text-align: center; font-weight: 800;">
-                  ${this.renderStateOptions(st1.state, true)}
-                </select>
+          <div class="w2-literal-scroll">
+            <div class="w2-literal-container" id="w2-${w2.id}-doc-canvas">
+              <!-- Box a: Employee's SSN (Editable) -->
+              <div class="w2-overlay-box box-a">
+                <input type="text" class="w2-overlay-input" value="${w2.employeeSsn || ''}" placeholder="***-**-1234" data-w2-field="employeeSsn" data-w2-id="${w2.id}">
               </div>
 
-              <div class="w2-overlay-box row2-box-15-id">
-                <input type="text" class="w2-overlay-input" value="${st1.stateId}" placeholder="State ID No." data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="stateId">
+              <!-- Box b: Employer Identification Number (EIN) -->
+              <div class="w2-overlay-box box-b">
+                <input type="text" class="w2-overlay-input" value="${w2.ein}" data-w2-field="ein" data-w2-id="${w2.id}" placeholder="00-0000000">
               </div>
 
-              <div class="w2-overlay-box row2-box-16 box-highlight-state" id="w2-${w2.id}-state-${st1.id}-box16-container">
-                <div class="w2-overlay-header">
-                  ${renderRatingPill('w2-box16', true)}
-                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st1.id}-box16`, '')}
-                </div>
+              <!-- Box c: Employer's name, address, and ZIP code -->
+              <div class="w2-overlay-box box-c">
+                <textarea class="w2-overlay-textarea" data-w2-field="employer" data-w2-id="${w2.id}" placeholder="Employer Name, Address, City, State ZIP">${w2.employer}</textarea>
+              </div>
+
+              <!-- Box d: Control number -->
+              <div class="w2-overlay-box box-d">
+                <input type="text" class="w2-overlay-input" placeholder="Control No." value="${w2.controlNumber || ''}" data-w2-field="controlNumber" data-w2-id="${w2.id}">
+              </div>
+
+              <!-- Box e: Employee's name -->
+              <div class="w2-overlay-box box-e">
+                <input type="text" class="w2-overlay-input" placeholder="Employee Name" value="${w2.employeeName || ''}" data-w2-field="employeeName" data-w2-id="${w2.id}">
+              </div>
+
+              <!-- Box f: Employee's address and ZIP code -->
+              <div class="w2-overlay-box box-f">
+                <input type="text" class="w2-overlay-input" placeholder="Employee Address, City, State ZIP" value="${w2.employeeAddress || ''}" data-w2-field="employeeAddress" data-w2-id="${w2.id}">
+              </div>
+
+              <!-- Box 1: Wages, tips, other compensation -->
+              <div class="w2-overlay-box box-1 box-highlight-wages" id="w2-${w2.id}-box1-container">
                 <div class="w2-overlay-input-wrap">
                   <span class="w2-overlay-curr">$</span>
-                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-state-${st1.id}-box16" value="${st1.stateWages}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="stateWages">
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box1" value="${w2.box1}" placeholder="0">
                 </div>
               </div>
 
-              <div class="w2-overlay-box row2-box-17 box-highlight-state" id="w2-${w2.id}-state-${st1.id}-box17-container">
-                <div class="w2-overlay-header">
-                  ${renderRatingPill('w2-box17', true)}
-                  ${renderExplainToggleBtn(`drawer-explain-w2-${w2.id}-st-${st1.id}-box17`, '')}
-                </div>
+              <!-- Box 2: Federal income tax withheld -->
+              <div class="w2-overlay-box box-2 box-highlight-withholding" id="w2-${w2.id}-box2-container">
                 <div class="w2-overlay-input-wrap">
                   <span class="w2-overlay-curr">$</span>
-                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-state-${st1.id}-box17" value="${st1.stateTaxWithheld}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="stateTaxWithheld">
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box2" value="${w2.box2}" placeholder="0">
                 </div>
               </div>
 
-              <div class="w2-overlay-box row2-box-18">
+              <!-- Box 3: Social security wages -->
+              <div class="w2-overlay-box box-3 box-highlight-ss" id="w2-${w2.id}-box3-container">
                 <div class="w2-overlay-input-wrap">
                   <span class="w2-overlay-curr">$</span>
-                  <input type="number" step="any" class="w2-overlay-input num" value="${st1.localWages}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="localWages">
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box3" value="${w2.box3}" placeholder="0">
                 </div>
               </div>
 
-              <div class="w2-overlay-box row2-box-19">
+              <!-- Box 4: Social security tax withheld -->
+              <div class="w2-overlay-box box-4 box-highlight-ss" id="w2-${w2.id}-box4-container">
                 <div class="w2-overlay-input-wrap">
                   <span class="w2-overlay-curr">$</span>
-                  <input type="number" step="any" class="w2-overlay-input num" value="${st1.localTaxWithheld}" placeholder="0" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="localTaxWithheld">
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box4" value="${w2.box4}" placeholder="0">
                 </div>
               </div>
 
-              <div class="w2-overlay-box row2-box-20">
-                <input type="text" class="w2-overlay-input" value="${st1.localityName}" placeholder="Locality" data-w2-id="${w2.id}" data-state-id="${st1.id}" data-state-field="localityName">
-                <button type="button" class="btn-remove-row2-state" data-remove-state="${w2.id}:${st1.id}" title="Remove State Line 2">✕</button>
+              <!-- Box 5: Medicare wages and tips -->
+              <div class="w2-overlay-box box-5 box-highlight-medicare" id="w2-${w2.id}-box5-container">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box5" value="${w2.box5}" placeholder="0">
+                </div>
               </div>
-            ` : `
-              <!-- Placeholder button to add State Row 2 directly onto Row 2 of W-2 -->
-              <div class="w2-overlay-box row2-box-16" style="display: flex; align-items: center; justify-content: center; width: 45%;">
-                <button type="button" class="btn btn-sm" style="height: 22px; font-size: 0.72rem; padding: 0 0.6rem; background: rgba(255,255,255,0.92); border: 1px dashed #3b82f6; font-weight: 700; color: #2563eb; cursor: pointer;" data-add-state="${w2.id}">
-                  + Add 2nd State to Row 2
-                </button>
+
+              <!-- Box 6: Medicare tax withheld -->
+              <div class="w2-overlay-box box-6 box-highlight-medicare" id="w2-${w2.id}-box6-container">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box6" value="${w2.box6}" placeholder="0">
+                </div>
               </div>
-            `}
+
+              <!-- Box 7: Social security tips -->
+              <div class="w2-overlay-box box-7">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box7" value="${w2.box7 || ''}" placeholder="0" data-w2-field="box7" data-w2-id="${w2.id}">
+                </div>
+              </div>
+
+              <!-- Box 8: Allocated tips -->
+              <div class="w2-overlay-box box-8">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box8" value="${w2.box8 || ''}" placeholder="0" data-w2-field="box8" data-w2-id="${w2.id}">
+                </div>
+              </div>
+
+              <!-- Box 10: Dependent care benefits -->
+              <div class="w2-overlay-box box-10">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box10" value="${w2.box10 || ''}" placeholder="0" data-w2-field="box10" data-w2-id="${w2.id}">
+                </div>
+              </div>
+
+              <!-- Box 11: Nonqualified plans -->
+              <div class="w2-overlay-box box-11">
+                <div class="w2-overlay-input-wrap">
+                  <span class="w2-overlay-curr">$</span>
+                  <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box11" value="${w2.box11 || ''}" placeholder="0" data-w2-field="box11" data-w2-id="${w2.id}">
+                </div>
+              </div>
+
+              <!-- Box 12: Code & Amount -->
+              <div class="w2-overlay-box box-12" id="w2-${w2.id}-box12-container">
+                <div style="display: flex; gap: 3px; align-items: center; width: 100%;">
+                  <input type="text" class="w2-overlay-input" style="width: 38px; text-transform: uppercase; text-align: center; font-weight: 800;" value="${w2.box12Code || ''}" placeholder="Code" data-w2-id="${w2.id}" data-w2-field="box12Code">
+                  <div class="w2-overlay-input-wrap" style="flex: 1;">
+                    <span class="w2-overlay-curr">$</span>
+                    <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12-amt" value="${w2.box12Amount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12Amount">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Box 14: Other -->
+              <div class="w2-overlay-box box-14">
+                <input type="text" class="w2-overlay-input" placeholder="Other (e.g. CA SDI)" value="${w2.box14 || ''}" data-w2-field="box14" data-w2-id="${w2.id}">
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Extra States Extension (for states 3+) -->
-        ${extraStatesHtml}
-
-        <!-- Attached Collapsible Explanations for this W-2 -->
-        <div class="w2-drawers-container">
-          ${renderFieldExplanationDrawer('w2-box1', `drawer-explain-w2-${w2.id}-box1`)}
-          ${renderFieldExplanationDrawer('w2-box2', `drawer-explain-w2-${w2.id}-box2`)}
-          ${renderFieldExplanationDrawer('w2-box3', `drawer-explain-w2-${w2.id}-box3`)}
-          ${renderFieldExplanationDrawer('w2-box5', `drawer-explain-w2-${w2.id}-box5`)}
-          ${renderFieldExplanationDrawer('w2-box12', `drawer-explain-w2-${w2.id}-box12`)}
-          ${renderFieldExplanationDrawer('w2-ein', `drawer-explain-w2-${w2.id}-ein`)}
-          ${renderFieldExplanationDrawer('w2-box16', `drawer-explain-w2-${w2.id}-st-${st0.id}-box16`)}
-          ${renderFieldExplanationDrawer('w2-box17', `drawer-explain-w2-${w2.id}-st-${st0.id}-box17`)}
-          ${st1 ? `
-            ${renderFieldExplanationDrawer('w2-box16', `drawer-explain-w2-${w2.id}-st-${st1.id}-box16`)}
-            ${renderFieldExplanationDrawer('w2-box17', `drawer-explain-w2-${w2.id}-st-${st1.id}-box17`)}
-          ` : ''}
+        <!-- Option to add a State W-2 below the Federal W-2 -->
+        <div class="w2-add-state-bar">
+          <button type="button" class="btn btn-outline" data-add-state="${w2.id}">
+            + Add State W-2
+          </button>
+          <span style="font-size: 0.8rem; color: #64748b;">
+            ${w2.states.length} State W-2${w2.states.length === 1 ? '' : 's'} attached for this employer
+          </span>
         </div>
+
+        <!-- State W-2 PDF Overlays -->
+        ${stateW2CardsHtml}
       `;
 
-      container.appendChild(card);
+      container.appendChild(group);
     });
 
     this.bindW2Events();
@@ -3248,19 +3189,34 @@ class TaxApp {
 
   private bindW2Events(): void {
     this.state.w2s.forEach(w2 => {
-      // Employer name & EIN
-      const empInput = document.querySelector<HTMLInputElement>(`[data-w2-field="employer"][data-w2-id="${w2.id}"]`);
-      if (empInput) {
-        empInput.addEventListener('input', (e: Event) => {
-          w2.employer = (e.target as HTMLInputElement).value;
+      const bindTextProp = (field: keyof W2Data) => {
+        document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[data-w2-field="${String(field)}"][data-w2-id="${w2.id}"]`).forEach(el => {
+          el.addEventListener('input', (e: Event) => {
+            (w2 as any)[field] = (e.target as HTMLInputElement).value;
+            this.saveDraft();
+          });
         });
-      }
-      const einInput = document.querySelector<HTMLInputElement>(`[data-w2-field="ein"][data-w2-id="${w2.id}"]`);
-      if (einInput) {
-        einInput.addEventListener('input', (e: Event) => {
-          w2.ein = (e.target as HTMLInputElement).value;
+      };
+      bindTextProp('employer');
+      bindTextProp('ein');
+      bindTextProp('employeeSsn');
+      bindTextProp('controlNumber');
+      bindTextProp('employeeName');
+      bindTextProp('employeeAddress');
+      bindTextProp('box14');
+
+      const bindNumProp = (field: keyof W2Data) => {
+        document.querySelectorAll<HTMLInputElement>(`[data-w2-field="${String(field)}"][data-w2-id="${w2.id}"]`).forEach(el => {
+          el.addEventListener('input', (e: Event) => {
+            (w2 as any)[field] = Number((e.target as HTMLInputElement).value) || 0;
+            this.saveDraft();
+          });
         });
-      }
+      };
+      bindNumProp('box7');
+      bindNumProp('box8');
+      bindNumProp('box10');
+      bindNumProp('box11');
 
       // Federal Box 1 - 6
       const bindW2Field = (boxNum: number, propName: keyof W2Data, autoFillFICA = false) => {
@@ -3287,7 +3243,6 @@ class TaxApp {
             if (b5) b5.value = String(w2.box5);
             if (b6) b6.value = String(w2.box6);
 
-            // Also default state wages on first state line if matching
             if (w2.states && w2.states.length === 1 && (w2.states[0].stateWages === 0 || w2.states[0].stateWages === val)) {
               w2.states[0].stateWages = val;
               const sw = document.getElementById(`w2-${w2.id}-state-${w2.states[0].id}-box16`) as HTMLInputElement | null;
@@ -3315,7 +3270,6 @@ class TaxApp {
       w2.states.forEach(st => {
         const rowSelector = `[data-w2-id="${w2.id}"][data-state-id="${st.id}"]`;
 
-        // State select dropdown
         const stateSelect = document.querySelector<HTMLSelectElement>(`select${rowSelector}[data-state-field="state"]`);
         if (stateSelect) {
           stateSelect.addEventListener('change', (e: Event) => {
@@ -3326,19 +3280,19 @@ class TaxApp {
               const taxInp = document.getElementById(`w2-${w2.id}-state-${st.id}-box17`) as HTMLInputElement | null;
               if (taxInp) taxInp.value = '0';
             }
+            this.renderStateSections();
             this.recalculateAndRender();
           });
         }
 
-        // State ID
         const stateIdInp = document.querySelector<HTMLInputElement>(`input${rowSelector}[data-state-field="stateId"]`);
         if (stateIdInp) {
           stateIdInp.addEventListener('input', (e: Event) => {
             st.stateId = (e.target as HTMLInputElement).value;
+            this.saveDraft();
           });
         }
 
-        // State Wages (Box 16)
         const wagesInp = document.getElementById(`w2-${w2.id}-state-${st.id}-box16`) as HTMLInputElement | null;
         if (wagesInp) {
           wagesInp.addEventListener('input', (e: Event) => {
@@ -3349,7 +3303,6 @@ class TaxApp {
           wagesInp.addEventListener('blur', () => this.arrowEngine?.clearActive());
         }
 
-        // State Tax Withheld (Box 17) - Key Arrow Source!
         const taxInp = document.getElementById(`w2-${w2.id}-state-${st.id}-box17`) as HTMLInputElement | null;
         if (taxInp) {
           taxInp.addEventListener('input', (e: Event) => {
@@ -3362,7 +3315,6 @@ class TaxApp {
           taxInp.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
         }
 
-        // Local wages
         const localWagesInp = document.querySelector<HTMLInputElement>(`input${rowSelector}[data-state-field="localWages"]`);
         if (localWagesInp) {
           localWagesInp.addEventListener('input', (e: Event) => {
@@ -3371,7 +3323,6 @@ class TaxApp {
           });
         }
 
-        // Local Tax
         const localTaxInp = document.querySelector<HTMLInputElement>(`input${rowSelector}[data-state-field="localTaxWithheld"]`);
         if (localTaxInp) {
           localTaxInp.addEventListener('input', (e: Event) => {
@@ -3380,36 +3331,33 @@ class TaxApp {
           });
         }
 
-        // Locality Name
         const locNameInp = document.querySelector<HTMLInputElement>(`input${rowSelector}[data-state-field="localityName"]`);
         if (locNameInp) {
           locNameInp.addEventListener('input', (e: Event) => {
             st.localityName = (e.target as HTMLInputElement).value;
+            this.saveDraft();
           });
         }
       });
     });
 
-    // Remove W-2 buttons
     document.querySelectorAll<HTMLElement>('[data-remove-w2]').forEach(btn => {
       btn.addEventListener('click', (e: Event) => {
-        const idToRemove = parseInt((e.target as HTMLElement).dataset.removeW2 || '', 10);
+        const idToRemove = parseInt((e.currentTarget as HTMLElement).dataset.removeW2 || '', 10);
         this.removeW2(idToRemove);
       });
     });
 
-    // Add State to W-2 buttons
     document.querySelectorAll<HTMLElement>('[data-add-state]').forEach(btn => {
       btn.addEventListener('click', (e: Event) => {
-        const w2Id = parseInt((e.target as HTMLElement).dataset.addState || '', 10);
+        const w2Id = parseInt((e.currentTarget as HTMLElement).dataset.addState || '', 10);
         this.addStateToW2(w2Id);
       });
     });
 
-    // Remove State from W-2 buttons
     document.querySelectorAll<HTMLElement>('[data-remove-state]').forEach(btn => {
       btn.addEventListener('click', (e: Event) => {
-        const [w2IdStr, stateIdStr] = ((e.target as HTMLElement).dataset.removeState || '').split(':');
+        const [w2IdStr, stateIdStr] = ((e.currentTarget as HTMLElement).dataset.removeState || '').split(':');
         this.removeStateFromW2(parseInt(w2IdStr, 10), parseInt(stateIdStr, 10));
       });
     });
@@ -3821,34 +3769,14 @@ class TaxApp {
   private recalculateAndRender(): void {
     const taxData = calculateTaxes(this.state);
 
-    const updateCard = (cardId: string, calcObj: CalculationResult) => {
-      const card = document.getElementById(cardId);
-      if (!card) return;
-
-      const genEl = card.querySelector('.formula-general');
-      const plugEl = card.querySelector('.formula-plugged');
-
-      if (genEl && calcObj.generalFormula) genEl.textContent = calcObj.generalFormula;
-      if (plugEl && calcObj.pluggedFormula) plugEl.textContent = calcObj.pluggedFormula;
-    };
-
-    updateCard('calc-total-w2-wages', taxData.w2WagesCalc);
-    updateCard('calc-gross-income', taxData.grossIncomeCalc);
-    updateCard('calc-capital-gains', taxData.capitalGainsCalc);
-    updateCard('calc-schedule-e', taxData.scheduleECalc);
-    updateCard('calc-total-adjustments', taxData.adjustmentsCalc);
-    updateCard('calc-agi', taxData.agiCalc);
-    updateCard('calc-itemized-deductions', taxData.itemizedCalc);
-    updateCard('calc-standard-deduction', taxData.deductionCalc);
-    updateCard('calc-taxable-income', taxData.taxableIncomeCalc);
-    updateCard('calc-tax-before-credits', taxData.taxBeforeCreditsCalc);
+    this.renderCalculationBlocks(taxData);
     this.renderTaxBrackets(taxData.taxBeforeCreditsCalc.brackets);
 
-    updateCard('calc-total-credits', taxData.creditsCalc);
-    updateCard('calc-other-taxes', taxData.otherTaxesCalc);
-    updateCard('calc-total-tax-liability', taxData.totalTaxCalc);
-    updateCard('calc-total-withholding', taxData.withholdingCalc);
-    updateCard('calc-fica-breakdown', taxData.ficaCalc);
+    const bracketsCard = document.getElementById('calc-tax-brackets-card');
+    if (bracketsCard) {
+      const showBrackets = taxData.taxableIncomeCalc.result > 0 || Boolean(this.uiPrefs.showEmptyCalcBlocks);
+      bracketsCard.style.display = showBrackets ? '' : 'none';
+    }
 
     // Render Dynamic State Return Cards & Final Tax Summary Table
     this.renderStateReturns(taxData);
@@ -3861,7 +3789,6 @@ class TaxApp {
 
     this.updateTableOfContents();
     this.bindRatingPillEvents();
-    this.bindExplainEvents();
     this.saveDraft();
   }
 
@@ -4062,75 +3989,43 @@ class TaxApp {
       });
     }
 
-    // Dynamic Income Sources in Table of Contents
-    const incomeListContainer = document.getElementById('toc-income-list');
-    const incomeCounterEl = document.getElementById('toc-income-count');
-    if (incomeListContainer) {
-      incomeListContainer.innerHTML = '';
-      const sources = this.state.otherIncome.sources || [];
-      const totalIncomeCount = 1 + sources.length; // 1099-INT + dynamic sources
-
-      if (incomeCounterEl) {
-        incomeCounterEl.textContent = `${totalIncomeCount} ${totalIncomeCount === 1 ? 'Source' : 'Sources'}`;
-      }
-
-      // Default Taxable Interest
-      const intLink = document.createElement('a');
-      intLink.className = 'toc-link is-income';
-      intLink.href = '#card-other-interest';
-      intLink.dataset.tocTarget = 'card-other-interest';
-      intLink.innerHTML = `
-        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-          Taxable Interest
-        </span>
-        <span class="toc-badge">1099-INT</span>
-      `;
-      intLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        const target = document.getElementById('card-other-interest');
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          target.classList.add('flash-highlight');
-          setTimeout(() => target.classList.remove('flash-highlight'), 1200);
-        }
-      });
-      incomeListContainer.appendChild(intLink);
-
-      // Extra Income Sources
-      sources.forEach((src, idx) => {
+    // Dynamic State Sections in Table of Contents
+    const stateListContainer = document.getElementById('toc-state-list');
+    if (stateListContainer) {
+      stateListContainer.innerHTML = '';
+      this.getActiveStateCodes().forEach(code => {
+        const stObj = US_STATES.find(s => s.code === code);
         const link = document.createElement('a');
-        link.className = 'toc-link is-income';
-        link.href = `#income-source-card-${src.id}`;
-        link.dataset.tocTarget = `income-source-card-${src.id}`;
-
-        const name = src.payer ? (src.payer.length > 13 ? src.payer.substring(0, 13) + '…' : src.payer) : `Income #${idx + 1}`;
-
-        link.innerHTML = `
-          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            ${name}
-          </span>
-          <span class="toc-badge">${src.type}</span>
-        `;
-
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
-          const target = document.getElementById(`income-source-card-${src.id}`);
-          if (target) {
-            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            target.classList.add('flash-highlight');
-            setTimeout(() => target.classList.remove('flash-highlight'), 1200);
-          }
-        });
-
-        incomeListContainer.appendChild(link);
+        link.className = 'toc-link';
+        link.href = `#state-group-${code.toLowerCase()}`;
+        link.dataset.tocTarget = `state-group-${code.toLowerCase()}`;
+        link.innerHTML = `<span>${stObj ? stObj.name : code}</span><span class="toc-badge">${code}</span>`;
+        stateListContainer.appendChild(link);
       });
+    }
+
+    // Dynamic Visible Calculation Blocks in Table of Contents
+    const calcListContainer = document.getElementById('toc-calc-list');
+    if (calcListContainer) {
+      calcListContainer.innerHTML = '';
+      const showEmpty = Boolean(this.uiPrefs.showEmptyCalcBlocks);
+      this.currentCalcBlocks
+        .filter(b => b.hasImpact || showEmpty)
+        .forEach(block => {
+          const link = document.createElement('a');
+          link.className = 'toc-link';
+          link.href = `#${block.id}`;
+          link.dataset.tocTarget = block.id;
+          link.innerHTML = `<span>${block.title}</span>`;
+          calcListContainer.appendChild(link);
+        });
     }
 
     this.bindTocScrollspy();
   }
 
   private bindTocScrollspy(): void {
-    document.querySelectorAll<HTMLAnchorElement>('.toc-link:not(.is-w2):not(.is-income)').forEach(link => {
+    document.querySelectorAll<HTMLAnchorElement>('.toc-link:not(.is-w2)').forEach(link => {
       link.onclick = (e) => {
         e.preventDefault();
         const targetId = link.dataset.tocTarget;
@@ -4171,6 +4066,883 @@ class TaxApp {
           (currentActive as HTMLAnchorElement).classList.add('active');
         }
       }, { passive: true });
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     Top Menu Bar (Data, Edit, Settings, Templates, Drafts) & Delete All Modal
+     -------------------------------------------------------------------------- */
+  private bindMenuBarEvents(): void {
+    // Toggle dropdown menus
+    document.querySelectorAll<HTMLElement>('.menu-dropdown > .menu-bar-btn').forEach(btn => {
+      btn.addEventListener('click', (e: Event) => {
+        e.stopPropagation();
+        const wrap = btn.closest('.menu-dropdown') as HTMLElement | null;
+        if (!wrap) return;
+        const wasOpen = wrap.classList.contains('open');
+        document.querySelectorAll('.menu-dropdown.open, .add-panel-dropdown-wrap.open').forEach(el => el.classList.remove('open'));
+        if (!wasOpen) {
+          wrap.classList.add('open');
+        }
+      });
+    });
+
+    // Close menus when clicking outside
+    document.addEventListener('click', (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.menu-dropdown') && !target.closest('.add-panel-dropdown-wrap')) {
+        document.querySelectorAll('.menu-dropdown.open, .add-panel-dropdown-wrap.open').forEach(el => el.classList.remove('open'));
+      }
+      if (!target.closest('#var-breakdown-popover') && !target.closest('.formula-var')) {
+        const pop = document.getElementById('var-breakdown-popover');
+        if (pop) pop.hidden = true;
+      }
+    });
+
+    const closeAllMenus = () => {
+      document.querySelectorAll('.menu-dropdown.open').forEach(el => el.classList.remove('open'));
+    };
+
+    // Data menu
+    document.getElementById('menu-data-import')?.addEventListener('click', () => {
+      closeAllMenus();
+      document.getElementById('input-import-draft')?.click();
+    });
+    document.getElementById('menu-data-export')?.addEventListener('click', () => {
+      closeAllMenus();
+      this.exportDraft();
+    });
+    document.getElementById('menu-data-json-io')?.addEventListener('click', () => {
+      closeAllMenus();
+      this.openJsonIoModal();
+    });
+
+    // Delete All Data Modal (requires typing "Yes")
+    const deleteModal = document.getElementById('delete-data-modal-overlay');
+    const confirmInput = document.getElementById('input-confirm-delete-all') as HTMLInputElement | null;
+    const confirmBtn = document.getElementById('btn-confirm-delete-all') as HTMLButtonElement | null;
+
+    const openDeleteModal = () => {
+      closeAllMenus();
+      if (confirmInput) confirmInput.value = '';
+      if (confirmBtn) confirmBtn.disabled = true;
+      deleteModal?.classList.add('open');
+      confirmInput?.focus();
+    };
+    const closeDeleteModal = () => {
+      deleteModal?.classList.remove('open');
+    };
+
+    document.getElementById('menu-data-delete-all')?.addEventListener('click', openDeleteModal);
+    document.getElementById('btn-close-delete-data-modal')?.addEventListener('click', closeDeleteModal);
+    document.getElementById('btn-cancel-delete-all')?.addEventListener('click', closeDeleteModal);
+    deleteModal?.addEventListener('click', (e: Event) => {
+      if (e.target === deleteModal) closeDeleteModal();
+    });
+
+    confirmInput?.addEventListener('input', () => {
+      if (confirmBtn) {
+        confirmBtn.disabled = confirmInput.value.trim() !== 'Yes';
+      }
+    });
+
+    confirmBtn?.addEventListener('click', () => {
+      if (confirmInput?.value.trim() === 'Yes') {
+        this.deleteAllDataConfirmed();
+        closeDeleteModal();
+      }
+    });
+
+    // Edit menu
+    document.getElementById('menu-edit-add-w2')?.addEventListener('click', () => {
+      closeAllMenus();
+      this.addW2();
+    });
+
+    const expandSection = (section: PanelSectionCategory) => {
+      closeAllMenus();
+      if (!this.uiPrefs.openPanels) this.uiPrefs.openPanels = {};
+      PANEL_CATALOG.filter(p => p.section === section).forEach(p => {
+        if (p.sourceType) {
+          const exists = (this.state.otherIncome.sources || []).some(s => s.type === p.sourceType);
+          if (!exists) {
+            this.addIncomeSourceOfType(p.sourceType, false);
+          }
+        }
+        this.uiPrefs.openPanels![p.key] = true;
+      });
+      this.saveUiPrefs();
+      this.renderFederalPanelSections();
+      this.recalculateAndRender();
+    };
+
+    document.getElementById('menu-edit-expand-income')?.addEventListener('click', () => expandSection('other-income'));
+    document.getElementById('menu-edit-expand-adjustments')?.addEventListener('click', () => expandSection('adjustments'));
+    document.getElementById('menu-edit-expand-credits')?.addEventListener('click', () => expandSection('credits'));
+    document.getElementById('menu-edit-expand-itemized')?.addEventListener('click', () => expandSection('itemized'));
+
+    document.getElementById('menu-edit-collapse-empty')?.addEventListener('click', () => {
+      closeAllMenus();
+      this.uiPrefs.openPanels = {};
+      this.syncOpenPanelsWithState();
+      this.saveUiPrefs();
+      this.renderFederalPanelSections();
+      this.recalculateAndRender();
+    });
+
+    // Settings menu
+    const currentArrowMode = this.uiPrefs.arrowDisplayMode || 'always';
+    document.querySelectorAll<HTMLInputElement>('input[name="arrow-mode"]').forEach(radio => {
+      radio.checked = radio.value === currentArrowMode;
+      radio.addEventListener('change', () => {
+        if (radio.checked) {
+          const mode = radio.value as ArrowDisplayMode;
+          this.uiPrefs.arrowDisplayMode = mode;
+          this.state.showAllArrows = mode === 'always';
+          this.saveUiPrefs();
+          this.arrowEngine?.setDisplayMode(mode);
+        }
+      });
+    });
+
+    const showEmptyChk = document.getElementById('setting-show-empty-calcs') as HTMLInputElement | null;
+    if (showEmptyChk) {
+      showEmptyChk.checked = Boolean(this.uiPrefs.showEmptyCalcBlocks);
+      showEmptyChk.addEventListener('change', () => {
+        this.uiPrefs.showEmptyCalcBlocks = showEmptyChk.checked;
+        this.saveUiPrefs();
+        this.recalculateAndRender();
+      });
+    }
+
+    // Templates menu items close menu on click (preset handler in bindGlobalEvents loads it)
+    document.querySelectorAll<HTMLElement>('.menu-dropdown [data-preset]').forEach(btn => {
+      btn.addEventListener('click', () => closeAllMenus());
+    });
+
+    // Resident state change also updates State Sections
+    document.getElementById('select-resident-state')?.addEventListener('change', () => {
+      this.renderStateSections();
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+     Dynamic Federal Panel Sections (Other Income, Adjustments, Credits, Itemized)
+     -------------------------------------------------------------------------- */
+  private syncOpenPanelsWithState(): void {
+    if (!this.uiPrefs.openPanels) {
+      this.uiPrefs.openPanels = { '1099-int': true };
+    }
+    const open = this.uiPrefs.openPanels;
+    const ensure = (key: string, cond: boolean) => {
+      if (cond) open[key] = true;
+    };
+
+    ensure('1099-int', (Number(this.state.otherIncome?.interest) || 0) !== 0);
+    ensure('schedule-c-expenses', (Number(this.state.otherIncome?.scheduleCExpenses) || 0) !== 0);
+    ensure('capital-gains', Boolean(
+      (Number(this.state.otherIncome?.capitalGains?.shortTerm) || 0) !== 0 ||
+      (Number(this.state.otherIncome?.capitalGains?.longTerm) || 0) !== 0 ||
+      (Number(this.state.otherIncome?.capitalGains?.collectiblesGain) || 0) !== 0 ||
+      (Number(this.state.otherIncome?.capitalGains?.unrecaptured1250Gain) || 0) !== 0
+    ));
+    ensure('schedule-e-rental', Boolean(
+      (Number(this.state.otherIncome?.scheduleERental?.grossRents) || 0) !== 0 ||
+      (Number(this.state.otherIncome?.scheduleERental?.expenses) || 0) !== 0 ||
+      (Number(this.state.otherIncome?.scheduleERental?.depreciation) || 0) !== 0
+    ));
+    (this.state.otherIncome?.sources || []).forEach(src => {
+      const entry = PANEL_CATALOG.find(p => p.sourceType === src.type);
+      if (entry) open[entry.key] = true;
+    });
+
+    ensure('adj-student-loan', (Number(this.state.adjustments?.studentLoan) || 0) !== 0);
+    ensure('adj-ira', (Number(this.state.adjustments?.ira) || 0) !== 0);
+    ensure('adj-hsa', (Number(this.state.adjustments?.hsa) || 0) !== 0);
+    ensure('adj-educator', (Number(this.state.adjustments?.educatorExpenses) || 0) !== 0);
+    ensure('adj-se-retirement', (Number(this.state.adjustments?.seRetirement) || 0) !== 0);
+    ensure('adj-se-health', (Number(this.state.adjustments?.seHealthInsurance) || 0) !== 0);
+    ensure('adj-alimony', (Number(this.state.adjustments?.alimonyPaid) || 0) !== 0);
+
+    ensure('cred-children', (Number(this.state.dependents?.childrenCount) || 0) > 0);
+    ensure('cred-other-dependents', (Number(this.state.dependents?.otherDependentsCount) || 0) > 0);
+    ensure('cred-age-blind', (Number(this.state.dependents?.age65OrBlindCount) || 0) > 0);
+    ensure('cred-child-care', (Number(this.state.dependents?.childCareExpenses) || 0) > 0);
+    ensure('cred-aotc', (Number(this.state.dependents?.educationExpensesAotc) || 0) > 0);
+    ensure('cred-llc', (Number(this.state.dependents?.educationExpensesLlc) || 0) > 0);
+    ensure('cred-foreign-tax', (Number(this.state.dependents?.foreignTaxCredit) || 0) > 0);
+    ensure('cred-clean-energy', (Number(this.state.dependents?.cleanEnergyCredit) || 0) > 0);
+    ensure('cred-estimated-payments', (Number(this.state.dependents?.estimatedTaxPayments) || 0) > 0);
+
+    ensure('itemized-medical', (Number(this.state.itemizedDeductions?.medicalExpenses) || 0) > 0);
+    ensure('itemized-real-estate', (Number(this.state.itemizedDeductions?.realEstateTax) || 0) > 0);
+    ensure('itemized-mortgage', (Number(this.state.itemizedDeductions?.mortgageInterest) || 0) > 0);
+    ensure('itemized-charity', (Number(this.state.itemizedDeductions?.charity) || 0) > 0);
+    ensure('itemized-gambling-losses', (Number(this.state.itemizedDeductions?.gamblingLosses) || 0) > 0);
+  }
+
+  private addIncomeSourceOfType(type: IncomeSourceType, rerender: boolean = true): IncomeSource {
+    if (!this.state.otherIncome.sources) this.state.otherIncome.sources = [];
+    const newId = this.incomeSourceCounter++;
+    const newSrc: IncomeSource = {
+      id: newId,
+      type,
+      payer: '',
+      amount: 0,
+      state: this.state.residentState || 'CA'
+    };
+    this.state.otherIncome.sources.push(newSrc);
+    if (rerender) {
+      this.renderFederalPanelSections();
+      this.recalculateAndRender();
+    }
+    return newSrc;
+  }
+
+  private renderFederalPanelSections(): void {
+    const sections: Array<{ cat: PanelSectionCategory; gridId: string }> = [
+      { cat: 'other-income', gridId: 'grid-federal-other-income' },
+      { cat: 'adjustments', gridId: 'grid-federal-adjustments' },
+      { cat: 'credits', gridId: 'grid-federal-credits' },
+      { cat: 'itemized', gridId: 'grid-federal-itemized' }
+    ];
+
+    const openMap = this.uiPrefs.openPanels || { '1099-int': true };
+
+    sections.forEach(({ cat, gridId }) => {
+      // 1. Populate Add Panel Dropdown
+      const wrap = document.querySelector<HTMLElement>(`.add-panel-dropdown-wrap[data-panel-dropdown="${cat}"]`);
+      if (wrap) {
+        const btn = wrap.querySelector<HTMLButtonElement>('.add-panel-dropdown-btn');
+        const menu = wrap.querySelector<HTMLElement>('.add-panel-dropdown-menu');
+        if (btn && !btn.dataset.bound) {
+          btn.dataset.bound = 'true';
+          btn.addEventListener('click', (e: Event) => {
+            e.stopPropagation();
+            const wasOpen = wrap.classList.contains('open');
+            document.querySelectorAll('.menu-dropdown.open, .add-panel-dropdown-wrap.open').forEach(el => el.classList.remove('open'));
+            if (!wasOpen) wrap.classList.add('open');
+          });
+        }
+        if (menu) {
+          menu.innerHTML = '';
+          PANEL_CATALOG.filter(p => p.section === cat).forEach(entry => {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'add-panel-option-row';
+            row.innerHTML = `
+              <div>
+                <span class="add-panel-option-name">${entry.title}</span>
+                <span class="add-panel-option-sub">${entry.officialTitle}</span>
+              </div>
+              ${renderRatingCircles(entry.ratingKey)}
+            `;
+            row.addEventListener('click', () => {
+              wrap.classList.remove('open');
+              if (!this.uiPrefs.openPanels) this.uiPrefs.openPanels = {};
+              this.uiPrefs.openPanels[entry.key] = true;
+              if (entry.sourceType) {
+                this.addIncomeSourceOfType(entry.sourceType, false);
+              }
+              this.saveUiPrefs();
+              this.renderFederalPanelSections();
+              this.recalculateAndRender();
+            });
+            menu.appendChild(row);
+          });
+        }
+      }
+
+      // 2. Render Open Panels in this Section's Grid
+      const grid = document.getElementById(gridId);
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      const entries = PANEL_CATALOG.filter(p => p.section === cat);
+      let renderedCount = 0;
+
+      entries.forEach(entry => {
+        if (!openMap[entry.key]) return;
+
+        if (entry.sourceType) {
+          const matchingSources = (this.state.otherIncome.sources || []).filter(s => s.type === entry.sourceType);
+          if (matchingSources.length === 0) {
+            // If opened without a source yet, create one
+            const created = this.addIncomeSourceOfType(entry.sourceType, false);
+            matchingSources.push(created);
+          }
+          matchingSources.forEach(src => {
+            renderedCount++;
+            grid.appendChild(this.createSourcePanelElement(entry, src));
+          });
+        } else {
+          renderedCount++;
+          grid.appendChild(this.createSingleFieldPanelElement(entry));
+        }
+      });
+
+      if (renderedCount === 0) {
+        const emptyHint = document.createElement('div');
+        emptyHint.style.cssText = 'grid-column: 1 / -1; padding: 0.85rem 1rem; border: 1px dashed #cbd5e1; border-radius: 8px; color: #64748b; font-size: 0.85rem; background: #f8fafc;';
+        emptyHint.textContent = 'No panels added in this section yet. Use the dropdown above to add items that apply to you.';
+        grid.appendChild(emptyHint);
+      }
+    });
+
+    this.bindDynamicPanelEvents();
+  }
+
+  private createPanelShell(entry: PanelCatalogEntry, panelDomId: string, inputsHtml: string, closeAttr: string): HTMLElement {
+    const card = document.createElement('div');
+    card.className = `tax-panel panel-size-${entry.size} input-panel`;
+    card.id = panelDomId;
+    card.innerHTML = `
+      <div class="panel-top-row">
+        <h3 class="panel-title">${entry.title}</h3>
+        <div class="panel-top-actions">
+          ${renderRatingPill(entry.ratingKey, true)}
+          <button type="button" class="btn-close-panel" ${closeAttr} title="Remove panel" aria-label="Remove ${entry.title}">✕</button>
+        </div>
+      </div>
+      <div class="panel-official-title">${entry.officialTitle}</div>
+      <div class="panel-inputs">${inputsHtml}</div>
+      <div class="panel-short-desc">${entry.shortExplanation}</div>
+      <button type="button" class="btn-more-info" data-rating-field="${entry.ratingKey}">
+        <span>More Info</span>
+        <span class="more-info-icon">ⓘ</span>
+      </button>
+    `;
+    return card;
+  }
+
+  private createSourcePanelElement(entry: PanelCatalogEntry, src: IncomeSource): HTMLElement {
+    const extraInputs = src.type === '1099-DIV'
+      ? `<div><label class="panel-input-label">Qualified Dividends (Box 1b)</label><div class="w2-input-wrapper"><span class="currency-symbol">$</span><input type="number" step="any" class="w2-input" data-src-id="${src.id}" data-src-field="qualifiedDividends" value="${src.qualifiedDividends || 0}" placeholder="0"></div></div>`
+      : src.type === '1099-R'
+        ? `<div><label class="panel-input-label">Early Withdrawal (10% Penalty)</label><label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;margin-top:0.35rem;"><input type="checkbox" data-src-id="${src.id}" data-src-field="earlyDistributionPenalty" ${src.earlyDistributionPenalty ? 'checked' : ''}><span>Code 1 Early Distribution</span></label></div>`
+        : '';
+
+    const inputsHtml = `
+      <div class="panel-multi-inputs">
+        <div>
+          <label class="panel-input-label">Payer Name</label>
+          <input type="text" class="w2-input" style="padding-left:0.65rem;" data-src-id="${src.id}" data-src-field="payer" value="${src.payer || ''}" placeholder="${entry.title} Payer">
+        </div>
+        <div>
+          <label class="panel-input-label">Amount</label>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" id="input-source-${src.id}-amount" data-src-id="${src.id}" data-src-field="amount" value="${src.amount || 0}" placeholder="0">
+          </div>
+        </div>
+        ${extraInputs}
+        <div>
+          <label class="panel-input-label">Federal Tax Withheld</label>
+          <div class="w2-input-wrapper">
+            <span class="currency-symbol">$</span>
+            <input type="number" step="any" class="w2-input" data-src-id="${src.id}" data-src-field="federalTaxWithheld" value="${src.federalTaxWithheld || 0}" placeholder="0">
+          </div>
+        </div>
+      </div>
+    `;
+    return this.createPanelShell(entry, `income-source-card-${src.id}`, inputsHtml, `data-close-source-id="${src.id}" data-close-panel="${entry.key}"`);
+  }
+
+  private createSingleFieldPanelElement(entry: PanelCatalogEntry): HTMLElement {
+    const val = (id: string): number => {
+      switch (id) {
+        case 'input-other-interest': return Number(this.state.otherIncome?.interest) || 0;
+        case 'input-sched-c-expenses': return Number(this.state.otherIncome?.scheduleCExpenses) || 0;
+        case 'input-capital-gains-st': return Number(this.state.otherIncome?.capitalGains?.shortTerm) || 0;
+        case 'input-capital-gains-lt': return Number(this.state.otherIncome?.capitalGains?.longTerm) || 0;
+        case 'input-cap-collectibles': return Number(this.state.otherIncome?.capitalGains?.collectiblesGain) || 0;
+        case 'input-cap-1250': return Number(this.state.otherIncome?.capitalGains?.unrecaptured1250Gain) || 0;
+        case 'input-sched-e-rents': return Number(this.state.otherIncome?.scheduleERental?.grossRents) || 0;
+        case 'input-sched-e-expenses': return Number(this.state.otherIncome?.scheduleERental?.expenses) || 0;
+        case 'input-sched-e-depreciation': return Number(this.state.otherIncome?.scheduleERental?.depreciation) || 0;
+        case 'input-adj-student-loan': return Number(this.state.adjustments?.studentLoan) || 0;
+        case 'input-adj-ira': return Number(this.state.adjustments?.ira) || 0;
+        case 'input-adj-hsa': return Number(this.state.adjustments?.hsa) || 0;
+        case 'input-adj-educator': return Number(this.state.adjustments?.educatorExpenses) || 0;
+        case 'input-adj-se-retirement': return Number(this.state.adjustments?.seRetirement) || 0;
+        case 'input-adj-se-health': return Number(this.state.adjustments?.seHealthInsurance) || 0;
+        case 'input-adj-alimony': return Number(this.state.adjustments?.alimonyPaid) || 0;
+        case 'input-children-count': return Number(this.state.dependents?.childrenCount) || 0;
+        case 'input-other-dependents': return Number(this.state.dependents?.otherDependentsCount) || 0;
+        case 'input-age65-blind': return Number(this.state.dependents?.age65OrBlindCount) || 0;
+        case 'input-child-care': return Number(this.state.dependents?.childCareExpenses) || 0;
+        case 'input-edu-aotc': return Number(this.state.dependents?.educationExpensesAotc) || 0;
+        case 'input-edu-llc': return Number(this.state.dependents?.educationExpensesLlc) || 0;
+        case 'input-foreign-tax-credit': return Number(this.state.dependents?.foreignTaxCredit) || 0;
+        case 'input-clean-energy-credit': return Number(this.state.dependents?.cleanEnergyCredit) || 0;
+        case 'input-estimated-payments': return Number(this.state.dependents?.estimatedTaxPayments) || 0;
+        case 'input-itemized-medical': return Number(this.state.itemizedDeductions?.medicalExpenses) || 0;
+        case 'input-itemized-real-estate': return Number(this.state.itemizedDeductions?.realEstateTax) || 0;
+        case 'input-itemized-mortgage': return Number(this.state.itemizedDeductions?.mortgageInterest) || 0;
+        case 'input-itemized-charity': return Number(this.state.itemizedDeductions?.charity) || 0;
+        case 'input-itemized-gambling-losses': return Number(this.state.itemizedDeductions?.gamblingLosses) || 0;
+        default: return 0;
+      }
+    };
+
+    const numBox = (id: string, label?: string, isCount: boolean = false) => `
+      <div>
+        ${label ? `<label for="${id}" class="panel-input-label">${label}</label>` : ''}
+        ${isCount
+          ? `<input type="number" step="1" min="0" class="w2-input" style="padding-left:0.65rem;" id="${id}" value="${val(id)}" placeholder="0">`
+          : `<div class="w2-input-wrapper"><span class="currency-symbol">$</span><input type="number" step="any" class="w2-input" id="${id}" value="${val(id)}" placeholder="0"></div>`}
+      </div>
+    `;
+
+    let inputsHtml = '';
+    if (entry.key === 'capital-gains') {
+      inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-capital-gains-st', 'Short-Term Net (< 1 Yr)')}
+        ${numBox('input-capital-gains-lt', 'Long-Term Net (1+ Yr)')}
+        ${numBox('input-cap-collectibles', '28% Collectibles Gain')}
+        ${numBox('input-cap-1250', '25% Sec. 1250 Gain')}
+      </div>`;
+    } else if (entry.key === 'schedule-e-rental') {
+      const propState = this.state.otherIncome?.scheduleERental?.propertyState || '';
+      inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-sched-e-rents', 'Gross Rents Received')}
+        ${numBox('input-sched-e-expenses', 'Operating Expenses')}
+        ${numBox('input-sched-e-depreciation', 'Depreciation (Form 4562)')}
+        <div>
+          <label for="select-sched-e-state" class="panel-input-label">Property State</label>
+          <select id="select-sched-e-state" class="w2-input">
+            <option value="">Same as Home State</option>
+            ${this.renderStateOptions(propState)}
+          </select>
+        </div>
+      </div>`;
+    } else if (entry.key === 'cred-children' || entry.key === 'cred-other-dependents' || entry.key === 'cred-age-blind') {
+      inputsHtml = numBox(entry.inputIds[0], undefined, true);
+    } else {
+      inputsHtml = numBox(entry.inputIds[0]);
+    }
+
+    return this.createPanelShell(entry, `panel-${entry.key}`, inputsHtml, `data-close-panel="${entry.key}"`);
+  }
+
+  private bindDynamicPanelEvents(): void {
+    const bindNum = (id: string, setter: (v: number) => void) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (!el) return;
+      el.addEventListener('input', () => {
+        setter(Number(el.value) || 0);
+        this.recalculateAndRender();
+      });
+      el.addEventListener('focus', () => this.arrowEngine?.setActiveSource(id));
+      el.addEventListener('blur', () => this.arrowEngine?.clearActive());
+      el.addEventListener('mouseenter', () => this.arrowEngine?.setActiveSource(id));
+      el.addEventListener('mouseleave', () => this.arrowEngine?.clearActive());
+    };
+
+    const getCap = () => (this.state.otherIncome.capitalGains ??= { shortTerm: 0, longTerm: 0 });
+    const getSchedE = () => (this.state.otherIncome.scheduleERental ??= { grossRents: 0, expenses: 0, depreciation: 0, propertyState: '' });
+    const getItemized = () => (this.state.itemizedDeductions ??= { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 0 });
+
+    bindNum('input-other-interest', v => this.state.otherIncome.interest = v);
+    bindNum('input-sched-c-expenses', v => this.state.otherIncome.scheduleCExpenses = v);
+    bindNum('input-capital-gains-st', v => getCap().shortTerm = v);
+    bindNum('input-capital-gains-lt', v => getCap().longTerm = v);
+    bindNum('input-cap-collectibles', v => getCap().collectiblesGain = v);
+    bindNum('input-cap-1250', v => getCap().unrecaptured1250Gain = v);
+    bindNum('input-sched-e-rents', v => getSchedE().grossRents = v);
+    bindNum('input-sched-e-expenses', v => getSchedE().expenses = v);
+    bindNum('input-sched-e-depreciation', v => getSchedE().depreciation = v);
+
+    const schedEState = document.getElementById('select-sched-e-state') as HTMLSelectElement | null;
+    if (schedEState) {
+      schedEState.addEventListener('change', () => {
+        getSchedE().propertyState = schedEState.value;
+        this.renderStateSections();
+        this.recalculateAndRender();
+      });
+    }
+
+    bindNum('input-adj-student-loan', v => this.state.adjustments.studentLoan = v);
+    bindNum('input-adj-ira', v => this.state.adjustments.ira = v);
+    bindNum('input-adj-hsa', v => this.state.adjustments.hsa = v);
+    bindNum('input-adj-educator', v => this.state.adjustments.educatorExpenses = v);
+    bindNum('input-adj-se-retirement', v => this.state.adjustments.seRetirement = v);
+    bindNum('input-adj-se-health', v => this.state.adjustments.seHealthInsurance = v);
+    bindNum('input-adj-alimony', v => this.state.adjustments.alimonyPaid = v);
+
+    bindNum('input-children-count', v => this.state.dependents.childrenCount = v);
+    bindNum('input-other-dependents', v => this.state.dependents.otherDependentsCount = v);
+    bindNum('input-age65-blind', v => this.state.dependents.age65OrBlindCount = v);
+    bindNum('input-child-care', v => this.state.dependents.childCareExpenses = v);
+    bindNum('input-edu-aotc', v => this.state.dependents.educationExpensesAotc = v);
+    bindNum('input-edu-llc', v => this.state.dependents.educationExpensesLlc = v);
+    bindNum('input-foreign-tax-credit', v => this.state.dependents.foreignTaxCredit = v);
+    bindNum('input-clean-energy-credit', v => this.state.dependents.cleanEnergyCredit = v);
+    bindNum('input-estimated-payments', v => this.state.dependents.estimatedTaxPayments = v);
+
+    bindNum('input-itemized-medical', v => getItemized().medicalExpenses = v);
+    bindNum('input-itemized-real-estate', v => getItemized().realEstateTax = v);
+    bindNum('input-itemized-mortgage', v => getItemized().mortgageInterest = v);
+    bindNum('input-itemized-charity', v => getItemized().charity = v);
+    bindNum('input-itemized-gambling-losses', v => getItemized().gamblingLosses = v);
+
+    // Dynamic 1099 sources
+    document.querySelectorAll<HTMLInputElement>('[data-src-id]').forEach(el => {
+      const id = parseInt(el.dataset.srcId || '', 10);
+      const field = el.dataset.srcField as keyof IncomeSource;
+      const src = (this.state.otherIncome.sources || []).find(s => s.id === id);
+      if (!src || !field) return;
+
+      el.addEventListener('input', () => {
+        if (el.type === 'checkbox') {
+          (src as any)[field] = el.checked;
+        } else if (el.type === 'number') {
+          (src as any)[field] = Number(el.value) || 0;
+        } else {
+          (src as any)[field] = el.value;
+        }
+        this.recalculateAndRender();
+      });
+    });
+
+    // Close panel buttons (works for ALL panels, including 1099-INT!)
+    document.querySelectorAll<HTMLElement>('[data-close-panel]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const panelKey = btn.dataset.closePanel;
+        const srcIdStr = btn.dataset.closeSourceId;
+        if (srcIdStr && this.state.otherIncome.sources) {
+          const srcId = parseInt(srcIdStr, 10);
+          this.state.otherIncome.sources = this.state.otherIncome.sources.filter(s => s.id !== srcId);
+          const entry = panelKey ? getPanelCatalogEntry(panelKey) : undefined;
+          const remaining = entry?.sourceType
+            ? this.state.otherIncome.sources.some(s => s.type === entry.sourceType)
+            : false;
+          if (!remaining && panelKey && this.uiPrefs.openPanels) {
+            this.uiPrefs.openPanels[panelKey] = false;
+          }
+        } else if (panelKey) {
+          if (this.uiPrefs.openPanels) this.uiPrefs.openPanels[panelKey] = false;
+          this.resetPanelStateValues(panelKey);
+        }
+        this.saveUiPrefs();
+        this.renderFederalPanelSections();
+        this.recalculateAndRender();
+      });
+    });
+
+    // "More Info" buttons open the guidance modal
+    document.querySelectorAll<HTMLElement>('.btn-more-info[data-rating-field]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.ratingField;
+        if (key) this.openGuidanceModal(key);
+      });
+    });
+  }
+
+  private resetPanelStateValues(panelKey: string): void {
+    switch (panelKey) {
+      case '1099-int': this.state.otherIncome.interest = 0; break;
+      case 'schedule-c-expenses': this.state.otherIncome.scheduleCExpenses = 0; break;
+      case 'capital-gains': this.state.otherIncome.capitalGains = { shortTerm: 0, longTerm: 0, collectiblesGain: 0, unrecaptured1250Gain: 0 }; break;
+      case 'schedule-e-rental': this.state.otherIncome.scheduleERental = { grossRents: 0, expenses: 0, depreciation: 0, propertyState: '' }; break;
+      case 'adj-student-loan': this.state.adjustments.studentLoan = 0; break;
+      case 'adj-ira': this.state.adjustments.ira = 0; break;
+      case 'adj-hsa': this.state.adjustments.hsa = 0; break;
+      case 'adj-educator': this.state.adjustments.educatorExpenses = 0; break;
+      case 'adj-se-retirement': this.state.adjustments.seRetirement = 0; break;
+      case 'adj-se-health': this.state.adjustments.seHealthInsurance = 0; break;
+      case 'adj-alimony': this.state.adjustments.alimonyPaid = 0; break;
+      case 'cred-children': this.state.dependents.childrenCount = 0; break;
+      case 'cred-other-dependents': this.state.dependents.otherDependentsCount = 0; break;
+      case 'cred-age-blind': this.state.dependents.age65OrBlindCount = 0; break;
+      case 'cred-child-care': this.state.dependents.childCareExpenses = 0; break;
+      case 'cred-aotc': this.state.dependents.educationExpensesAotc = 0; break;
+      case 'cred-llc': this.state.dependents.educationExpensesLlc = 0; break;
+      case 'cred-foreign-tax': this.state.dependents.foreignTaxCredit = 0; break;
+      case 'cred-clean-energy': this.state.dependents.cleanEnergyCredit = 0; break;
+      case 'cred-estimated-payments': this.state.dependents.estimatedTaxPayments = 0; break;
+      case 'itemized-medical': if (this.state.itemizedDeductions) this.state.itemizedDeductions.medicalExpenses = 0; break;
+      case 'itemized-real-estate': if (this.state.itemizedDeductions) this.state.itemizedDeductions.realEstateTax = 0; break;
+      case 'itemized-mortgage': if (this.state.itemizedDeductions) this.state.itemizedDeductions.mortgageInterest = 0; break;
+      case 'itemized-charity': if (this.state.itemizedDeductions) this.state.itemizedDeductions.charity = 0; break;
+      case 'itemized-gambling-losses': if (this.state.itemizedDeductions) this.state.itemizedDeductions.gamblingLosses = 0; break;
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     State Sections (Grouped by State with Other Income, Adjustments, Credits, Itemized)
+     -------------------------------------------------------------------------- */
+  private getActiveStateCodes(): string[] {
+    const codes = new Set<string>();
+    codes.add((this.state.residentState || 'CA').toUpperCase());
+    (this.state.w2s || []).forEach(w => {
+      (w.states || []).forEach(s => {
+        if (s.state) codes.add(s.state.toUpperCase());
+      });
+    });
+    const propState = this.state.otherIncome?.scheduleERental?.propertyState;
+    if (propState) codes.add(propState.toUpperCase());
+    return Array.from(codes);
+  }
+
+  private renderStateSections(): void {
+    const container = document.getElementById('state-sections-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const activeStates = this.getActiveStateCodes();
+    const stateMap = (this.state.stateSpecific ??= {});
+
+    activeStates.forEach(code => {
+      const stObj = US_STATES.find(s => s.code === code);
+      const stateName = stObj ? stObj.name : code;
+      const isResident = code === (this.state.residentState || 'CA').toUpperCase();
+      const data = (stateMap[code] ??= {});
+
+      const block = document.createElement('div');
+      block.className = 'state-group-block';
+      block.id = `state-group-${code.toLowerCase()}`;
+
+      block.innerHTML = `
+        <div class="state-group-header">
+          <h3>State: ${stateName} (${code}) ${isResident ? '• Primary Resident' : '• Nonresident'}</h3>
+          <span class="irs-line-tag" style="background: #f3e8ff; color: #6b21a8; border-color: #d8b4fe;">${code} State Inputs</span>
+        </div>
+        <div class="panels-grid">
+          <div class="tax-panel panel-size-sm input-panel">
+            <div class="panel-top-row">
+              <h3 class="panel-title">${code} Other Income</h3>
+              <div class="panel-top-actions">${renderRatingPill('w2-box16', true)}</div>
+            </div>
+            <div class="panel-official-title">${stateName} • State-Only Additions</div>
+            <div class="panel-inputs">
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input state-spec-input" data-state-code="${code}" data-state-prop="otherIncome" value="${data.otherIncome || 0}" placeholder="0">
+              </div>
+            </div>
+            <div class="panel-short-desc">Income taxable in ${code} not already included on Federal Form 1040.</div>
+          </div>
+
+          <div class="tax-panel panel-size-sm input-panel">
+            <div class="panel-top-row">
+              <h3 class="panel-title">${code} Adjustments</h3>
+              <div class="panel-top-actions">${renderRatingPill('adj-hsa', true)}</div>
+            </div>
+            <div class="panel-official-title">${stateName} • State Subtractions</div>
+            <div class="panel-inputs">
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input state-spec-input" data-state-code="${code}" data-state-prop="adjustments" value="${data.adjustments || 0}" placeholder="0">
+              </div>
+            </div>
+            <div class="panel-short-desc">State-specific subtractions (e.g., 529 plan or US Treasury interest).</div>
+          </div>
+
+          <div class="tax-panel panel-size-sm input-panel">
+            <div class="panel-top-row">
+              <h3 class="panel-title">${code} Credits</h3>
+              <div class="panel-top-actions">${renderRatingPill('credits-children', true)}</div>
+            </div>
+            <div class="panel-official-title">${stateName} • State Tax Credits</div>
+            <div class="panel-inputs">
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input state-spec-input" data-state-code="${code}" data-state-prop="credits" value="${data.credits || 0}" placeholder="0">
+              </div>
+            </div>
+            <div class="panel-short-desc">Direct ${code} state credits (renter's credit, state EITC, etc.).</div>
+          </div>
+
+          <div class="tax-panel panel-size-sm input-panel">
+            <div class="panel-top-row">
+              <h3 class="panel-title">${code} Itemized Deductions</h3>
+              <div class="panel-top-actions">${renderRatingPill('itemized-charity', true)}</div>
+            </div>
+            <div class="panel-official-title">${stateName} • State Itemized Overrides</div>
+            <div class="panel-inputs">
+              <div class="w2-input-wrapper">
+                <span class="currency-symbol">$</span>
+                <input type="number" step="any" class="w2-input state-spec-input" data-state-code="${code}" data-state-prop="itemizedDeductions" value="${data.itemizedDeductions || 0}" placeholder="0">
+              </div>
+            </div>
+            <div class="panel-short-desc">State-specific itemized deductions if different from Federal Schedule A.</div>
+          </div>
+        </div>
+      `;
+
+      container.appendChild(block);
+    });
+
+    container.querySelectorAll<HTMLInputElement>('.state-spec-input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const code = inp.dataset.stateCode!;
+        const prop = inp.dataset.stateProp as keyof NonNullable<TaxAppState['stateSpecific']>[string];
+        const sMap = (this.state.stateSpecific ??= {});
+        const entry = (sMap[code] ??= {});
+        entry[prop] = Number(inp.value) || 0;
+        this.recalculateAndRender();
+      });
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+     Clustered Calculation Blocks + Click-to-Select + Variable Breakdown Popover
+     -------------------------------------------------------------------------- */
+  private renderTokensHtml(tokens: FormulaToken[], blockId: string): string {
+    return tokens.map(tok => {
+      if (tok.type === 'text') {
+        return `<span>${tok.text || ''}</span>`;
+      }
+      const emptyClass = tok.isEmpty ? 'var-empty' : '';
+      const display = tok.valueFormatted || tok.label || '';
+      return `<span class="formula-var ${emptyClass}" data-block-id="${blockId}" data-var-id="${tok.varId}" role="button" tabindex="0" title="Click to view contributing inputs">${display}</span>`;
+    }).join('');
+  }
+
+  private renderCalculationBlocks(taxData: TaxCalculationSummary): void {
+    const container = document.getElementById('calc-blocks-container');
+    if (!container) return;
+
+    this.currentCalcBlocks = buildCalculationBlocks(this.state, taxData);
+    const showEmpty = Boolean(this.uiPrefs.showEmptyCalcBlocks);
+    const visibleBlocks = this.currentCalcBlocks.filter(b => b.hasImpact || showEmpty);
+
+    container.innerHTML = '';
+
+    if (visibleBlocks.length === 0) {
+      container.innerHTML = `
+        <div class="calc-card" style="text-align: center; color: #64748b; padding: 1.5rem;">
+          Enter W-2 wages, other income, or deductions above to spawn live calculation blocks.
+          (Or enable <strong>Show Empty Calculation Blocks</strong> in <strong>Settings</strong>.)
+        </div>
+      `;
+      return;
+    }
+
+    const selectedId = this.arrowEngine?.getSelectedNode() || null;
+
+    visibleBlocks.forEach(block => {
+      const card = document.createElement('div');
+      card.className = `calc-card calc-clickable ${block.isOutput ? 'output-panel' : ''} ${selectedId === block.id ? 'calc-selected' : ''}`;
+      card.id = block.id;
+
+      const linesHtml = block.lines.map(line => `
+        <div class="calc-line-item ${line.isIntermediate ? 'is-intermediate' : ''}" id="${line.id}">
+          <div class="calc-line-top">
+            <span class="calc-line-name">${line.label}</span>
+            ${line.formLineLabel
+              ? `<span class="irs-line-tag">${line.formLineLabel}</span>`
+              : `<span class="irs-line-tag intermediate-tag">Intermediate</span>`}
+          </div>
+          <div class="formula-box" style="margin-top: 0.25rem;">
+            <div class="formula-row">
+              <span class="formula-badge general">General Formula</span>
+              <span class="formula-math formula-general">${this.renderTokensHtml(line.generalTokens.map(tk => tk.type === 'var' ? { ...tk, valueFormatted: tk.label } : tk), block.id)}</span>
+            </div>
+            <div class="formula-row">
+              <span class="formula-badge plugged">With Your Numbers</span>
+              <span class="formula-math plugged-highlight formula-plugged">${this.renderTokensHtml(line.pluggedTokens, block.id)}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      card.innerHTML = `
+        <div class="calc-card-header">
+          <div>
+            <div class="step-indicator">${block.stepLabel}</div>
+            <h3 class="calc-card-title">${block.title}</h3>
+          </div>
+        </div>
+        <div class="calc-lines-list">${linesHtml}</div>
+      `;
+
+      // Click on calculation box selects it & highlights arrows leading to/from it
+      card.addEventListener('click', (e: Event) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('.formula-var')) return;
+        const curr = this.arrowEngine?.getSelectedNode();
+        this.arrowEngine?.setSelectedNode(curr === block.id ? null : block.id);
+      });
+
+      container.appendChild(card);
+    });
+
+    // Bind clickable formula variables
+    container.querySelectorAll<HTMLElement>('.formula-var').forEach(varEl => {
+      varEl.addEventListener('click', (e: Event) => {
+        e.stopPropagation();
+        const blockId = varEl.dataset.blockId;
+        const varId = varEl.dataset.varId;
+        if (blockId && varId) {
+          this.openVariableBreakdownPopover(blockId, varId, varEl);
+        }
+      });
+    });
+  }
+
+  private openVariableBreakdownPopover(blockId: string, varId: string, anchorEl: HTMLElement): void {
+    const block = this.currentCalcBlocks.find(b => b.id === blockId);
+    const breakdown: CalcVariableBreakdown | undefined = block?.variables[varId];
+    const popover = document.getElementById('var-breakdown-popover');
+    const titleEl = document.getElementById('var-popover-title');
+    const listEl = document.getElementById('var-popover-list');
+    if (!breakdown || !popover || !titleEl || !listEl) return;
+
+    titleEl.textContent = `${breakdown.label} (${breakdown.totalFormatted})`;
+    listEl.innerHTML = '';
+
+    breakdown.contributors.forEach((c: CalcVariableContributor) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = `var-contrib-row ${!c.isSetUp ? 'is-unset' : ''}`;
+      const signClass = c.sign === '-' ? 'sign-minus' : (c.sign === 'info' ? 'sign-info' : 'sign-plus');
+      row.innerHTML = `
+        <span class="var-contrib-sign ${signClass}">${c.sign === 'info' ? '•' : c.sign}</span>
+        <span class="var-contrib-label">${c.label}</span>
+        <span class="var-contrib-amt">${c.amountFormatted}</span>
+      `;
+      row.addEventListener('click', () => {
+        popover.hidden = true;
+        // If this contributor belongs to an optional panel that isn't open yet, add it to the page first!
+        if (c.panelKey) {
+          if (!this.uiPrefs.openPanels) this.uiPrefs.openPanels = {};
+          if (!this.uiPrefs.openPanels[c.panelKey]) {
+            this.uiPrefs.openPanels[c.panelKey] = true;
+            const entry = getPanelCatalogEntry(c.panelKey);
+            if (entry?.sourceType) {
+              const hasAny = (this.state.otherIncome.sources || []).some(s => s.type === entry.sourceType);
+              if (!hasAny) this.addIncomeSourceOfType(entry.sourceType, false);
+            }
+            this.saveUiPrefs();
+            this.renderFederalPanelSections();
+            this.recalculateAndRender();
+          }
+        }
+        const target = document.getElementById(c.targetElementId);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          target.classList.add('flash-highlight');
+          if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) {
+            target.focus();
+          }
+          setTimeout(() => target.classList.remove('flash-highlight'), 1200);
+        }
+      });
+      listEl.appendChild(row);
+    });
+
+    const rect = anchorEl.getBoundingClientRect();
+    const top = Math.min(window.innerHeight - 320, rect.bottom + 8);
+    const left = Math.max(12, Math.min(window.innerWidth - 356, rect.left));
+    popover.style.top = `${Math.max(64, top)}px`;
+    popover.style.left = `${left}px`;
+    popover.hidden = false;
+
+    const closeBtn = document.getElementById('var-popover-close');
+    if (closeBtn) {
+      closeBtn.onclick = () => { popover.hidden = true; };
     }
   }
 }
