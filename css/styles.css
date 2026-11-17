@@ -3298,7 +3298,15 @@ input[type="number"] {
 
 /* State Sections */
 .state-group-block {
-  margin-bottom: 2rem;
+  margin-bottom: 2.25rem;
+}
+
+.state-subsection {
+  margin-bottom: 1.75rem;
+}
+
+.state-subsection:last-child {
+  margin-bottom: 0;
 }
 
 .state-group-header {
