@@ -217,6 +217,8 @@ export interface TaxAppState {
   /** Taxpayer can be claimed as a dependent on someone else's return (limited standard deduction, no EITC). */
   claimedAsDependent?: boolean;
   taxpayer?: PersonInfo;
+  /** Moved into the resident state during the year from `priorState`, in month `moveMonth` (1–12). */
+  partYear?: { priorState: string; moveMonth: number };
   spouse?: PersonInfo;
   /** Married filing separately and lived apart from spouse all year (SS benefits base amounts). */
   livedApartFromSpouse?: boolean;

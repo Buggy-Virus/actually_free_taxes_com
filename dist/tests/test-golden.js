@@ -598,6 +598,20 @@ const CASES = [
         expect: [['AGI', fed('fed.agi'), 60000], ['NY addition', st('NY', 'muniAddBack'), 3000], ['NY income', st('NY', 'agi'), 63000]]
     },
     {
+        name: 'Moved from Illinois to Pennsylvania in July — part-year returns in both states',
+        source: 'IL-1040 Schedule NR: IL income $30,000 wages + 6/12 of $1,200 interest = $30,600; exemption $2,775 × 50% → ($30,600 − $1,387.50) × 4.95% = $1,446.02. PA-40: income while a PA resident $30,600 × 3.07% = $939.42',
+        state: ret({ residentState: 'PA', partYear: { priorState: 'IL', moveMonth: 7 }, otherIncome: { interest: 1200, sources: [] },
+            w2s: [w2(30000, { state: 'IL' }), w2(30000, { state: 'PA' })] }),
+        expect: [['IL part-year income', st('IL', 'income'), 30600], ['IL tax', st('IL', 'totalTax'), 1446.02],
+            ['PA residency ratio', st('PA', 'residencyRatio'), 0.5], ['PA tax', st('PA', 'totalTax'), 939.42]]
+    },
+    {
+        name: 'Illinois nonresident — exemption prorated',
+        source: 'IL-1040 Schedule NR: $2,775 × (IL income ÷ federal AGI); IL wages $20,000 of $80,000 → ($20,000 − $693.75) × 4.95% = $955.66',
+        state: ret({ residentState: 'IN', w2s: [w2(20000, { state: 'IL' }), w2(60000, { state: 'IN' })] }),
+        expect: [['IL exemptions', st('IL', 'exemptions'), 693.75]]
+    },
+    {
         name: 'Texas resident — no state income tax',
         source: 'Texas has no personal income tax',
         state: ret({ residentState: 'TX', w2s: [w2(90000, { state: 'TX' })] }),

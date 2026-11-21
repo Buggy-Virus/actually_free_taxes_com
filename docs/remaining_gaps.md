@@ -78,7 +78,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 
 | ID | Pri | Gap | Today | Approach / inputs needed | Status |
 | :-- | :-: | :-- | :-- | :-- | :-: |
-| C1 | P0 | **Part-year residency** (move dates, income by period, prorated deductions) | Full-year resident only | Residency periods per state; reuse nonresident ratio machinery | ⬜ |
+| C1 | P0 | **Part-year residency** (move dates, income by period, prorated deductions) | Full-year resident only | Residency periods per state; reuse nonresident ratio machinery | ✅ prior + current state part-year returns; non-wage income allocated by months; current state uses tax × residency ratio (exact for flat-rate states, approximate for progressive prorate-method states); exemptions prorated on nonresident/part-year returns |
 | C2 | P0 | Year-keyed rate tables for all states (2024, 2025, 2026) and correct HOH/MFJ brackets (29 states use synthesized "1.4 × single" HOH) | Overrides for 6 states | Verify every state from DOR instructions | ⬜ |
 | C3 | P0 | Resident state required (no silent default to CA) | Defaults to CA | Validation + prompt | ✅ "— Select your state —"; no resident return without a state |
 | C4 | P1 | State estimated / extension payments and prior-year overpayment | W-2 withholding only | Per-state payments input | ✅ "State Estimated & Extension Payments" panel in every state |

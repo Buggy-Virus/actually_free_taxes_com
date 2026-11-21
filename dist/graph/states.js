@@ -48,6 +48,11 @@ export function planFromState(state) {
         || federalGraph(state.year || 2024).evaluate(federalContext(state)).value('fed.rentalAllowed') !== 0);
     if (rentalState && hasRental)
         codes.add(rentalState);
+    const prior = (state.partYear?.priorState || '').toUpperCase().trim();
+    const moveMonth = Number(state.partYear?.moveMonth) || 0;
+    const priorState = resident && prior && prior !== resident && moveMonth >= 2 && moveMonth <= 12 ? prior : '';
+    if (priorState)
+        codes.add(priorState);
     let nyc = false, yonkers = false;
     (state.w2s || []).forEach(w => (w.states || []).forEach(s => {
         const code = (s.state || resident).toUpperCase().trim();
@@ -64,10 +69,11 @@ export function planFromState(state) {
         resident,
         nonresidents: [...codes].filter(c => c !== resident).sort(),
         rentalState: rentalState && hasRental ? rentalState : '',
-        residentLocality: resident === 'NY' ? (nyc ? 'nyc' : yonkers ? 'yonkers' : '') : ''
+        residentLocality: resident === 'NY' ? (nyc ? 'nyc' : yonkers ? 'yonkers' : '') : '',
+        priorState
     };
 }
-const planKey = (p) => `${p.year}|${p.resident}|${p.nonresidents.join(',')}|${p.rentalState}|${p.residentLocality}`;
+const planKey = (p) => `${p.year}|${p.resident}|${p.nonresidents.join(',')}|${p.rentalState}|${p.residentLocality}|${p.priorState}`;
 const graphCache = new Map();
 /** The full return graph for a plan (federal + state modules), cached per plan. */
 export function returnGraph(plan) {
@@ -93,6 +99,7 @@ function catalogKeyFor(code, itemKey) {
 export function returnContext(state, plan) {
     const ctx = federalContext(state);
     const n = (v) => Number(v) || 0;
+    ctx.inputs['in.priorStateMonths'] = plan.priorState ? Math.max(0, Math.min(11, (Number(state.partYear?.moveMonth) || 1) - 1)) : 0;
     const codes = [plan.resident, ...plan.nonresidents].filter(Boolean);
     codes.forEach(code => {
         const lc = code.toLowerCase();
@@ -139,6 +146,10 @@ function residentPanelKeys(code) {
 function defineShared(g) {
     g.param({ id: 'st.taxpayerCount', label: 'Taxpayers on Return', unit: 'count', domSources: ['select-filing-status'],
         resolve: c => (c.status === 'married_joint' ? 2 : 1) });
+    // Part-year residency: income other than W-2 wages is allocated by months of residence in each state.
+    g.input({ id: 'in.priorStateMonths', label: 'Months in Previous State', unit: 'count', domId: 'select-move-month', max: 11 });
+    g.quantity({ id: 'ret.nonWageIncome', label: 'Income Other Than W-2 Wages', unit: 'usd', category: 'state', expr: sub(R('fed.totalIncome'), R('fed.wages')) });
+    g.quantity({ id: 'ret.priorShare', label: 'Share of Year in Previous State', unit: 'rate', display: 'inline', expr: div(R('in.priorStateMonths'), num(12)) });
     g.quantity({ id: 'ret.dependents', label: 'Dependents', unit: 'count', display: 'inline', expr: add(R('fed.ctcChildren'), R('fed.odcDependents')) });
     g.quantity({ id: 'ret.netLtcg', label: 'Net Long-Term Capital Gain (State)', unit: 'usd', category: 'capital',
         expr: atLeast0(add(R('fed.longTermGain'), min(lit(0), R('in.stGain')))) });
@@ -501,7 +512,18 @@ function defineResident(g, plan) {
             expr: round(mul(R('in.realEstateTax'), rate(0.05))) });
         tentative = atLeast0(sub(tentative, R(S('propertyTaxCredit'))));
     }
-    q('tentativeTax', { label: `${code} Tentative Tax`, unit: 'usd', category: 'state', expr: round(tentative) });
+    if (plan.priorState) {
+        // Part-year resident: tax as a full-year resident × share of income received while a resident.
+        q('residencyIncome', { label: `${code} Income While a Resident`, unit: 'usd', category: 'state',
+            expr: add(R(S('w2Wages')), mul(R('ret.nonWageIncome'), sub(rate(1), R('ret.priorShare')))) });
+        q('residencyRatio', { label: `${code} Part-Year Residency Ratio`, unit: 'rate', category: 'state',
+            expr: when(gt(R('fed.agi'), lit(0)), min(rate(1), max(rate(0), div(R(S('residencyIncome')), R('fed.agi')))), rate(1)) });
+        q('fullYearTax', { label: `${code} Tax as a Full-Year Resident`, unit: 'usd', category: 'state', expr: round(tentative) });
+        q('tentativeTax', { label: `${code} Part-Year Tax`, unit: 'usd', category: 'state', expr: round(mul(R(S('fullYearTax')), R(S('residencyRatio')))) });
+    }
+    else {
+        q('tentativeTax', { label: `${code} Tentative Tax`, unit: 'usd', category: 'state', expr: round(tentative) });
+    }
     // ---------- local tax ----------
     let local = lit(0);
     if (plan.residentLocality === 'nyc') {
@@ -525,7 +547,8 @@ function defineResident(g, plan) {
     const ostcTerms = [];
     plan.nonresidents.forEach(nr => {
         const nrRule = getStateTaxRule(nr);
-        if (!nrRule.hasIncomeTax)
+        // The previous state's part-year income is outside this state's residency share, so no credit applies.
+        if (!nrRule.hasIncomeTax || nr === plan.priorState)
             return;
         const N = (slot) => sid(nr, slot);
         q(`ostcRatio.${nr.toLowerCase()}`, { label: `${nr} Share of ${code} Income`, unit: 'rate', display: 'inline',
@@ -642,9 +665,18 @@ function defineNonresident(g, plan, code) {
     defineStateDocuments(g, plan, code);
     definePanels(g, code, false);
     q('withholding', { label: `${code} Tax Withheld & Paid`, unit: 'usd', category: 'withholding', expr: add(R(S('w2Withheld')), R(S('estimatedPayments'))) });
-    q('income', { label: `${code}-Source Income`, unit: 'usd', category: 'state',
-        expr: add(R(S('w2Wages')), R(S('documentIncome')), atLeast0(R(S('rentalNet')))) });
-    const reciprocalByRule = Boolean(rule.reciprocalWith?.includes(plan.resident) || resRule.reciprocalWith?.includes(code));
+    const partYear = code === plan.priorState;
+    if (partYear) {
+        // Part-year resident of this state: W-2 wages earned here plus a months-based share of all other income.
+        q('residentPeriodIncome', { label: `${code} Share of Other Income (months as a resident)`, unit: 'usd', category: 'state',
+            expr: mul(R('ret.nonWageIncome'), R('ret.priorShare')) });
+        q('income', { label: `${code} Part-Year Income`, unit: 'usd', category: 'state', expr: add(R(S('w2Wages')), R(S('residentPeriodIncome'))) });
+    }
+    else {
+        q('income', { label: `${code}-Source Income`, unit: 'usd', category: 'state',
+            expr: add(R(S('w2Wages')), R(S('documentIncome')), atLeast0(R(S('rentalNet')))) });
+    }
+    const reciprocalByRule = !partYear && Boolean(rule.reciprocalWith?.includes(plan.resident) || resRule.reciprocalWith?.includes(code));
     const reciprocal = reciprocalByRule ? lte(R(S('rentalNet')), lit(0)) : gt(lit(0), lit(1));
     // Nonresident computation. Most states use one of two methods (see docs/state_local_tax_logic.md §2):
     //   ratio method   — tax all federal AGI as if a resident, then multiply by the state-source share;
@@ -653,10 +685,18 @@ function defineNonresident(g, plan, code) {
         expr: atLeast0(sub(add(R(S('income')), R(S('panelOther'))), R(S('panelAdj')))) });
     q('incomeRatio', { label: `${code}-Source Share of Federal AGI`, unit: 'rate', category: 'state',
         expr: when(gt(R('fed.agi'), lit(0)), min(rate(1), div(R(S('adjustedIncome')), R('fed.agi'))), rate(1)) });
+    // Personal and dependent exemptions (same amounts as for residents).
+    const nrExTerms = [];
+    if (STATE_PERSONAL_EXEMPTION[code])
+        nrExTerms.push(mul(P('st.taxpayerCount'), lit(STATE_PERSONAL_EXEMPTION[code])));
+    if (STATE_DEPENDENT_EXEMPTION[code])
+        nrExTerms.push(mul(R('ret.dependents'), lit(STATE_DEPENDENT_EXEMPTION[code])));
+    const fullExemptions = nrExTerms.length ? add(...nrExTerms) : lit(0);
     if (NONRESIDENT_RATIO_METHOD.includes(code)) {
         q('deduction', { label: `${code} Standard Deduction`, unit: 'usd', category: 'state', expr: add(P(S('stdBase')), R(S('panelItem'))) });
+        q('exemptions', { label: `${code} Exemptions`, unit: 'usd', category: 'state', optional: true, expr: fullExemptions });
         q('taxableIfResident', { label: `${code} Taxable Income as if Resident (all federal AGI)`, unit: 'usd', category: 'state',
-            expr: atLeast0(sub(R('fed.agi'), R(S('deduction')))) });
+            expr: atLeast0(sub(R('fed.agi'), R(S('deduction')), R(S('exemptions')))) });
         q('taxIfResident', { label: `${code} Tax as if Resident`, unit: 'usd', category: 'state', expr: ruleTax(code, rule, R(S('taxableIfResident'))) });
         q('taxable', { label: `${code} Taxable Income`, unit: 'usd', category: 'state', expr: R(S('taxableIfResident')) });
         q('tentativeTax', { label: `${code} Nonresident Tax (resident tax × ${code} share)`, unit: 'usd', category: 'state',
@@ -665,7 +705,8 @@ function defineNonresident(g, plan, code) {
     else {
         q('deduction', { label: `${code} Prorated Standard Deduction`, unit: 'usd', category: 'state',
             expr: add(mul(P(S('stdBase')), R(S('incomeRatio'))), R(S('panelItem'))) });
-        q('taxable', { label: `${code} Taxable Income`, unit: 'usd', category: 'state', expr: atLeast0(sub(R(S('adjustedIncome')), R(S('deduction')))) });
+        q('exemptions', { label: `${code} Prorated Exemptions`, unit: 'usd', category: 'state', optional: true, expr: mul(fullExemptions, R(S('incomeRatio'))) });
+        q('taxable', { label: `${code} Taxable Income`, unit: 'usd', category: 'state', expr: atLeast0(sub(R(S('adjustedIncome')), R(S('deduction')), R(S('exemptions')))) });
         q('tentativeTax', { label: `${code} Tax on Taxable Income`, unit: 'usd', category: 'state', expr: ruleTax(code, rule, R(S('taxable'))) });
     }
     const standard = atLeast0(round(sub(R(S('tentativeTax')), R(S('panelCred')))));
@@ -718,7 +759,8 @@ export function stateBlocks(plan, code, g) {
                     ...pick('itemized'), S('panelItem'), S('deduction'), ...pick('personalExemption', 'dependentExemption', 'childDeduction'), S('exemptions'),
                     { id: S('taxable'), show: 'always' }] },
             { id: `calc-state-${lc}-tentative`, stepLabel: `${name} • Step 2: Tax Brackets`, title: `${code} Tax Brackets & Tentative Tax`,
-                quantities: [S('bracketTax'), ...pick('stcgSurtax', 'millionaireSurtax', 'mentalHealthTax', 'propertyTaxCredit'), { id: S('tentativeTax'), show: 'always' }] }
+                quantities: [S('bracketTax'), ...pick('stcgSurtax', 'millionaireSurtax', 'mentalHealthTax', 'propertyTaxCredit', 'fullYearTax', 'residencyIncome', 'residencyRatio'),
+                    { id: S('tentativeTax'), show: 'always' }] }
         ];
         blocks.push({ id: `calc-state-${lc}-local`, stepLabel: `${name} • Step 3: Local / Municipal Tax`, title: g.quantities.get(S('localTax')).label,
             quantities: [S('localTax')] });
@@ -733,9 +775,10 @@ export function stateBlocks(plan, code, g) {
         out.push({ id: `calc-state-${lc}-d30`, stepLabel: `${name} • Form D-30 Unincorporated Business Tax`, title: 'DC Form D-30',
             quantities: [S('d30Receipts'), S('d30Net'), S('d30SalaryAllowance'), S('d30Taxable'), S('d30Tax')] });
     }
-    out.push({ id: `calc-state-${lc}-taxable`, stepLabel: `${name} • Nonresident Income & Taxable Income`, title: `${code} Nonresident Taxable Income`,
-        quantities: [S('w2Wages'), S('documentIncome'), S('rentalNet'), { id: S('income'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'),
-            S('incomeRatio'), S('deduction'), ...pick('taxableIfResident', 'taxIfResident'), ...(has('taxableIfResident') ? [] : [S('taxable')]), S('tentativeTax')] });
+    const py = code === plan.priorState;
+    out.push({ id: `calc-state-${lc}-taxable`, stepLabel: `${name} • ${py ? 'Part-Year Resident' : 'Nonresident'} Income & Taxable Income`, title: `${code} ${py ? 'Part-Year' : 'Nonresident'} Taxable Income`,
+        quantities: [S('w2Wages'), ...pick('residentPeriodIncome'), S('documentIncome'), S('rentalNet'), { id: S('income'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'),
+            S('incomeRatio'), S('deduction'), S('exemptions'), ...pick('taxableIfResident', 'taxIfResident'), ...(has('taxableIfResident') ? [] : [S('taxable')]), S('tentativeTax')] });
     out.push({ id: `calc-state-${lc}-card`, stepLabel: `${name} • Nonresident Return`, title: rule.formNonResident, isOutput: true,
         quantities: [S('panelCred'), { id: S('totalTax'), show: 'always' }, { id: S('totalWithholding'), show: 'always' }, { id: S('net'), show: 'always' }] });
     return out;

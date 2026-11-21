@@ -62,7 +62,7 @@ Required template additions:
 | Unemployment compensation (exempt in CA, NJ, PA, VA, MT, others) | ⚠️ | ✅ CA, NJ, PA, VA (`unemploymentSubtraction`) |
 | Capital gains: state LTCG exclusions (AZ 25%, AR 50%, ND 40%, NM 40%, SC 44%, VT 40% up to $5k, WI 30%); MA 8.5% short-term rate; WA excise | ⚠️ | ✅ listed exclusions; ⚠️ MA modeled as a 3.5% surtax |
 | 529 plan deductions/credits (30+ states) and recapture of nonqualified withdrawals | ⚠️ | Deductions via state panels with caps; no recapture |
-| Part-year residency (move dates, income allocated by residency period, prorated deductions/exemptions) | ❌ | **Major gap**: one full-year resident state only |
+| Part-year residency (move dates, income allocated by residency period, prorated deductions/exemptions) | ⚠️ | ✅ one move per year (previous state + month); non-wage income allocated by months, not by date received; current state uses the ratio method |
 | Nonresident returns: source-income rules (wages by work location, rentals by property state, intangibles to domicile), tax computed with the state's method (prorate deductions vs "tax on total × ratio") | ⚠️ | ✅ ratio method for 21 states (`st.<code>.taxIfResident × incomeRatio`), prorated standard deduction for the rest; ❌ exemption/credit proration details, intangibles sourcing |
 | Convenience-of-employer rule (NY, NJ, CT, DE, NE, PA for remote work) | ❌ | |
 | Credit for taxes paid to other states: per-state limitation formulas, which tax qualifies (local taxes in some states), reverse credits (e.g. VA/OR/AZ/CA for certain states) | ⚠️ | One ratio formula; credit clamped ≥ 0 |

@@ -58,6 +58,7 @@ function randomReturn() {
             list: rnd() < 0.5 ? Array.from({ length: Math.floor(rnd() * 4) }, (_, i) => ({ id: i + 1, name: `D${i}`, birthYear: 1950 + Math.floor(rnd() * 75),
                 relationship: rnd() < 0.8 ? 'child' : 'relative', monthsLived: Math.floor(rnd() * 13), student: rnd() < 0.3, disabled: rnd() < 0.05, hasSsn: rnd() < 0.95 })) : undefined },
         statePanels: [],
+        partYear: rnd() < 0.15 ? { priorState: pick(STATES), moveMonth: 2 + Math.floor(rnd() * 11) } : undefined,
         taxpayer: rnd() < 0.5 ? { birthYear: 1940 + Math.floor(rnd() * 70), blind: rnd() < 0.05 } : undefined,
         spouse: rnd() < 0.5 ? { birthYear: 1940 + Math.floor(rnd() * 70), blind: rnd() < 0.05 } : undefined,
         showAllArrows: true

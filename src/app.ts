@@ -1075,6 +1075,7 @@ class TaxApp {
       spouse: { birthYear: Number(parsed.spouse?.birthYear) || undefined, blind: Boolean(parsed.spouse?.blind) },
       livedApartFromSpouse: Boolean(parsed.livedApartFromSpouse),
       spouseItemizes: Boolean(parsed.spouseItemizes),
+      partYear: parsed.partYear && typeof parsed.partYear.priorState === 'string' && parsed.partYear.priorState ? { priorState: String(parsed.partYear.priorState).toUpperCase(), moveMonth: Number(parsed.partYear.moveMonth) || 7 } : undefined,
       priorYearTax: Number(parsed.priorYearTax) || 0,
       priorYearAgi: Number(parsed.priorYearAgi) || 0,
       statePanels: Array.isArray(parsed.statePanels)
@@ -1420,6 +1421,26 @@ class TaxApp {
         this.renderW2Forms(); // the "Whose W-2?" selector only appears on joint returns
         this.recalculateAndRender();
       });
+    }
+
+    const movedCheck = document.getElementById('check-moved') as HTMLInputElement | null;
+    const movedFields = document.getElementById('moved-fields') as HTMLElement | null;
+    const priorSel = document.getElementById('select-prior-state') as HTMLSelectElement | null;
+    const monthSel = document.getElementById('select-move-month') as HTMLSelectElement | null;
+    if (movedCheck && movedFields && priorSel && monthSel) {
+      priorSel.innerHTML = `<option value="">— Select —</option>${this.renderStateOptions(this.state.partYear?.priorState || '')}`;
+      monthSel.value = String(this.state.partYear?.moveMonth || 7);
+      movedCheck.checked = Boolean(this.state.partYear?.priorState);
+      movedFields.style.display = movedCheck.checked ? 'grid' : 'none';
+      const update = () => {
+        movedFields.style.display = movedCheck.checked ? 'grid' : 'none';
+        this.state.partYear = movedCheck.checked && priorSel.value ? { priorState: priorSel.value, moveMonth: Number(monthSel.value) || 7 } : undefined;
+        this.renderStateSections();
+        this.recalculateAndRender();
+      };
+      movedCheck.addEventListener('change', update);
+      priorSel.addEventListener('change', update);
+      monthSel.addEventListener('change', update);
     }
 
     const resStateSelect = document.getElementById('select-resident-state') as HTMLSelectElement | null;
