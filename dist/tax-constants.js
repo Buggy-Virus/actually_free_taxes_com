@@ -96,11 +96,12 @@ export const TAX_CONSTANTS = {
         }
     },
     2025: {
+        // P.L. 119-21 §70102 (July 4, 2025) raised the 2025 standard deduction.
         standardDeduction: {
-            single: 15000,
-            married_joint: 30000,
-            married_separate: 15000,
-            head_of_household: 22500
+            single: 15750,
+            married_joint: 31500,
+            married_separate: 15750,
+            head_of_household: 23625
         },
         ssWageLimit: 176100,
         ssRate: 0.062,
@@ -119,7 +120,7 @@ export const TAX_CONSTANTS = {
             married_separate: 125000,
             head_of_household: 200000
         },
-        childTaxCreditPerChild: 2000,
+        childTaxCreditPerChild: 2200,
         childTaxCreditRefundableMax: 1700,
         childTaxCreditPhaseout: {
             single: 200000,

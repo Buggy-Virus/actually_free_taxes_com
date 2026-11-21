@@ -60,7 +60,7 @@ export function planFromState(state: TaxAppState): ReturnPlan {
   const rentalState = (rental?.propertyState || '').toUpperCase().trim();
   // A rental state joins the return when there are rents or an allowed (non-zero) rental result.
   const hasRental = Boolean(rental) && ((Number(rental!.grossRents) || 0) > 0
-    || federalGraph().evaluate(federalContext(state)).value('fed.rentalAllowed') !== 0);
+    || federalGraph(state.year || 2024).evaluate(federalContext(state)).value('fed.rentalAllowed') !== 0);
   if (rentalState && hasRental) codes.add(rentalState);
 
   let nyc = false, yonkers = false;
@@ -89,7 +89,7 @@ export function returnGraph(plan: ReturnPlan): FormulaGraph {
   let g = graphCache.get(key);
   if (!g) {
     g = new FormulaGraph();
-    defineFederal(g);
+    defineFederal(g, plan.year);
     defineShared(g);
     defineResident(g, plan);
     plan.nonresidents.forEach(code => defineNonresident(g!, plan, code));

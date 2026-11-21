@@ -113,6 +113,7 @@ function childExprs(e) {
         case 'sub': return [e.a, ...e.minus];
         case 'neg':
         case 'ceil':
+        case 'floor':
         case 'round': return [e.e];
         case 'mul':
         case 'div': return [e.a, e.b];
@@ -265,6 +266,10 @@ export class Evaluation {
                 const c = kids([e.e]);
                 return { expr: e, value: Math.ceil(c[0].value), children: c };
             }
+            case 'floor': {
+                const c = kids([e.e]);
+                return { expr: e, value: Math.floor(c[0].value), children: c };
+            }
             case 'round': {
                 const c = kids([e.e]);
                 const f = e.to === 'cent' ? 100 : 1;
@@ -328,8 +333,12 @@ export class Evaluation {
         if (e.k === 'sum_over')
             return (n.items || []).length === 0;
         if (e.k === 'ref') {
-            const def = this.graph.inputs.get(e.id) || this.graph.quantities.get(e.id);
-            return Boolean(def?.optional) && n.value === 0;
+            const input = this.graph.inputs.get(e.id);
+            if (input)
+                return Boolean(input.optional) && n.value === 0;
+            // A computed $0 stays visible when its `presentIf` holds (e.g. interest entered but fully phased out).
+            const q = this.graph.quantities.get(e.id);
+            return Boolean(q?.optional) && n.value === 0 && !(q?.presentIf && this.evalCond(q.presentIf).value);
         }
         if (e.k === 'mul')
             return n.children.some(c => this.isAbsent(c));
@@ -474,7 +483,8 @@ export class Evaluation {
             case 'neg': return [text('−'), ...this.render(n.children[0], plugged, true, vars)];
             case 'min':
             case 'max':
-            case 'ceil': {
+            case 'ceil':
+            case 'floor': {
                 const toks = [text(`${e.k}(`)];
                 n.children.forEach((c, i) => {
                     if (i > 0)
@@ -573,7 +583,8 @@ export class Evaluation {
             case 'round': return this.renderRaw(e.e, collection, top);
             case 'min':
             case 'max':
-            case 'ceil': {
+            case 'ceil':
+            case 'floor': {
                 const args = childExprs(e);
                 return [text(`${e.k}(`), ...args.flatMap((a, i) => [...(i ? [text(', ')] : []), ...r(a)]), text(')')];
             }

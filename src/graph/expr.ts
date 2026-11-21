@@ -45,6 +45,7 @@ export type Expr =
   | { k: 'min'; args: Expr[] }
   | { k: 'max'; args: Expr[] }
   | { k: 'ceil'; e: Expr }
+  | { k: 'floor'; e: Expr }
   | { k: 'if'; cond: Cond; then: Expr; else: Expr }
   /** Pick an entry of a list-valued param by a computed index (clamped to the list). */
   | { k: 'lookup'; table: string; key: Expr }
@@ -71,6 +72,7 @@ export const div = (a: Expr, b: Expr): Expr => ({ k: 'div', a, b });
 export const min = (...args: Expr[]): Expr => ({ k: 'min', args });
 export const max = (...args: Expr[]): Expr => ({ k: 'max', args });
 export const ceil = (e: Expr): Expr => ({ k: 'ceil', e });
+export const floor = (e: Expr): Expr => ({ k: 'floor', e });
 export const atLeast0 = (e: Expr): Expr => max(lit(0), e);
 export const when = (cond: Cond, then: Expr, otherwise: Expr): Expr => ({ k: 'if', cond, then, else: otherwise });
 export const lookup = (table: string, key: Expr): Expr => ({ k: 'lookup', table, key });

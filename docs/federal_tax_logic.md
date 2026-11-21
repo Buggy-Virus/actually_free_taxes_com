@@ -22,9 +22,9 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Requirement | Status | Notes |
 | :-- | :--: | :-- |
 | TY2024 parameters (brackets, std deduction, phaseouts, SS wage base) | ✅ | `src/tax-constants.ts` |
-| TY2025 parameters **after** P.L. 119-21 (signed July 4, 2025) | ❌ | 2025 values predate the act: std deduction $15,000 → **$15,750** single / **$31,500** MFJ / **$23,625** HOH; CTC $2,000 → **$2,200**; SALT cap $10,000 → **$40,000** |
+| TY2025 parameters **after** P.L. 119-21 (signed July 4, 2025) | ⚠️ | ✅ std deduction $15,750 / $31,500 / $23,625; ✅ CTC $2,200; ✅ SALT cap $40,000 with phase-down; ❌ new Schedule 1-A deductions (tips, overtime, car loan interest, senior) |
 | TY2026 parameters (Rev. Proc. 2025-32) | ❌ | The next filing season (early 2027) is for TY2026. The year selector stops at 2025 |
-| Every year-dependent value is keyed by year | ⚠️ | Federal brackets, std deduction, AMT and SS base are keyed by year. EITC tables, Saver's Credit thresholds, the AMT 28% breakpoint, and the student loan and education phaseouts use 2024 values for every year |
+| Every year-dependent value is keyed by year | ⚠️ | ✅ brackets, std deduction, SS base, AMT exemption and 28% breakpoint, EITC tables, Saver's Credit tiers, student loan phase-out, SALT cap. ❌ HSA/IRA limits (not enforced yet), mileage rates |
 | Prior-year returns (late filers, amendments) | ⚠️ | Only 2024–2025 |
 
 ---
@@ -57,7 +57,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Box 1 wages summed across W-2s → Line 1a | ✅ | `fed.wages` |
 | Box 2 withholding → Line 25a | ✅ | `fed.w2Withholding` |
 | Boxes 3–6 (SS and Medicare wages and tax) | ✅ | Used by `fed.excessSS`, `fed.seSsRoom`, `fed.additionalMedicareTax` |
-| Box 6 Additional Medicare withheld credited on Line 25c (Form 8959 Part V) | ❌ | Known gap: overstates the balance due for wages > $200k |
+| Box 6 Additional Medicare withheld credited on Line 25c (Form 8959 Part V) | ✅ | `fed.addlMedicareWithheld`; golden test |
 | Box 7/8 SS tips, allocated tips (Line 1c) | ❌ | Allocated tips are taxable and need Form 4137 |
 | Box 10 dependent care benefits: excess over $5,000 is taxable (Line 1e); reduces the Form 2441 expense limit | ❌ | |
 | Box 12 codes: D/E/G/S (deferrals → Saver's Credit, IRA phaseout); W (employer HSA → reduces HSA limit); C (group-term life); DD (info); AA/BB (Roth); Q (combat pay → EITC election); T (adoption benefits, Line 1f) | ❌ | Fields exist in UI, unused in math |
@@ -108,7 +108,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Prior-year capital loss carryover | ⚠️ | Single carryover number; must be split ST/LT (Capital Loss Carryover Worksheet) and next year's carryover computed |
 | Form 8949 per-transaction entry with box categories A–F (basis reported or not), adjustment codes (W wash sale, B basis, etc.) | ❌ | Needed to file; summary totals only allowed when no adjustments (Exception 1) |
 | Wash-sale disallowance | ❌ | Usually from broker 1099-B (code W) |
-| 28% collectibles gain, 25% unrecaptured §1250 gain | ⚠️ | Taxed at flat 25%/28% instead of *maximum* rates (Schedule D Tax Worksheet). Known gap |
+| 28% collectibles gain, 25% unrecaptured §1250 gain | ✅ | Worksheet result capped at regular tax on all income (`fed.regularTax`); golden test |
 | §1202 qualified small business stock exclusion | ❌ | |
 | §1256 contracts 60/40 (Form 6781) | ❌ | |
 | Sale of main home — §121 exclusion $250k / $500k (ownership and use tests, partial exclusion) | ❌ | |
@@ -181,7 +181,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Penalty on early withdrawal of savings | ✅ | |
 | Alimony paid (pre-2019) | ✅ | |
 | IRA deduction: $7,000 limit (+$1,000 age 50), limited to compensation, spousal IRA, MAGI phase-out when covered by workplace plan (2024: $77k–$87k single, $123k–$143k MFJ; $230k–$240k spouse covered) | ⚠️ | Amount accepted as entered |
-| Student loan interest: $2,500 cap and MAGI phase-out ($80k–$95k single / $165k–$195k MFJ 2024; MFS not allowed) | ⚠️ | ✅ cap; ❌ phase-out (known gap) |
+| Student loan interest: $2,500 cap and MAGI phase-out ($80k–$95k single / $165k–$195k MFJ 2024; $85k–$100k / $170k–$200k 2025; MFS not allowed) | ✅ | `fed.studentLoanMagi`, `fed.studentLoanDeduction`; golden test |
 | Archer MSA, jury duty pay remitted, other | ⚠️ | Jury duty ✅ |
 
 **Adjusted Gross Income** — `fed.agi` (Line 11) ✅
@@ -194,7 +194,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 
 | Rule | Status | Notes |
 | :-- | :--: | :-- |
-| Base amount by status and year | ⚠️ | 2025 values pre-date P.L. 119-21 |
+| Base amount by status and year | ✅ | 2025 per P.L. 119-21; ❌ 2026 |
 | Additional amount per 65+/blind box | ✅ | Golden test |
 | Dependent limitation, MFS-spouse-itemizes rule | ❌ | See §1 |
 | **2025–2028 senior deduction** $6,000 per individual 65+ (phase-out 6% of MAGI over $75k / $150k MFJ; SSN; MFJ if married), available whether or not itemizing | ❌ | Schedule 1-A |
@@ -207,7 +207,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | :-- | :--: | :-- |
 | Medical over 7.5% of AGI | ✅ | `fed.medicalDeduction` |
 | SALT: state/local income tax **or** general sales tax election (+ IRS sales tax tables), real estate, personal property tax | ⚠️ | Income tax = W-2 boxes 17+19 only (misses estimated payments and prior-year balance paid; CA SDI); no sales tax option; no personal property tax |
-| SALT cap: $10,000 (2024); **$40,000 (2025), $40,400 (2026), +1%/yr to 2029, $10,000 from 2030**; phase-down by 30% of MAGI over $500,000 ($505,000 in 2026) to a $10,000 floor; half for MFS | ⚠️ | $10,000 for every year |
+| SALT cap: $10,000 (2024); **$40,000 (2025), $40,400 (2026), +1%/yr to 2029, $10,000 from 2030**; phase-down by 30% of MAGI over $500,000 ($505,000 in 2026) to a $10,000 floor; half for MFS | ✅ | `fed.saltCap` (2024–2025); golden tests |
 | Mortgage interest (Form 1098): $750k acquisition debt limit ($1M grandfathered pre-12/16/2017), points, home equity used to buy/build/improve only | ⚠️ | Amount accepted as entered; no debt limit |
 | Mortgage insurance premiums (deductible again from 2026) | ❌ | |
 | Investment interest (Form 4952) limited to net investment income, carryforward, qualified dividend election | ⚠️ | Limited; no carryforward/election |
@@ -237,10 +237,10 @@ Every federal rule the app must support for a person to prepare and file a compl
 
 | Rule | Status | Notes |
 | :-- | :--: | :-- |
-| **Tax Table** for taxable income < $100,000 ($50 rows, tax at row midpoint, rounded) | ❌ | Engine applies rates to exact income (differs by up to ~$6). Known gap |
+| **Tax Table** for taxable income < $100,000 ($50 rows, tax at row midpoint, rounded) | ✅ | `fed.ordinaryTaxRow`, `fed.regularTaxRow`; golden tests |
 | Tax Computation Worksheet (≥ $100,000) | ✅ | Equivalent to bracket math; golden test |
 | Qualified Dividends and Capital Gain Tax Worksheet (0/15/20% stacking) | ✅ | `fed.standardPrefTax`; golden test |
-| Schedule D Tax Worksheet (28% / 25% gains as maximum rates) | ⚠️ | Flat rates; known gap |
+| Schedule D Tax Worksheet (28% / 25% gains as maximum rates) | ✅ | Smaller of worksheet and regular tax |
 | Kiddie tax (Form 8615) and parent's election (Form 8814) | ❌ | |
 | Foreign Earned Income Tax Worksheet (stacking) | ❌ | |
 | Lump-sum distributions (Form 4972) | 🚫 | |
@@ -254,12 +254,12 @@ Every federal rule the app must support for a person to prepare and file a compl
 
 | Rule | Status | Notes / graph ids |
 | :-- | :--: | :-- |
-| Child Tax Credit $2,000 (2024) / **$2,200 (2025)**; under 17; SSN for child (and, from 2025, for at least one parent); $50 per $1,000 over $200k / $400k | ⚠️ | `fed.ctcAfterPhaseout`; 2025 amount and SSN rules missing |
+| Child Tax Credit $2,000 (2024) / **$2,200 (2025)**; under 17; SSN for child (and, from 2025, for at least one parent); $50 per $1,000 over $200k / $400k | ⚠️ | `fed.ctcAfterPhaseout`; ✅ amounts; ❌ SSN and age tests |
 | Credit for Other Dependents $500 | ✅ | `fed.odcAfterPhaseout` |
 | Child & dependent care (Form 2441): 35%→20% rate, $3,000 / $6,000; **qualifying person under 13**; limited to the lower earner's earned income (student/disabled spouse deemed $250/$500 per month); reduced by employer benefits (box 10); MFS generally ineligible | ⚠️ | `fed.childCareCredit`; counts all dependents, no earned-income limit, no box 10 |
 | **2026+ dependent care rate up to 50%** (P.L. 119-21) | ❌ | |
 | Education credits (Form 8863): AOTC per student ($2,500, 40% refundable, first 4 years, half-time, no felony drug conviction; refundability limited for some under-24 students); LLC 20% of $10,000 per return; MAGI phase-out $80k–$90k / $160k–$180k | ⚠️ | `fed.aotcTotal`, `fed.llc`; one student only; no per-student or 4-year tracking |
-| Saver's Credit (Form 8880): includes elective deferrals (W-2 box 12 D/E/G/S, Roth), minus distributions; not for full-time students or dependents; thresholds by year | ⚠️ | IRA contributions only; 2024 thresholds every year |
+| Saver's Credit (Form 8880): includes elective deferrals (W-2 box 12 D/E/G/S, Roth), minus distributions; not for full-time students or dependents; thresholds by year | ⚠️ | IRA contributions only; ✅ thresholds by year |
 | Foreign tax credit (Form 1116) with limitation; de minimis $300/$600 election without the form; carryover | ⚠️ | Amount accepted as entered |
 | Residential clean energy (Form 5695 Part I, 30%) — **ends for expenditures after 12/31/2025** | ⚠️ | Amount accepted as entered |
 | Energy-efficient home improvement (25C, $1,200 / $2,000 heat pumps) — **ends after 2025** | ⚠️ | Amount accepted as entered |
@@ -298,7 +298,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Additional Medicare withheld (25c) | ❌ | |
 | Estimated payments + prior-year overpayment applied (Line 26) | ⚠️ | Single amount |
 | Extension payment (Form 4868), amount paid with extension | ❌ | |
-| Earned Income Credit (Line 27): year-indexed tables (2024 and 2025 differ); EIC Table $50 bands; investment income limit; age 25–64 when no qualifying child; qualifying child age/residency/relationship; MFS separated-spouse rule; SSN requirements; disallowance periods | ⚠️ | `fed.eitc`: 2024 parameters for every year; formula instead of EIC Table; age and child tests not modeled |
+| Earned Income Credit (Line 27): year-indexed tables (2024 and 2025 differ); EIC Table $50 bands; investment income limit; age 25–64 when no qualifying child; qualifying child age/residency/relationship; MFS separated-spouse rule; SSN requirements; disallowance periods | ⚠️ | `fed.eitc`: ✅ 2024 and 2025 parameters; formula instead of EIC Table; age and child tests not modeled |
 | Additional Child Tax Credit (Line 28): 15% of earned income over $2,500, $1,700 per child (2024 and 2025) | ✅ | `fed.actc` |
 | Refundable AOTC (Line 29) | ✅ | `fed.aotcRefundable` |
 | Net Premium Tax Credit (Form 8962): 1095-A reconciliation, SLCSP, household income as % of FPL, applicable percentage (enhanced subsidies expired after 2025 → 400% FPL cliff returns for 2026), shared policy allocation, excess APTC repayment | ⚠️ | Net amount accepted as entered |

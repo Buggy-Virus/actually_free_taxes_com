@@ -26,6 +26,7 @@ export const div = (a, b) => ({ k: 'div', a, b });
 export const min = (...args) => ({ k: 'min', args });
 export const max = (...args) => ({ k: 'max', args });
 export const ceil = (e) => ({ k: 'ceil', e });
+export const floor = (e) => ({ k: 'floor', e });
 export const atLeast0 = (e) => max(lit(0), e);
 export const when = (cond, then, otherwise) => ({ k: 'if', cond, then, else: otherwise });
 export const lookup = (table, key) => ({ k: 'lookup', table, key });

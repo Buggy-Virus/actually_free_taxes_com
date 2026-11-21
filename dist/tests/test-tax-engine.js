@@ -43,10 +43,11 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
     assert.strictEqual(res.agiCalc.result, 75000, 'AGI should be 75,000');
     assert.strictEqual(res.deductionCalc.result, 14600, 'Standard deduction for single 2024 is 14,600');
     assert.strictEqual(res.taxableIncomeCalc.result, 60400, 'Taxable income is 75000 - 14600 = 60400');
-    assert.strictEqual(Math.round(res.totalTaxCalc.result), 8341, 'Total tax should be 8341');
+    // 2024 Tax Table, single, row $60,400–$60,450 → $8,347 (taxable income under $100,000 must use the table)
+    assert.strictEqual(Math.round(res.totalTaxCalc.result), 8347, 'Total tax should be 8347 (Tax Table)');
     assert.strictEqual(res.withholdingCalc.result, 8900, 'Total withholding is 8900');
     assert.strictEqual(res.finalResultCalc.isRefund, true, 'Should be a refund');
-    assert.strictEqual(Math.round(res.finalResultCalc.result), 559, 'Refund amount should be 559');
+    assert.strictEqual(Math.round(res.finalResultCalc.result), 553, 'Refund amount should be 553');
     // Verify State Tax
     assert.strictEqual(res.stateTaxCalc.totalStateWithheld, 3450, 'State tax withheld is 3,450');
     assert.strictEqual(res.stateTaxCalc.byState.length, 1, '1 state entry');
@@ -225,7 +226,8 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
     assert.strictEqual(res.grossIncomeCalc.result, 80700, 'Gross income with extra income sources');
     assert.strictEqual(res.otherTaxesCalc.selfEmploymentTax, 1130.36, 'Schedule SE tax on $8,000 NEC is $1,130.36');
     assert.strictEqual(res.otherTaxesCalc.halfSelfEmploymentTaxDeduction, 565.18, 'Half SE tax deduction is $565.18');
-    assert.strictEqual(res.agiCalc.result, 79634.82, 'AGI with $500 student loan + $565.18 half SE tax adjustment');
+    // Student loan MAGI $80,134.82 is inside the 2024 $80k–$95k phase-out: $500 × (1 − 134.82/15,000) = $495.51
+    assert.strictEqual(res.agiCalc.result, 79639.31, 'AGI with phased-out student loan deduction + $565.18 half SE tax adjustment');
     assert(res.grossIncomeCalc.sourceFields.includes('q-fed-businessProfit'), 'Sources include freelance input');
     assert(res.grossIncomeCalc.sourceFields.includes('q-fed-dividends'), 'Sources include dividends input');
     console.log("✓ TS Test 5: Additional Income Sources (1099-NEC + 1099-DIV + Auto Schedule SE) verified correctly!");

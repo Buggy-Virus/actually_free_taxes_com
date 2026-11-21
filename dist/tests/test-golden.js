@@ -40,8 +40,7 @@ const CASES = [
         name: 'Single, $50,000 wages — 2024 tax from the Tax Table',
         source: '2024 Form 1040 instructions, Tax Table: taxable income under $100,000 uses the $50-row table (row $35,400–$35,450 → $4,019)',
         state: ret({ w2s: [w2(50000)] }),
-        expect: [['taxable income', fed('fed.taxableIncome'), 35400], ['income tax (Line 16)', fed('fed.tax'), 4019]],
-        knownGap: 'Tax Table: engine applies bracket rates to exact taxable income ($4,016) instead of the $50-row midpoint table'
+        expect: [['taxable income', fed('fed.taxableIncome'), 35400], ['income tax (Line 16)', fed('fed.tax'), 4019]]
     },
     {
         name: 'Single, $150,000 wages — Tax Computation Worksheet (≥ $100,000)',
@@ -54,22 +53,19 @@ const CASES = [
         source: 'Schedule 8812: 2 × $2,000 (AGI under $400,000); Tax Table row $70,800–$70,850 → $8,035',
         state: ret({ filingStatus: 'married_joint', w2s: [w2(100000)], dependents: { childrenCount: 2 } }),
         expect: [['taxable income', fed('fed.taxableIncome'), 70800], ['child tax credit', r => r.creditsCalc.childTaxCredit, 4000],
-            ['income tax', fed('fed.tax'), 8035]],
-        knownGap: 'Tax Table (see above): engine computes $8,032'
+            ['income tax', fed('fed.tax'), 8035]]
     },
     {
         name: 'Single, $150,000 wages, 2025 — standard deduction after the 2025 reconciliation act',
         source: 'P.L. 119-21 §70102: 2025 standard deduction $15,750 single',
         state: ret({ year: 2025, w2s: [w2(150000)] }),
-        expect: [['standard deduction', fed('fed.stdDeduction'), 15750], ['taxable income', fed('fed.taxableIncome'), 134250]],
-        knownGap: '2025 constants predate P.L. 119-21 (engine uses $15,000)'
+        expect: [['standard deduction', fed('fed.stdDeduction'), 15750], ['taxable income', fed('fed.taxableIncome'), 134250]]
     },
     {
         name: 'MFJ 2025, 1 child — $2,200 Child Tax Credit',
         source: 'P.L. 119-21 §70104: CTC $2,200 per child for 2025',
         state: ret({ year: 2025, filingStatus: 'married_joint', w2s: [w2(120000)], dependents: { childrenCount: 1 } }),
-        expect: [['child tax credit', r => r.creditsCalc.childTaxCredit, 2200]],
-        knownGap: '2025 CTC still $2,000 in engine'
+        expect: [['child tax credit', r => r.creditsCalc.childTaxCredit, 2200]]
     },
     {
         name: 'Single age 65+ — additional standard deduction',
@@ -89,8 +85,7 @@ const CASES = [
         name: 'Single, no children, $10,000 wages, 2025 — EITC',
         source: 'Rev. Proc. 2024-40: 2025 EITC with no qualifying children, max $649',
         state: ret({ year: 2025, w2s: [w2(10000)] }),
-        expect: [['EITC', fed('fed.eitc'), 649]],
-        knownGap: 'EITC parameters are not keyed by year (engine uses 2024 max $632)'
+        expect: [['EITC', fed('fed.eitc'), 649]]
     },
     {
         name: 'Child & dependent care credit at $30,000 AGI',
@@ -134,10 +129,9 @@ const CASES = [
     },
     {
         name: 'Low income with unrecaptured §1250 gain — 25% is a maximum rate',
-        source: 'Schedule D Tax Worksheet: tax is the smaller of the worksheet result and regular tax on all income ($400 × 10% = $40)',
+        source: 'Schedule D Tax Worksheet line 47: smaller of the worksheet result ($400 × 25% = $100) and regular tax on all income (Tax Table row $400–$425 → $41)',
         state: ret({ w2s: [w2(10000)], otherIncome: { interest: 0, sources: [], capitalGains: { shortTerm: 0, longTerm: 5000, unrecaptured1250Gain: 5000 } } }),
-        expect: [['income tax', fed('fed.tax'), 40]],
-        knownGap: '§1250 gain taxed at a flat 25% instead of min(25%, ordinary rate) — engine gives $100'
+        expect: [['income tax', fed('fed.tax'), 41]]
     },
     // ---------------- Federal: payroll taxes & withholding credits ----------------
     {
@@ -157,8 +151,7 @@ const CASES = [
         name: 'Single, $250,000 wages — Additional Medicare Tax and its withholding credit',
         source: 'Form 8959: 0.9% × $50,000 = $450 tax (line 18) and $450 employer withholding credited on Form 1040 line 25c',
         state: ret({ w2s: [w2(250000, { fedWithheld: 50000 })] }),
-        expect: [['additional Medicare tax', fed('fed.additionalMedicareTax'), 450], ['total payments', fed('fed.payments'), 50450]],
-        knownGap: 'Additional Medicare Tax withheld (Form 8959 Part V) is not credited as a payment'
+        expect: [['additional Medicare tax', fed('fed.additionalMedicareTax'), 450], ['total payments', fed('fed.payments'), 50450]]
     },
     {
         name: 'Single, $180,000 wages + $40,000 interest — Net Investment Income Tax',
@@ -172,13 +165,33 @@ const CASES = [
         state: ret({ w2s: [w2(300000)] }),
         expect: [['AMT', fed('fed.amt'), 0]]
     },
+    // ---------------- Federal: SALT cap (P.L. 119-21) ----------------
+    {
+        name: 'MFJ 2025, $200,000 wages, $30,000 state & local taxes — $40,000 cap',
+        source: 'IRC §164(b)(6) as amended by P.L. 119-21 §70120: 2025 cap $40,000 (MAGI under $500,000)',
+        state: ret({ year: 2025, filingStatus: 'married_joint', residentState: 'NJ', w2s: [w2(200000, { state: 'NJ', stateWithheld: 12000 })],
+            itemizedDeductions: { medicalExpenses: 0, realEstateTax: 18000, mortgageInterest: 20000, charity: 0 } }),
+        expect: [['SALT deduction', fed('fed.salt'), 30000], ['itemized deductions', fed('fed.itemized'), 50000]]
+    },
+    {
+        name: 'MFJ 2025, $550,000 wages — SALT cap phase-down',
+        source: 'IRC §164(b)(7): $40,000 − 30% × ($550,000 − $500,000) = $25,000 (floor $10,000)',
+        state: ret({ year: 2025, filingStatus: 'married_joint', w2s: [w2(550000)],
+            itemizedDeductions: { medicalExpenses: 0, realEstateTax: 50000, mortgageInterest: 0, charity: 0 } }),
+        expect: [['SALT cap', fed('fed.saltCap'), 25000], ['SALT deduction', fed('fed.salt'), 25000]]
+    },
+    {
+        name: 'Single 2024, $40,000 state & local taxes — $10,000 cap',
+        source: 'IRC §164(b)(6): 2024 cap $10,000',
+        state: ret({ w2s: [w2(300000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 40000, mortgageInterest: 0, charity: 0 } }),
+        expect: [['SALT deduction', fed('fed.salt'), 10000]]
+    },
     // ---------------- Federal: adjustment limits ----------------
     {
         name: 'Student loan interest phaseout, single MAGI $87,500',
         source: 'Pub. 970 ch. 4: 2024 phaseout $80,000–$95,000 → $2,500 × (1 − 7,500/15,000) = $1,250',
-        state: ret({ w2s: [w2(90000)], adjustments: { studentLoan: 2500, ira: 0, hsa: 0 } }),
-        expect: [['adjustments', fed('fed.adjustments'), 1250]],
-        knownGap: 'Student loan interest MAGI phaseout is not applied (engine allows $2,500)'
+        state: ret({ w2s: [w2(87500)], adjustments: { studentLoan: 2500, ira: 0, hsa: 0 } }),
+        expect: [['adjustments', fed('fed.adjustments'), 1250]]
     },
     // ---------------- States ----------------
     {

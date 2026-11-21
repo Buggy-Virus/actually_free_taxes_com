@@ -44,8 +44,10 @@ for (const [id, q] of federalGraph().quantities) {
     }
 }
 const adjLine = ev.lines('fed.adjustments').slice(-1)[0];
-assert.strictEqual(text(adjLine.pluggedTokens), 'Adjustments to Income = min($3,000.00, $2,500.00) + $5,000.00 + $1,000.00 = $8,500.00', 'inline quantity (student loan cap) is expanded inside its parent; $0 optional inputs are omitted');
-assert.strictEqual(text(adjLine.generalTokens), 'Adjustments to Income = min(Student Loan Interest Paid, Student Loan Interest Cap) + Traditional IRA Deduction + HSA Deduction');
+assert.strictEqual(text(adjLine.pluggedTokens), 'Adjustments to Income = $0.00 + $5,000.00 + $1,000.00 = $6,000.00', 'student loan interest is fully phased out at MAGI $114,800 and stays visible as $0');
+assert.strictEqual(text(adjLine.generalTokens), 'Adjustments to Income = Student Loan Interest Deduction + Traditional IRA Deduction + HSA Deduction');
+const sliLine = ev.lines('fed.studentLoanDeduction').slice(-1)[0];
+assert.ok(text(sliLine.pluggedTokens).startsWith('Student Loan Interest Deduction = min($3,000.00, $2,500.00) × (100% − min(100%, max($0.00,'), 'the student loan cap and phase-out are shown with the real numbers');
 assert.strictEqual(text(ev.lines('fed.wages')[0].pluggedTokens), 'Total W-2 Wages = $90,000.00 + $30,000.00 = $120,000.00');
 const taxLines = ev.lines('fed.ordinaryTax');
 assert.ok(taxLines.length > 1 && taxLines[0].label.startsWith('Bracket 1'), 'bracket slices become intermediate lines');
@@ -54,7 +56,7 @@ const visible = [...federalGraph().quantities.values()].filter(q => q.display !=
 const edges = ev.edges(visible).map(e => `${e.sourceId}->${e.targetId}`);
 assert.ok(edges.includes(`w2-0-box1->${lineDomId('fed.wages')}`));
 assert.ok(edges.includes(`w2-1-box1->${lineDomId('fed.wages')}`));
-assert.ok(edges.includes(`input-adj-student-loan->${lineDomId('fed.adjustments')}`), 'inline dependency attributed to the line that shows it');
+assert.ok(edges.includes(`input-adj-student-loan->${lineDomId('fed.studentLoanDeduction')}`), 'inline dependency (capped interest) attributed to the line that shows it');
 assert.ok(edges.includes(`w2-1-state-0-box17->${lineDomId('fed.salt')}`));
 assert.ok(edges.includes(`${lineDomId('fed.agi')}->${lineDomId('fed.taxableIncome')}`));
 assert.ok(ev.upstream('fed.tax').includes('w2-0-box1'), 'transitive upstream reaches raw inputs');

@@ -11,7 +11,7 @@
 import { TaxAppState, IncomeSourceType, PanelSectionCategory } from '../types.js';
 import { TAX_CONSTANTS, YearTaxRules, normalizeFilingStatus } from '../tax-constants.js';
 import {
-  add, and, atLeast0, brackets, ceil, count, div, each, field, flag, gt, gte, lit, lookup, lt, lte,
+  Expr, add, and, atLeast0, brackets, ceil, count, div, each, field, flag, floor, gt, gte, lit, lookup, lt, lte,
   max, min, mul, neg, not, num, param, rate, ref, round, statusIs, sub, sumOver, when
 } from './expr.js';
 import { BlockSpec, CollectionItem, CoreStatus, FormulaGraph, GraphContext } from './graph.js';
@@ -160,7 +160,13 @@ function defineParams(g: FormulaGraph): void {
   p('fed.capLossFloor', 'Capital Loss Limit', 'usd', c => (c.status === 'married_separate' ? -1500 : -3000), 'IRC §1211(b)', ['select-filing-status']);
   p('fed.studentLoanCap', 'Student Loan Interest Cap', 'usd', () => 2500, 'IRC §221(b)(1)', []);
   p('fed.educatorCap', 'Educator Expense Cap', 'usd', c => (c.status === 'married_joint' ? 600 : 300), 'IRC §62(a)(2)(D)', ['select-filing-status']);
-  p('fed.saltCap', 'SALT Cap', 'usd', c => (c.status === 'married_separate' ? 5000 : 10000), 'IRC §164(b)(6)', ['select-filing-status']);
+  p('fed.saltCapBase', 'SALT Cap', 'usd', c => (c.year >= 2025 ? 40000 : 10000) / (c.status === 'married_separate' ? 2 : 1), 'IRC §164(b)(6) as amended by P.L. 119-21', YEAR_STATUS);
+  p('fed.saltPhaseStart', 'SALT Cap Phase-Down Threshold (MAGI)', 'usd', c => (c.status === 'married_separate' ? 250000 : 500000), 'IRC §164(b)(7)', ['select-filing-status']);
+  p('fed.saltFloor', 'SALT Cap Minimum', 'usd', c => (c.status === 'married_separate' ? 5000 : 10000), 'IRC §164(b)(7)', ['select-filing-status']);
+  p('fed.slPhaseStart', 'Student Loan Interest Phase-Out Start (MAGI)', 'usd',
+    c => (c.status === 'married_joint' ? (c.year >= 2025 ? 170000 : 165000) : (c.year >= 2025 ? 85000 : 80000)), 'Pub. 970 ch. 4', YEAR_STATUS);
+  p('fed.slPhaseRange', 'Student Loan Interest Phase-Out Range', 'usd', c => (c.status === 'married_joint' ? 30000 : 15000), 'Pub. 970 ch. 4', ['select-filing-status']);
+  p('fed.medicareRate', 'Medicare Employee Rate', 'rate', c => rules(c.year).medicareRate, 'IRC §3101(b)(1)', []);
   p('fed.feieLimit', 'Foreign Earned Income Exclusion Limit', 'usd', c => (c.year === 2025 ? 130000 : 126500), 'Form 2555', ['select-tax-year']);
   p('fed.palAllowance', 'Rental Loss Allowance', 'usd', c => (c.status === 'married_separate' ? 12500 : 25000), 'Form 8582', ['select-filing-status']);
   p('fed.palPhaseStart', 'Rental Allowance Phaseout Start', 'usd', c => (c.status === 'married_separate' ? 50000 : 100000), 'Form 8582', ['select-filing-status']);
@@ -169,27 +175,32 @@ function defineParams(g: FormulaGraph): void {
   p('fed.eduPhaseStart', 'Education Credit Phaseout Start', 'usd', c => (c.status === 'married_joint' ? 160000 : 80000), 'Form 8863', ['select-filing-status']);
   p('fed.eduPhaseSpan', 'Education Credit Phaseout Range', 'usd', c => (c.status === 'married_joint' ? 20000 : 10000), 'Form 8863', ['select-filing-status']);
   p('fed.saversMax', "Saver's Credit Contribution Cap", 'usd', c => (c.status === 'married_joint' ? 4000 : 2000), 'Form 8880', ['select-filing-status']);
-  p('fed.saversT50', "Saver's Credit 50% AGI Limit", 'usd', c => byStatus({ married_joint: 46000, head_of_household: 34500, other: 23000 })(c.status), 'Form 8880', ['select-filing-status']);
-  p('fed.saversT20', "Saver's Credit 20% AGI Limit", 'usd', c => byStatus({ married_joint: 50000, head_of_household: 37500, other: 25000 })(c.status), 'Form 8880', ['select-filing-status']);
-  p('fed.saversT10', "Saver's Credit 10% AGI Limit", 'usd', c => byStatus({ married_joint: 76500, head_of_household: 57375, other: 38250 })(c.status), 'Form 8880', ['select-filing-status']);
+  const savers = (y: number) => y >= 2025
+    ? { t50: { married_joint: 47500, head_of_household: 35625, other: 23750 }, t20: { married_joint: 51000, head_of_household: 38250, other: 25500 }, t10: { married_joint: 79000, head_of_household: 59250, other: 39500 } }
+    : { t50: { married_joint: 46000, head_of_household: 34500, other: 23000 }, t20: { married_joint: 50000, head_of_household: 37500, other: 25000 }, t10: { married_joint: 76500, head_of_household: 57375, other: 38250 } };
+  p('fed.saversT50', "Saver's Credit 50% AGI Limit", 'usd', c => byStatus(savers(c.year).t50)(c.status), 'Form 8880', YEAR_STATUS);
+  p('fed.saversT20', "Saver's Credit 20% AGI Limit", 'usd', c => byStatus(savers(c.year).t20)(c.status), 'Form 8880', YEAR_STATUS);
+  p('fed.saversT10', "Saver's Credit 10% AGI Limit", 'usd', c => byStatus(savers(c.year).t10)(c.status), 'Form 8880', YEAR_STATUS);
   p('fed.adoptionCap', 'Adoption Credit Limit', 'usd', c => (c.year === 2025 ? 17280 : 16810), 'Form 8839', ['select-tax-year']);
   p('fed.eitcInvCap', 'EITC Investment Income Limit', 'usd', c => (c.year === 2025 ? 11950 : 11600), 'Schedule EIC', ['select-tax-year']);
-  p('fed.eitcMax', 'EITC Maximum Credit', 'usd', () => [632, 4213, 6960, 7830], 'Schedule EIC', []);
+  p('fed.eitcMax', 'EITC Maximum Credit', 'usd', c => (c.year >= 2025 ? [649, 4328, 7152, 8046] : [632, 4213, 6960, 7830]), 'Rev. Proc. 2023-34 / 2024-40', ['select-tax-year']);
   p('fed.eitcPhaseInRate', 'EITC Phase-In Rate', 'rate', () => [0.0765, 0.34, 0.40, 0.45], 'Schedule EIC', []);
   p('fed.eitcPhaseOutRate', 'EITC Phase-Out Rate', 'rate', () => [0.0765, 0.1598, 0.2106, 0.2106], 'Schedule EIC', []);
   p('fed.eitcIncomeLimit', 'EITC Income Limit', 'usd',
-    c => (c.status === 'married_joint' ? [25511, 56004, 62688, 66819] : [18591, 49084, 55768, 59899]), 'Schedule EIC', ['select-filing-status']);
+    c => c.year >= 2025
+      ? (c.status === 'married_joint' ? [26214, 57554, 64430, 68675] : [19104, 50434, 57310, 61555])
+      : (c.status === 'married_joint' ? [25511, 56004, 62688, 66819] : [18591, 49084, 55768, 59899]), 'Rev. Proc. 2023-34 / 2024-40', YEAR_STATUS);
   p('fed.amtExemption', 'AMT Exemption', 'usd',
     c => byStatus({ married_joint: c.year === 2025 ? 137000 : 133300, married_separate: c.year === 2025 ? 68500 : 66650, other: c.year === 2025 ? 88100 : 85700 })(c.status), 'Form 6251');
   p('fed.amtPhaseStart', 'AMT Exemption Phaseout Start', 'usd',
     c => (c.status === 'married_joint' ? (c.year === 2025 ? 1252700 : 1218700) : (c.year === 2025 ? 626350 : 609350)), 'Form 6251');
-  p('fed.amt28Breakpoint', 'AMT 28% Rate Breakpoint', 'usd', c => (c.status === 'married_separate' ? 116300 : 232600), 'Form 6251', ['select-filing-status']);
+  p('fed.amt28Breakpoint', 'AMT 28% Rate Breakpoint', 'usd', c => (c.year >= 2025 ? 239100 : 232600) / (c.status === 'married_separate' ? 2 : 1), 'Form 6251', YEAR_STATUS);
 
   g.param({ id: 'fed.brackets', label: 'Federal Tax Brackets', unit: 'usd', source: 'IRC §1(j)', domSources: YEAR_STATUS, resolve: c => rules(c.year).brackets[c.status] });
   g.param({ id: 'fed.ltcgBrackets', label: 'Capital Gain Rate Brackets', unit: 'usd', source: 'IRC §1(h)', domSources: YEAR_STATUS, resolve: c => rules(c.year).ltcgBrackets[c.status] });
 }
 
-function defineQuantities(g: FormulaGraph): void {
+function defineQuantities(g: FormulaGraph, year: number): void {
   type Q = Parameters<FormulaGraph['quantity']>[0];
   const q = (def: Q) => g.quantity(def);
   const R = ref, P = param;
@@ -252,19 +263,32 @@ function defineQuantities(g: FormulaGraph): void {
     expr: round(mul(R('fed.seTax'), rate(0.5))) });
 
   // ---------- Adjustments (Schedule 1 Part II) ----------
-  q({ id: 'fed.studentLoanDeduction', label: 'Student Loan Interest Deduction', unit: 'usd', display: 'inline', optional: true,
+  q({ id: 'fed.studentLoanInterestCapped', label: 'Student Loan Interest (up to cap)', unit: 'usd', display: 'inline', optional: true,
     expr: min(R('in.studentLoan'), P('fed.studentLoanCap')) });
   q({ id: 'fed.educatorDeduction', label: 'Educator Expense Deduction', unit: 'usd', display: 'inline', optional: true,
     expr: min(R('in.educator'), P('fed.educatorCap')) });
+  q({ id: 'fed.adjustmentsExIraSli', label: 'Adjustments Other Than IRA & Student Loan Interest', unit: 'usd', display: 'inline',
+    expr: add(R('in.hsa'), R('fed.educatorDeduction'), R('in.seRetirement'), R('in.seHealth'),
+      R('in.alimonyPaid'), R('in.militaryMoving'), R('in.earlyWithdrawal'), R('in.juryDuty'), R('fed.halfSeTax')) });
+  q({ id: 'fed.otherAdjustments', label: 'Adjustments Other Than Student Loan Interest', unit: 'usd', display: 'inline',
+    expr: add(R('in.ira'), R('fed.adjustmentsExIraSli')) });
+  // Pub. 970 Student Loan Interest Deduction Worksheet: MAGI = income − other adjustments + excluded foreign income.
+  q({ id: 'fed.studentLoanMagi', label: 'MAGI for Student Loan Interest', unit: 'usd', category: 'adjustments',
+    appliesWhen: gt(R('fed.studentLoanInterestCapped'), lit(0)),
+    expr: add(sub(R('fed.totalIncome'), R('fed.otherAdjustments')), R('fed.feie')) });
+  q({ id: 'fed.studentLoanDeduction', label: 'Student Loan Interest Deduction', unit: 'usd', form: 'Schedule 1 Line 21', category: 'adjustments', optional: true,
+    presentIf: gt(R('in.studentLoan'), lit(0)),
+    expr: when(statusIs('married_separate'), lit(0),
+      round(mul(R('fed.studentLoanInterestCapped'), sub(rate(1), min(rate(1), div(atLeast0(sub(R('fed.studentLoanMagi'), P('fed.slPhaseStart'))), P('fed.slPhaseRange'))))))) });
   q({ id: 'fed.adjustments', label: 'Adjustments to Income', unit: 'usd', form: 'Schedule 1 Line 26', category: 'adjustments',
-    expr: round(add(R('fed.studentLoanDeduction'), R('in.ira'), R('in.hsa'), R('fed.educatorDeduction'), R('in.seRetirement'), R('in.seHealth'),
-      R('in.alimonyPaid'), R('in.militaryMoving'), R('in.earlyWithdrawal'), R('in.juryDuty'), R('fed.halfSeTax'))) });
+    expr: round(add(R('fed.studentLoanDeduction'), R('fed.otherAdjustments'))) });
 
   // ---------- Rental real estate (Schedule E / Form 8582) ----------
   q({ id: 'fed.rentalNet', label: 'Net Rental Income Before Loss Limits', unit: 'usd', form: 'Schedule E Line 26', category: 'wages', optional: true,
     expr: sub(R('in.rents'), R('in.rentalExpenses'), R('in.rentalDepreciation')) });
   q({ id: 'fed.magiForRental', label: 'MAGI for Rental Loss Allowance', unit: 'usd', category: 'adjustments',
-    expr: atLeast0(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed')), R('fed.adjustments'))) });
+    // Form 8582 MAGI: figured without the IRA and student loan interest deductions or taxable Social Security.
+    expr: atLeast0(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed')), R('fed.adjustmentsExIraSli'))) });
   q({ id: 'fed.rentalLossAllowance', label: 'Allowed Rental Loss', unit: 'usd', form: 'Form 8582', category: 'adjustments',
     expr: atLeast0(sub(P('fed.palAllowance'), mul(atLeast0(sub(R('fed.magiForRental'), P('fed.palPhaseStart'))), rate(0.5)))) });
   q({ id: 'fed.rentalAllowed', label: 'Rental Income on Return', unit: 'usd', form: 'Schedule 1 Line 5', category: 'wages', optional: true,
@@ -275,8 +299,9 @@ function defineQuantities(g: FormulaGraph): void {
   // ---------- Social Security benefits worksheet ----------
   q({ id: 'fed.provisionalIncome', label: 'Provisional Income', unit: 'usd', category: 'wages',
     expr: atLeast0(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'),
-      R('fed.taxExemptInterest'), mul(R('fed.ssaGross'), rate(0.5))), R('fed.adjustments'))) });
+      R('fed.taxExemptInterest'), mul(R('fed.ssaGross'), rate(0.5))), R('fed.otherAdjustments'))) });
   q({ id: 'fed.taxableSS', label: 'Taxable Social Security', unit: 'usd', form: 'Form 1040 Line 6b', category: 'wages', optional: true,
+    presentIf: gt(R('fed.ssaGross'), lit(0)),
     expr: when(gt(R('fed.provisionalIncome'), P('fed.ssBase2')),
       round(min(mul(R('fed.ssaGross'), rate(0.85)),
         add(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(P('fed.ssBase2'), P('fed.ssBase1')), rate(0.5))),
@@ -300,8 +325,13 @@ function defineQuantities(g: FormulaGraph): void {
   q({ id: 'fed.medicalFloor', label: 'Medical 7.5% AGI Floor', unit: 'usd', category: 'itemized', expr: mul(R('fed.agi'), rate(0.075)) });
   q({ id: 'fed.medicalDeduction', label: 'Deductible Medical Expenses', unit: 'usd', form: 'Schedule A Line 4', category: 'itemized', optional: true,
     expr: atLeast0(sub(R('in.medical'), R('fed.medicalFloor'))) });
+  q({ id: 'fed.saltCap', label: 'SALT Cap', unit: 'usd', category: 'itemized',
+    expr: year >= 2025
+      // P.L. 119-21: $40,000 cap reduced by 30% of MAGI over $500,000, but not below $10,000.
+      ? max(P('fed.saltFloor'), sub(P('fed.saltCapBase'), mul(atLeast0(sub(add(R('fed.agi'), R('fed.feie')), P('fed.saltPhaseStart'))), rate(0.3))))
+      : P('fed.saltCapBase') });
   q({ id: 'fed.salt', label: 'SALT Deduction', unit: 'usd', form: 'Schedule A Line 5e', category: 'itemized', optional: true,
-    expr: min(P('fed.saltCap'), add(R('in.realEstateTax'), R('fed.stateWithheld'), R('fed.localWithheld'))) });
+    expr: min(R('fed.saltCap'), add(R('in.realEstateTax'), R('fed.stateWithheld'), R('fed.localWithheld'))) });
   q({ id: 'fed.gamblingLossDeduction', label: 'Deductible Gambling Losses', unit: 'usd', form: 'Schedule A Line 16', category: 'itemized', optional: true,
     expr: min(R('fed.gambling'), R('in.gamblingLosses')) });
   q({ id: 'fed.investmentInterestDeduction', label: 'Deductible Investment Interest', unit: 'usd', form: 'Schedule A Line 9', category: 'itemized', optional: true,
@@ -337,7 +367,16 @@ function defineQuantities(g: FormulaGraph): void {
     expr: min(R('fed.taxableIncome'), add(R('fed.qualifiedDividends'), R('fed.standardLtcg'), R('fed.specialGains'))) });
   q({ id: 'fed.ordinaryTaxable', label: 'Ordinary Taxable Income', unit: 'usd', category: 'tax',
     expr: atLeast0(sub(R('fed.taxableIncome'), R('fed.preferentialIncome'))) });
-  q({ id: 'fed.ordinaryTax', label: 'Tax on Ordinary Income', unit: 'usd', category: 'tax', expr: brackets(R('fed.ordinaryTaxable'), 'fed.brackets') });
+  // Form 1040 instructions: taxable income under $100,000 must use the Tax Table — tax at the
+  // midpoint of the row ($0–5, $5–15, $15–25, $25 rows to $3,000, $50 rows to $100,000), rounded.
+  const tableMidpoint = (x: Expr): Expr => when(lt(x, lit(5)), lit(2.5), when(lt(x, lit(15)), lit(10), when(lt(x, lit(25)), lit(20),
+    when(lt(x, lit(3000)), add(mul(floor(div(x, lit(25))), lit(25)), lit(12.5)), add(mul(floor(div(x, lit(50))), lit(50)), lit(25))))));
+  const taxOn = (id: string, label: string, income: string, extra: Partial<Q> = {}) => {
+    q({ id: `${id}Row`, label: 'Tax Table Row Midpoint', unit: 'usd', category: 'tax', appliesWhen: lt(R(income), lit(100000)), expr: tableMidpoint(R(income)) });
+    q({ id, label, unit: 'usd', category: 'tax', ...extra,
+      expr: when(lt(R(income), lit(100000)), round(brackets(R(`${id}Row`), 'fed.brackets'), 'dollar'), brackets(R(income), 'fed.brackets')) });
+  };
+  taxOn('fed.ordinaryTax', 'Tax on Ordinary Income', 'fed.ordinaryTaxable');
   q({ id: 'fed.standardPrefIncome', label: 'Qualified Dividends & 0/15/20% Gains', unit: 'usd', display: 'inline',
     expr: min(R('fed.preferentialIncome'), add(R('fed.qualifiedDividends'), R('fed.standardLtcg'))) });
   q({ id: 'fed.standardPrefTax', label: 'Qualified Dividends & Capital Gains Tax', unit: 'usd', category: 'capital', optional: true,
@@ -350,8 +389,13 @@ function defineQuantities(g: FormulaGraph): void {
     expr: mul(atLeast0(sub(R('fed.remainingSpecial'), R('fed.applied1250'))), rate(0.28)) });
   q({ id: 'fed.preferentialTax', label: 'Preferential-Rate Tax', unit: 'usd', display: 'inline',
     expr: add(R('fed.standardPrefTax'), R('fed.unrecap1250Tax'), R('fed.collectiblesTax')) });
+  // QDCG / Schedule D Tax Worksheet: tax is the smaller of the special-rate computation and regular tax on all income
+  // (so the 25% / 28% rates are maximums, never above the ordinary rate).
+  taxOn('fed.regularTax', 'Regular Tax on All Taxable Income', 'fed.taxableIncome', { appliesWhen: gt(R('fed.preferentialIncome'), lit(0)) });
   q({ id: 'fed.tax', label: 'Income Tax', unit: 'usd', form: 'Form 1040 Line 16', category: 'tax',
-    expr: round(add(R('fed.ordinaryTax'), R('fed.preferentialTax'))) });
+    expr: when(gt(R('fed.preferentialIncome'), lit(0)),
+      round(min(add(R('fed.ordinaryTax'), R('fed.preferentialTax')), R('fed.regularTax'))),
+      round(R('fed.ordinaryTax'))) });
 
   // ---------- Credits ----------
   q({ id: 'fed.ctcMax', label: 'Child Tax Credit Before Phaseout', unit: 'usd', display: 'inline', expr: mul(R('in.children'), P('fed.ctcPerChild')) });
@@ -361,6 +405,7 @@ function defineQuantities(g: FormulaGraph): void {
   q({ id: 'fed.childCreditsAfterPhaseout', label: 'Child & Dependent Credits After Phaseout', unit: 'usd', category: 'credits', optional: true,
     expr: atLeast0(sub(add(R('fed.ctcMax'), R('fed.odcMax')), R('fed.ctcPhaseout'))) });
   q({ id: 'fed.ctcAfterPhaseout', label: 'Child Tax Credit', unit: 'usd', category: 'credits', optional: true,
+    presentIf: gt(R('in.children'), num(0)),
     expr: min(R('fed.ctcMax'), R('fed.childCreditsAfterPhaseout')) });
   q({ id: 'fed.odcAfterPhaseout', label: 'Credit for Other Dependents', unit: 'usd', category: 'credits', optional: true,
     expr: atLeast0(sub(R('fed.childCreditsAfterPhaseout'), R('fed.ctcAfterPhaseout'))) });
@@ -371,6 +416,7 @@ function defineQuantities(g: FormulaGraph): void {
   q({ id: 'fed.careExpenseCap', label: 'Child Care Expense Cap', unit: 'usd', display: 'inline',
     expr: when(gte(max(num(1), add(R('in.children'), R('in.otherDependents'))), num(2)), lit(6000), lit(3000)) });
   q({ id: 'fed.childCareCredit', label: 'Child & Dependent Care Credit', unit: 'usd', form: 'Form 2441', category: 'credits', optional: true,
+    presentIf: gt(R('in.childCare'), lit(0)),
     expr: when(statusIs('married_separate'), lit(0), round(mul(min(R('fed.careExpenseCap'), R('in.childCare')), R('fed.careRate')))) });
 
   q({ id: 'fed.eduPhaseFactor', label: 'Education Credit Phase Factor', unit: 'rate', display: 'inline',
@@ -384,11 +430,13 @@ function defineQuantities(g: FormulaGraph): void {
   q({ id: 'fed.llc', label: 'Lifetime Learning Credit', unit: 'usd', display: 'inline', optional: true,
     expr: round(mul(mul(min(lit(10000), R('in.llc')), rate(0.2)), R('fed.eduPhaseFactor'))) });
   q({ id: 'fed.educationNonrefundable', label: 'Nonrefundable Education Credits', unit: 'usd', form: 'Form 8863 Line 19', category: 'credits', optional: true,
+    presentIf: gt(add(R('in.aotc'), R('in.llc')), lit(0)),
     expr: add(R('fed.aotcNonrefundable'), R('fed.llc')) });
 
   q({ id: 'fed.saversRate', label: "Saver's Credit Rate", unit: 'rate', display: 'inline',
     expr: when(lte(R('fed.agi'), P('fed.saversT50')), rate(0.5), when(lte(R('fed.agi'), P('fed.saversT20')), rate(0.2), when(lte(R('fed.agi'), P('fed.saversT10')), rate(0.1), rate(0)))) });
   q({ id: 'fed.saversCredit', label: "Saver's Credit", unit: 'usd', form: 'Form 8880', category: 'credits', optional: true,
+    presentIf: gt(R('in.ira'), lit(0)),
     expr: round(mul(min(P('fed.saversMax'), R('in.ira')), R('fed.saversRate'))) });
   q({ id: 'fed.adoptionCredit', label: 'Adoption Credit', unit: 'usd', display: 'inline', optional: true, expr: min(P('fed.adoptionCap'), R('in.adoption')) });
 
@@ -432,6 +480,9 @@ function defineQuantities(g: FormulaGraph): void {
     expr: atLeast0(sub(R('fed.medicareAndSeWages'), P('fed.addlMedThreshold'))) });
   q({ id: 'fed.additionalMedicareTax', label: 'Additional Medicare Tax', unit: 'usd', form: 'Form 8959', category: 'medicare', optional: true,
     expr: round(mul(R('fed.excessMedicareWages'), P('fed.addlMedRate'))) });
+  // Form 8959 Part V: Medicare tax withheld above the regular 1.45% is Additional Medicare Tax withholding (Line 25c).
+  q({ id: 'fed.addlMedicareWithheld', label: 'Additional Medicare Tax Withheld', unit: 'usd', form: 'Form 8959 Line 24', category: 'withholding', optional: true,
+    expr: round(sumOver('w2', when(gt(field('box5'), lit(0)), atLeast0(sub(field('box6'), mul(field('box5'), P('fed.medicareRate')))), lit(0)))) });
   q({ id: 'fed.netInvestmentIncome', label: 'Net Investment Income', unit: 'usd', category: 'capital',
     expr: atLeast0(add(R('in.interest'), R('fed.interest1099'), R('fed.dividends'), atLeast0(R('fed.capAllowed')), atLeast0(R('fed.rentalAllowed')))) });
   q({ id: 'fed.niitBase', label: 'NIIT Taxable Base', unit: 'usd', category: 'capital',
@@ -463,7 +514,7 @@ function defineQuantities(g: FormulaGraph): void {
   q({ id: 'fed.totalTax', label: 'Total Tax', unit: 'usd', form: 'Form 1040 Line 24', category: 'tax',
     expr: round(add(atLeast0(sub(R('fed.tax'), R('fed.nonrefundableCredits'))), R('fed.otherTaxes'))) });
   q({ id: 'fed.payments', label: 'Total Payments', unit: 'usd', form: 'Form 1040 Line 33', category: 'withholding',
-    expr: round(add(R('fed.w2Withholding'), R('fed.extraWithholding'), R('in.estimatedPayments'), R('fed.refundableCredits'), R('fed.excessSS'))) });
+    expr: round(add(R('fed.w2Withholding'), R('fed.extraWithholding'), R('fed.addlMedicareWithheld'), R('in.estimatedPayments'), R('fed.refundableCredits'), R('fed.excessSS'))) });
   q({ id: 'fed.netResult', label: 'Payments Minus Tax', unit: 'usd', display: 'inline', expr: round(sub(R('fed.payments'), R('fed.totalTax'))) });
   q({ id: 'fed.refund', label: 'Refund', unit: 'usd', form: 'Form 1040 Line 34', category: 'refund',
     appliesWhen: gte(R('fed.netResult'), lit(0)), expr: round(sub(R('fed.payments'), R('fed.totalTax'))) });
@@ -474,22 +525,23 @@ function defineQuantities(g: FormulaGraph): void {
 }
 
 /** Add every federal input, param and quantity to a graph. */
-export function defineFederal(g: FormulaGraph): void {
+export function defineFederal(g: FormulaGraph, year: number): void {
   defineInputs(g);
   defineParams(g);
-  defineQuantities(g);
+  defineQuantities(g, year);
 }
 
-let cached: FormulaGraph | null = null;
+const cache = new Map<number, FormulaGraph>();
 
-/** The federal-only graph (definitions are static, so it is built once). */
-export function federalGraph(): FormulaGraph {
-  if (!cached) {
-    const g = new FormulaGraph();
-    defineFederal(g);
-    cached = g;
+/** The federal-only graph for a tax year (built once per year). */
+export function federalGraph(year = 2024): FormulaGraph {
+  let g = cache.get(year);
+  if (!g) {
+    g = new FormulaGraph();
+    defineFederal(g, year);
+    cache.set(year, g);
   }
-  return cached;
+  return g;
 }
 
 /** Map the app's saved state onto graph inputs. Pure data copying — no tax logic. */
@@ -591,15 +643,16 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
   { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',
     quantities: ['fed.interestTotal', 'fed.taxExemptInterest', 'fed.dividends', 'fed.qualifiedDividends', 'fed.businessProfit', 'fed.retirement',
       'fed.gambling', 'fed.otherSourceIncome', 'fed.ssaGross', 'fed.provisionalIncome', 'fed.taxableSS',
-      { id: 'fed.totalIncome', show: 'always' }, { id: 'fed.adjustments', show: 'always' }, { id: 'fed.agi', show: 'always' }] },
+      { id: 'fed.totalIncome', show: 'always' }, 'fed.studentLoanMagi', 'fed.studentLoanDeduction', { id: 'fed.adjustments', show: 'always' },
+      { id: 'fed.agi', show: 'always' }] },
   { id: 'calc-itemized-deductions', stepLabel: 'Step 4a • Schedule A Itemized Deductions', title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',
-    quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.salt', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
+    quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
   { id: 'calc-taxable-income', stepLabel: 'Step 4 • Deductions & Taxable Income', title: 'Deduction & Taxable Income',
     quantities: [{ id: 'fed.stdDeduction', show: 'always' }, { id: 'fed.deduction', show: 'always' }, 'fed.qbiIncome', 'fed.qbiIncomeLimit', 'fed.qbi',
       { id: 'fed.taxableIncome', show: 'always' }] },
   { id: 'calc-tax-before-credits', stepLabel: 'Step 5 • Tax Brackets', title: 'Federal Income Tax (Before Credits)',
-    quantities: ['fed.netLtcg', 'fed.preferentialIncome', 'fed.ordinaryTaxable', 'fed.ordinaryTax', 'fed.standardPrefTax', 'fed.unrecap1250Tax',
-      'fed.collectiblesTax', { id: 'fed.tax', show: 'always' }] },
+    quantities: ['fed.netLtcg', 'fed.preferentialIncome', 'fed.ordinaryTaxable', 'fed.ordinaryTaxRow', 'fed.ordinaryTax', 'fed.standardPrefTax', 'fed.unrecap1250Tax',
+      'fed.collectiblesTax', 'fed.regularTaxRow', 'fed.regularTax', { id: 'fed.tax', show: 'always' }] },
   { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
     quantities: ['fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.childCareCredit', 'fed.aotcTotal',
       'fed.educationNonrefundable', 'fed.saversCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
@@ -608,7 +661,7 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
     quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',
       'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.tipsFica', 'fed.otherTaxes', 'fed.excessSS'] },
   { id: 'calc-final-verdict', stepLabel: 'Step 8 • Federal Bottom Line', title: 'Total Tax, Payments & Federal Refund / Owed', isOutput: true,
-    quantities: [{ id: 'fed.totalTax', show: 'always' }, { id: 'fed.payments', show: 'always' }, { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
+    quantities: [{ id: 'fed.totalTax', show: 'always' }, 'fed.addlMedicareWithheld', { id: 'fed.payments', show: 'always' }, { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
 ];
 
 /**
