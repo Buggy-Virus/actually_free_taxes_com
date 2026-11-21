@@ -442,6 +442,8 @@ export interface TaxCalculationSummary {
   effectiveRateCalc: EffectiveRateCalculation;
   /** The evaluated federal formula graph this summary was read from (drives blocks & arrows). */
   federalEval?: import('./graph/graph.js').Evaluation;
+  /** Which state modules the return graph contains. */
+  returnPlan?: import('./graph/states.js').ReturnPlan;
 }
 
 export type ArrowColorCategory =

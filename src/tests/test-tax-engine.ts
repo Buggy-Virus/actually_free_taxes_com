@@ -615,7 +615,7 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   assert.ok(txReturn, 'TX return exists in report');
   assert.strictEqual(txReturn.hasIncomeTax, false, 'TX has 0% income tax');
   assert.strictEqual(txReturn.stateTaxLiability, 0, 'TX tax liability is $0');
-  assert(txReturn.pluggedFormula.includes('No Texas State Return Required'), 'Formula explains no return required');
+  assert(txReturn.pluggedFormula.includes('Texas has no wage income tax'), 'Formula explains no return required');
 
   console.log("✓ TS Test 11: 0% Income Tax State (Texas) verified correctly!");
 }
@@ -1006,15 +1006,15 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   assert(otherTaxesBlock.lines.some(l => l.id === 'q-fed-niit'), 'Form 8960 NIIT intermediate line is expanded');
 
   const nyReturn = summary.stateReturnsCalc.find(r => r.state === 'NY')!;
-  const nyBlocks = buildStateCalcBlocks(nyReturn, summary.stateReturnsCalc);
+  const nyBlocks = buildStateCalcBlocks(nyReturn, summary.stateReturnsCalc, summary).filter(b => b.lines.length > 0);
   assert.strictEqual(nyBlocks.length, 4, 'NY + NYC splits into 4 distinct calculation panels');
   assert.strictEqual(nyBlocks[0].id, 'calc-state-ny-taxable', 'NY Panel 1 is Deductions & Taxable Income');
   assert.strictEqual(nyBlocks[1].id, 'calc-state-ny-tentative', 'NY Panel 2 is State Brackets & Tentative Tax');
-  assert(nyBlocks[1].lines.some(l => l.id.startsWith('line-state-ny-tentative-b')), 'NY state bracket waterfall intermediate lines are generated');
+  assert(nyBlocks[1].lines.some(l => l.id.startsWith('q-st-ny-bracketTax-b')), 'NY state bracket waterfall intermediate lines are generated');
   assert.strictEqual(nyBlocks[2].id, 'calc-state-ny-local', 'NY Panel 3 is NYC Local Brackets');
-  assert(nyBlocks[2].lines.some(l => l.id.startsWith('line-state-ny-local-b')), 'NYC local bracket waterfall intermediate lines are generated');
+  assert(nyBlocks[2].lines.some(l => l.id.startsWith('q-st-ny-localTax-b')), 'NYC local bracket waterfall intermediate lines are generated');
   assert.strictEqual(nyBlocks[3].id, 'calc-state-ny-card', 'NY Panel 4 is OSTC, Total Tax & Net Outcome');
-  assert(nyBlocks[3].lines.some(l => l.id === 'line-state-ny-ostc-nj'), 'NY OSTC credit FormulaNode line for NJ is generated');
+  assert(nyBlocks[3].lines.some(l => l.id === 'q-st-ny-ostc-nj'), 'NY OSTC credit FormulaNode line for NJ is generated');
 
   // Verify DC Form D-30 FormulaNode expansion
   const dcState: TaxAppState = {
@@ -1027,11 +1027,11 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   };
   const dcSummary = calculateTaxes(dcState);
   const dcReturn = dcSummary.stateReturnsCalc.find(r => r.state === 'DC')!;
-  const dcBlocks = buildStateCalcBlocks(dcReturn, dcSummary.stateReturnsCalc);
-  assert.strictEqual(dcBlocks.length, 2, 'DC Form D-30 splits into 2 FormulaNode panels');
-  assert(dcBlocks[0].lines.some(l => l.id === 'line-dc-d30-salary'), 'DC D-30 30% Salary Allowance line generated');
-  assert(dcBlocks[0].lines.some(l => l.id === 'line-dc-d30-taxable'), 'DC D-30 Taxable UBT line generated');
-  assert(dcBlocks[1].lines.some(l => l.id === 'line-dc-d30-raw-tax'), 'DC D-30 8.25% Raw UBT Tax line generated');
+  const dcBlocks = buildStateCalcBlocks(dcReturn, dcSummary.stateReturnsCalc, dcSummary).filter(b => b.lines.length > 0);
+  assert.strictEqual(dcBlocks[0].id, 'calc-state-dc-d30', 'DC Form D-30 card comes first');
+  assert(dcBlocks[0].lines.some(l => l.id === 'q-st-dc-d30SalaryAllowance'), 'DC D-30 30% Salary Allowance line generated');
+  assert(dcBlocks[0].lines.some(l => l.id === 'q-st-dc-d30Taxable'), 'DC D-30 Taxable UBT line generated');
+  assert(dcBlocks[0].lines.some(l => l.id === 'q-st-dc-d30Tax'), 'DC D-30 8.25% Raw UBT Tax line generated');
 
   const autoPanels = buildAutoPanels(state, summary);
   assert(autoPanels.federal.some(p => p.id === 'auto-fed-std-deduction'), 'Federal Standard Deduction auto panel generated');
@@ -1198,15 +1198,15 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   assert.ok(otherTaxBlock.variables['in.householdTax'] !== undefined, 'calc-other-taxes formula includes household employment tax');
 
   const azRet = gapRes.stateReturnsCalc.find(r => r.state === 'AZ')!;
-  const azBlocks = buildStateCalcBlocks(azRet, gapRes.stateReturnsCalc);
+  const azBlocks = buildStateCalcBlocks(azRet, gapRes.stateReturnsCalc, gapRes);
   const azTaxableBlock = azBlocks.find(b => b.id === 'calc-state-az-taxable')!;
-  assert.ok(azTaxableBlock.sourceIds.includes('auto-state-az-ltcg-excl'), 'calc-state-az-taxable links auto-state-az-ltcg-excl');
+  assert.ok(azTaxableBlock.lines.some(l => l.id === 'q-st-az-ltcgExclusion'), 'calc-state-az-taxable shows the AZ capital gain exclusion line');
 
   const ilState: TaxAppState = { ...gapState, residentState: 'IL', w2s: [{ ...gapState.w2s[0], states: [{ id: 0, state: 'IL', stateId: 'IL-1', stateWages: 80000, stateTaxWithheld: 2000, localWages: 0, localTaxWithheld: 0, localityName: '' }] }] };
   const ilRes = calculateTaxes(ilState);
   const ilAutoPanels = buildAutoPanels(ilState, ilRes);
   const ilExempPanel = (ilAutoPanels.byState['IL'] || []).find(p => p.id === 'auto-state-il-dep-exemption')!;
-  assert.ok(ilExempPanel.sourceIds.includes('select-filing-status'), 'auto-state-il-dep-exemption includes select-filing-status');
+  assert.ok(ilRes.federalEval!.upstream(ilExempPanel.quantityId!).includes('select-filing-status'), 'auto-state-il-dep-exemption traces back to the filing status selector');
 
   console.log("✓ TS Test 19: Federal User Panel FormulaNode Wiring & State Auto-Panel sourceIds verified!");
 }

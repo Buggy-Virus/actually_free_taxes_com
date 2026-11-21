@@ -473,15 +473,20 @@ function defineQuantities(g: FormulaGraph): void {
     expr: when(gt(R('fed.totalIncome'), lit(0)), div(R('fed.totalTax'), R('fed.totalIncome')), rate(0)) });
 }
 
+/** Add every federal input, param and quantity to a graph. */
+export function defineFederal(g: FormulaGraph): void {
+  defineInputs(g);
+  defineParams(g);
+  defineQuantities(g);
+}
+
 let cached: FormulaGraph | null = null;
 
-/** The federal graph (definitions are static, so it is built once). */
+/** The federal-only graph (definitions are static, so it is built once). */
 export function federalGraph(): FormulaGraph {
   if (!cached) {
     const g = new FormulaGraph();
-    defineInputs(g);
-    defineParams(g);
-    defineQuantities(g);
+    defineFederal(g);
     cached = g;
   }
   return cached;

@@ -3338,16 +3338,15 @@ class TaxApp {
     }
     buildConnections(taxData) {
         const connections = [];
-        // Federal arrows are derived from the formula graph: every arrow is a reference in a formula
+        // Federal and state arrows are derived from the formula graph: every arrow is a reference in a formula
         // that was actually evaluated, landing on the specific formula line that uses it. Arrows
         // between lines of the same card are omitted (the card's formula already shows them).
         const ev = taxData?.federalEval;
         const visibleFederal = new Set();
         const blockOf = new Map();
         const showEmpty = Boolean(this.uiPrefs.showEmptyCalcBlocks);
-        this.currentCalcBlocks
-            .filter(b => b.hasImpact || showEmpty)
-            .forEach(b => b.quantityIds.forEach(q => { visibleFederal.add(q); blockOf.set(q, b.id); }));
+        [...this.currentCalcBlocks.filter(b => b.hasImpact || showEmpty), ...this.currentStateCalcBlocks]
+            .forEach(b => (b.quantityIds || []).forEach(q => { visibleFederal.add(q); blockOf.set(q, b.id); }));
         if (ev) {
             ev.edges(visibleFederal, q => blockOf.get(q)).forEach(e => {
                 connections.push({
@@ -3366,52 +3365,6 @@ class TaxApp {
             targetId: 'calc-unified-summary',
             category: 'tax',
             label: 'Federal Bottom Line to Final Summary'
-        });
-        // 13. State Tax Withholding & Wage Connections
-        this.state.w2s.forEach(w => {
-            (w.states || []).forEach(st => {
-                const stateKey = (st.state || '').toLowerCase();
-                connections.push({
-                    id: `conn-w2-${w.id}-state-${st.id}-wages`,
-                    sourceId: `w2-${w.id}-state-${st.id}-box16`,
-                    targetId: `calc-state-${stateKey}-card`,
-                    category: 'state',
-                    label: `${st.state} State Sourced Wages (Box 16)`
-                });
-                connections.push({
-                    id: `conn-w2-${w.id}-state-${st.id}-tax`,
-                    sourceId: `w2-${w.id}-state-${st.id}-box17`,
-                    targetId: `calc-state-${stateKey}-card`,
-                    category: 'state',
-                    label: `${st.state} State Tax Withheld (Box 17)`
-                });
-            });
-        });
-        (this.state.otherIncome.sources || []).forEach(src => {
-            if (src.amount > 0 && src.state) {
-                const stateKey = src.state.toLowerCase();
-                connections.push({
-                    id: `conn-income-source-${src.id}-state-${stateKey}`,
-                    sourceId: `input-income-source-${src.id}`,
-                    targetId: `calc-state-${stateKey}-card`,
-                    category: 'state',
-                    label: `${src.type} (${src.state}) to ${src.state} State Return`
-                });
-            }
-        });
-        // 14. Cross-State Double Taxation Shield (OSTC) Connections
-        (taxData?.stateReturnsCalc || []).forEach((sr) => {
-            const homeStateKey = sr.state.toLowerCase();
-            (sr.creditedStates || []).forEach((c) => {
-                const sourceStateKey = c.fromState.toLowerCase();
-                connections.push({
-                    id: `conn-ostc-${sourceStateKey}-to-${homeStateKey}`,
-                    sourceId: `calc-state-${sourceStateKey}-card`,
-                    targetId: `calc-state-${homeStateKey}-card`,
-                    category: 'state_credit',
-                    label: `${c.fromState} Tax Credited to ${sr.state}`
-                });
-            });
         });
         // 15. State Return Cards -> Final Tax Summary
         (taxData?.stateReturnsCalc || []).forEach((sr) => {
@@ -3438,17 +3391,6 @@ class TaxApp {
                     targetId: ap.id,
                     category: ap.state ? 'state' : (ap.section === 'credits' ? 'credits' : 'adjustments'),
                     label: `${srcId} to ${ap.title}`
-                });
-            });
-        });
-        this.currentStateCalcBlocks.forEach(sb => {
-            (sb.sourceIds || []).forEach(srcId => {
-                connections.push({
-                    id: `conn-stblock-${srcId}-to-${sb.id}`,
-                    sourceId: srcId,
-                    targetId: sb.id,
-                    category: srcId.includes('ostc') ? 'state_credit' : 'state',
-                    label: `${srcId} to ${sb.title}`
                 });
             });
         });
@@ -4573,7 +4515,7 @@ class TaxApp {
             });
             let stateCalcHtml = '';
             if (sr) {
-                const stateBlocks = buildStateCalcBlocks(sr, stateReturns);
+                const stateBlocks = buildStateCalcBlocks(sr, stateReturns, taxData, Boolean(this.uiPrefs.showEmptyCalcBlocks)).filter(b => b.lines.length > 0);
                 this.currentStateCalcBlocks.push(...stateBlocks);
                 const extraBadges = [
                     sr.creditForOtherStates > 0 ? `<span class="state-status-badge badge-shield" id="calc-state-${code.toLowerCase()}-ostc">OSTC Credit Applied (-${formatCurrency(sr.creditForOtherStates)})</span>` : '',
