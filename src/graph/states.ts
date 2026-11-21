@@ -22,7 +22,7 @@ import { NYC_LOCAL_BRACKETS, getStateTaxRule, StateTaxRuleDefinition } from '../
 import { STATE_PANEL_CATALOG } from '../state-panel-catalog.js';
 import {
   Expr, Cond, add, and, atLeast0, brackets, ceil, div, each, field, gt, gte, lit, lt, lte, max, min, mul, neg, not, num,
-  or, param, rate, ref, round, statusIs, sub, sumOver, when, flag
+  or, param, quietly, rate, ref, round, statusIs, sub, sumOver, when, flag
 } from './expr.js';
 import { BlockSpec, CollectionItem, FormulaGraph, GraphContext, QuantityDef } from './graph.js';
 import { defineFederal, federalContext, federalGraph } from './federal.js';
@@ -326,7 +326,48 @@ const MUNI_ADDBACK_EXEMPT = ['IN', 'UT'];
 /** States that compute nonresident tax as (tax on all income as a resident) × (state-source share). */
 const NONRESIDENT_RATIO_METHOD = ['AR', 'CA', 'CO', 'CT', 'IA', 'KS', 'ME', 'MN', 'MO', 'MT', 'NE', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'RI', 'UT', 'VT', 'WV'];
 /** States that tax some Social Security benefits (each with its own exemptions — not yet modeled). */
-const SS_TAXING_STATES = ['CO', 'CT', 'MN', 'MT', 'NM', 'RI', 'UT', 'VT', 'WV'];
+const MFS = statusIs('married_separate');
+const taxpayerAgeKnown = quietly(gt(R('in.taxpayerBirthYear'), num(0)));
+
+/**
+ * Subtraction for federally taxable Social Security (null = fully taxed, i.e. no subtraction line).
+ * Sources: CT Schedule 1 SS worksheet; NM §7-2-5.14 (2022+); MN §290.0132 subd. 26 (House Research 2024/2025
+ * thresholds); VT Dept. of Taxes SS exemption page (2025 +$5,000); WV §11-21-12 (2024 35%, 2025 65% above the limits);
+ * CO §39-22-104(4)(f) (65+ full SS subtraction; 2025+ ages 55–64 with AGI ≤ $75,000 / $95,000).
+ * UT taxes SS but gives a credit (see ssCredit). MT (2024+) and RI are taxed as federal — RI's modification is not yet modeled.
+ */
+function ssSubtractionExpr(code: string, year: number): Expr | null {
+  const tss = R('fed.taxableSS');
+  const agi = R('fed.agi');
+  const y25 = year >= 2025;
+  switch (code) {
+    case 'CT': // full if AGI < $75k ($100k joint/HOH); otherwise taxable SS above 25% of benefits is subtracted
+      return when(lt(agi, when(statusIs('single', 'married_separate'), lit(75000), lit(100000))), tss,
+        atLeast0(sub(tss, round(mul(R('fed.ssaGross'), rate(0.25))))));
+    case 'NM':
+      return when(lte(agi, when(MFS, lit(75000), when(statusIs('single'), lit(100000), lit(150000)))), tss, lit(0));
+    case 'MN': { // 10% less per $4,000 ($2,000 MFS) of AGI (or part) above the threshold
+      const thr = when(MFJ, lit(y25 ? 108320 : 105380), when(MFS, lit(y25 ? 54160 : 52690), lit(y25 ? 84490 : 82190)));
+      const steps = ceil(div(atLeast0(sub(agi, thr)), when(MFS, lit(2000), lit(4000))));
+      return round(mul(tss, max(num(0), sub(num(1), mul(steps, rate(0.1))))));
+    }
+    case 'VT': { // full to the threshold, then phased out over $10,000
+      const top = add(when(MFJ, lit(y25 ? 70000 : 65000), lit(y25 ? 55000 : 50000)), lit(10000));
+      return round(mul(tss, min(num(1), max(num(0), div(sub(top, agi), lit(10000))))));
+    }
+    case 'WV':
+      return when(lte(agi, when(MFJ, lit(100000), lit(50000))), tss, round(mul(tss, rate(y25 ? 0.65 : 0.35))));
+    case 'CO': {
+      const age = R('fed.taxpayerAge');
+      const eligible = y25 ? or(gte(age, num(65)), and(gte(age, num(55)), lte(agi, when(MFJ, lit(95000), lit(75000))))) : gte(age, num(65));
+      return when(and(taxpayerAgeKnown, eligible), tss, lit(0));
+    }
+    case 'MT': case 'RI': case 'UT':
+      return null;
+    default:
+      return tss;
+  }
+}
 /** States that exempt unemployment compensation. */
 const UI_EXEMPT_STATES = ['CA', 'NJ', 'PA', 'VA'];
 /** States whose starting point is federal taxable income. */
@@ -413,9 +454,10 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
       expr: code === 'VT' ? min(lit(5000), base) : base });
     subtractions.push(R(S('ltcgExclusion')));
   }
-  // Social Security benefits are exempt in every income-tax state except the few that tax them (modeled as taxed for now).
-  if (!SS_TAXING_STATES.includes(code)) {
-    q('ssSubtraction', { label: `${code} Social Security Exemption`, unit: 'usd', category: 'state', optional: true, expr: R('fed.taxableSS') });
+  // Social Security: exempt in every income-tax state except those below, which exempt part or all of it by income or age.
+  const ssExempt = ssSubtractionExpr(code, year);
+  if (ssExempt) {
+    q('ssSubtraction', { label: `${code} Social Security Exemption`, unit: 'usd', category: 'state', optional: true, expr: ssExempt });
     subtractions.push(R(S('ssSubtraction')));
   }
   // Retirement income exclusions: IL and MS exempt qualified retirement income; PA exempts distributions after retirement.
@@ -624,6 +666,16 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
       break;
   }
   q('exemptionCredit', { label: exLabel, unit: 'usd', category: 'state_credit', optional: true, expr: exCredit });
+  if (code === 'UT') {
+    // TC-40 Social Security Benefits Credit: rate × taxable SS, less 25¢ per $1 of income above the threshold.
+    // 2024: modified AGI (federal AGI + tax-exempt interest), $45,000 / $75,000 joint & HOH / $37,500 MFS.
+    // 2025 (SB 71): state taxable income, $54,000 / $90,000 / $45,000.
+    const y25 = year >= 2025;
+    const thr = when(MFS, lit(y25 ? 45000 : 37500), when(statusIs('single'), lit(y25 ? 54000 : 45000), lit(y25 ? 90000 : 75000)));
+    const income = y25 ? R(S('taxable')) : add(R('fed.agi'), R('fed.taxExemptInterest'));
+    q('ssCredit', { label: 'UT Social Security Benefits Credit', unit: 'usd', form: 'TC-40A code AH', category: 'state_credit', optional: true,
+      expr: atLeast0(round(sub(mul(R('fed.taxableSS'), P(S('flatRate'))), mul(atLeast0(sub(income, thr)), rate(0.25))))) });
+  }
   if (plan.residentLocality === 'nyc') {
     // NYC school tax credit (fixed amount): $63, or $125 on joint returns, for income of $250,000 or less; refundable.
     q('nycSchoolTaxCredit', { label: 'NYC School Tax Credit', unit: 'usd', form: 'IT-201 Line 69', category: 'state_credit', optional: true,
@@ -634,6 +686,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   const eitcRefundable = eitcRate > 0 && !NONREFUNDABLE_EITC.includes(code);
   const exRefundable = REFUNDABLE_EXEMPTION_CREDIT.includes(code);
   const nonref: Expr[] = [R(S('otherStateCredit')), R(S('panelCred'))];
+  if (code === 'UT') nonref.push(R(S('ssCredit')));
   const refundable: Expr[] = [];
   (eitcRefundable ? refundable : nonref).push(R(S('stateEitc')));
   (exRefundable ? refundable : nonref).push(R(S('exemptionCredit')));
@@ -764,7 +817,7 @@ export function stateBlocks(plan: ReturnPlan, code: string, g: FormulaGraph): Bl
       quantities: [S('localTax')] });
     const ostc = plan.nonresidents.filter(nr => has(`ostc.${nr.toLowerCase()}`)).map(nr => S(`ostc.${nr.toLowerCase()}`));
     blocks.push({ id: `calc-state-${lc}-card`, stepLabel: `${name} • Credits, Total Tax & Net Outcome`, title: `${rule.formResident} • Bottom Line`, isOutput: true,
-      quantities: [...ostc, S('otherStateCredit'), S('stateEitc'), S('exemptionCredit'), ...pick('nycSchoolTaxCredit'), S('panelCred'), S('nonrefundableCredits'), { id: S('netStateTax'), show: 'always' },
+      quantities: [...ostc, S('otherStateCredit'), S('stateEitc'), S('exemptionCredit'), ...pick('ssCredit', 'nycSchoolTaxCredit'), S('panelCred'), S('nonrefundableCredits'), { id: S('netStateTax'), show: 'always' },
         { id: S('totalTax'), show: 'always' }, { id: S('totalWithholding'), show: 'always' }, S('refundableCredits'), { id: S('net'), show: 'always' }] });
     return blocks;
   }

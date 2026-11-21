@@ -711,7 +711,92 @@ const CASES: Golden[] = [
     source: 'Texas has no personal income tax',
     state: ret({ residentState: 'TX', w2s: [w2(90000, { state: 'TX' })] }),
     expect: [['TX tax', st('TX', 'totalTax'), 0]]
-  }
+  },
+  // ---------------- State: Social Security (C5) ----------------
+  {
+    name: 'CT: Social Security fully exempt below $75,000 AGI',
+    source: 'CT Schedule 1 Social Security Benefit Adjustment Worksheet: AGI $67,000 < $75,000 single → subtract all $17,000 federally taxable',
+    state: ret({ year: 2024, filingStatus: 'single', residentState: 'CT', w2s: [w2(50000, { state: 'CT' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['federal taxable SS', fed('fed.taxableSS'), 17000], ['CT subtraction', st('CT', 'ssSubtraction'), 17000]]
+  },
+  {
+    name: 'CT: above the threshold, at most 25% of benefits is taxed',
+    source: 'CT SS worksheet: AGI $107,000 ≥ $75,000 → $17,000 taxable − 25% × $20,000 = $12,000 subtraction',
+    state: ret({ year: 2024, filingStatus: 'single', residentState: 'CT', w2s: [w2(90000, { state: 'CT' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['CT subtraction', st('CT', 'ssSubtraction'), 12000]]
+  },
+  {
+    name: 'NM: Social Security exemption is a cliff at $100,000 single / $150,000 joint',
+    source: 'NM §7-2-5.14 (2022+): single AGI $107,000 > $100,000 → no exemption',
+    state: ret({ year: 2024, filingStatus: 'single', residentState: 'NM', w2s: [w2(90000, { state: 'NM' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['NM subtraction', st('NM', 'ssSubtraction'), 0]]
+  },
+  {
+    name: 'NM: married filing jointly under $150,000 exempts all taxable benefits',
+    source: 'NM §7-2-5.14: MFJ AGI $107,000 ≤ $150,000 → $17,000',
+    state: ret({ year: 2024, filingStatus: 'married_joint', residentState: 'NM', w2s: [w2(90000, { state: 'NM' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['NM subtraction', st('NM', 'ssSubtraction'), 17000]]
+  },
+  {
+    name: 'MN: subtraction falls 10% per $4,000 above the 2024 threshold',
+    source: 'MN House Research (2024): single threshold $82,190; AGI $87,000 is 2 increments over → 80% × $17,000 = $13,600',
+    state: ret({ year: 2024, filingStatus: 'single', residentState: 'MN', w2s: [w2(70000, { state: 'MN' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['MN subtraction', st('MN', 'ssSubtraction'), 13600]]
+  },
+  {
+    name: 'VT: partial exemption between $50,000 and $60,000 (2024)',
+    source: 'VT Dept. of Taxes worksheet: ($60,000 − $57,000) ÷ $10,000 = 30% × $17,000 = $5,100',
+    state: ret({ year: 2024, filingStatus: 'single', residentState: 'VT', w2s: [w2(40000, { state: 'VT' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['VT subtraction', st('VT', 'ssSubtraction'), 5100]]
+  },
+  {
+    name: 'VT: 2025 thresholds are $5,000 higher',
+    source: 'VT Dept. of Taxes (2025): single full exemption to $55,000 — AGI $57,000 → ($65,000 − $57,000) ÷ $10,000 = 80% × $17,000 = $13,600',
+    state: ret({ year: 2025, filingStatus: 'single', residentState: 'VT', w2s: [w2(40000, { state: 'VT' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['VT subtraction', st('VT', 'ssSubtraction'), 13600]]
+  },
+  {
+    name: 'WV: above the income limits, 35% (2024) / 65% (2025) of taxable benefits is exempt',
+    source: 'WV §11-21-12 as amended 2024: AGI $107,000 > $50,000 → 35% × $17,000 = $5,950',
+    state: ret({ year: 2024, filingStatus: 'single', residentState: 'WV', w2s: [w2(90000, { state: 'WV' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['WV subtraction', st('WV', 'ssSubtraction'), 5950]]
+  },
+  {
+    name: 'WV 2025: 65% of taxable benefits exempt above the limits',
+    source: 'WV §11-21-12: 65% for 2025 → 65% × $17,000 = $11,050',
+    state: ret({ year: 2025, filingStatus: 'single', residentState: 'WV', w2s: [w2(90000, { state: 'WV' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['WV subtraction', st('WV', 'ssSubtraction'), 11050]]
+  },
+  {
+    name: 'CO: age 65+ subtracts all federally taxable Social Security',
+    source: 'CO §39-22-104(4)(f)(III): taxpayers 65+ may subtract all federally taxable SS (age 70 in 2024)',
+    state: ret({ year: 2024, filingStatus: 'single', residentState: 'CO', w2s: [w2(90000, { state: 'CO' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] }, taxpayer: { birthYear: 1954 } }),
+    expect: [['CO subtraction', st('CO', 'ssSubtraction'), 17000]]
+  },
+  {
+    name: 'CO: age 60 in 2024 gets no separate SS subtraction',
+    source: 'CO §39-22-104(4)(f): the full SS subtraction for ages 55–64 starts in 2025',
+    state: ret({ year: 2024, filingStatus: 'single', residentState: 'CO', w2s: [w2(90000, { state: 'CO' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] }, taxpayer: { birthYear: 1964 } }),
+    expect: [['CO subtraction', st('CO', 'ssSubtraction'), 0]]
+  },
+  {
+    name: 'CO 2025: ages 55–64 with AGI ≤ $75,000 subtract all taxable SS',
+    source: 'CO HB24-1142: 2025+ full SS subtraction for ages 55–64 if AGI ≤ $75,000 single — AGI $67,000',
+    state: ret({ year: 2025, filingStatus: 'single', residentState: 'CO', w2s: [w2(50000, { state: 'CO' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] }, taxpayer: { birthYear: 1965 } }),
+    expect: [['CO subtraction', st('CO', 'ssSubtraction'), 17000]]
+  },
+  {
+    name: 'UT 2025: Social Security Benefits Credit below the $90,000 joint threshold',
+    source: 'TC-40 (SB 71): MFJ, UT taxable income $85,500 < $90,000 → 4.5% × $25,500 taxable SS = $1,147.50',
+    state: ret({ year: 2025, filingStatus: 'married_joint', residentState: 'UT', w2s: [w2(60000, { state: 'UT' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 30000)] } }),
+    expect: [['federal taxable SS', fed('fed.taxableSS'), 25500], ['UT SS credit', st('UT', 'ssCredit'), 1147.5]]
+  },
+  {
+    name: 'UT 2024: credit phased out 25¢ per dollar above $45,000 single',
+    source: 'TC-40 2024: 4.55% × $17,000 = $773.50 − 25% × ($67,000 − $45,000) → $0',
+    state: ret({ year: 2024, filingStatus: 'single', residentState: 'UT', w2s: [w2(50000, { state: 'UT' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['UT SS credit', st('UT', 'ssCredit'), 0]]
+  },
 ];
 
 let passed = 0, gaps = 0;
