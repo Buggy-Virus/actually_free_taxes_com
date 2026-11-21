@@ -432,6 +432,9 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
     q('unemploymentSubtraction', { label: `${code} Unemployment Compensation Exclusion`, unit: 'usd', category: 'state', optional: true, expr: each('src.g', 'amount') });
     subtractions.push(R(S('unemploymentSubtraction')));
   }
+  // A state income tax refund taxed federally is not income on the state return.
+  q('refundSubtraction', { label: `${code} State Tax Refund Subtraction`, unit: 'usd', category: 'state', optional: true, expr: R('fed.taxableStateRefund') });
+  subtractions.push(R(S('refundSubtraction')));
   // Interest on US obligations (Treasury bills/notes/bonds, savings bonds) is exempt from state income tax everywhere.
   q('treasurySubtraction', { label: 'US Government Interest Subtraction', unit: 'usd', category: 'state', optional: true, expr: R('fed.treasuryInterest') });
   subtractions.push(R(S('treasurySubtraction')));
@@ -462,7 +465,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   if (itemizes) {
     q('propertyTax', { label: `${code} Property Tax Allowed`, unit: 'usd', display: 'inline', expr: code === 'CA' ? R('in.realEstateTax') : min(lit(10000), R('in.realEstateTax')) });
     q('itemized', { label: `${code} Itemized Deductions`, unit: 'usd', category: 'itemized', optional: true,
-      expr: add(R('fed.medicalDeduction'), R(S('propertyTax')), R('in.mortgage'), R('in.charity')) });
+      expr: add(R('fed.medicalDeduction'), R(S('propertyTax')), R('fed.mortgageDeduction'), R('fed.charityDeduction')) });
     const forceStandard = flag('fed.forceStandard', 'you chose the standard deduction', 'you did not force the standard deduction', 'select-deduction-method');
     q('deductionBase', { label: `${code} Deduction Used`, unit: 'usd', display: 'inline',
       expr: when(and(not(forceStandard), gt(R(S('itemized')), R(S('baseStdDeduction')))), R(S('itemized')), R(S('baseStdDeduction'))) });
@@ -749,7 +752,7 @@ export function stateBlocks(plan: ReturnPlan, code: string, g: FormulaGraph): Bl
     const blocks: BlockSpec[] = [
       { id: `calc-state-${lc}-taxable`, stepLabel: `${name} • Step 1: Income, Deductions & Taxable Income`, title: `${code} Deductions & Taxable Income`,
         quantities: [S('w2Wages'), S('documentIncome'), { id: S('startingPoint'), show: 'always' },
-          ...pick('muniAddBack', 'hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ssSubtraction', 'retirementSubtraction', 'unemploymentSubtraction', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
+          ...pick('muniAddBack', 'refundSubtraction', 'hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ssSubtraction', 'retirementSubtraction', 'unemploymentSubtraction', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
           { id: S('agi'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'), { id: S('baseStdDeduction'), show: 'always' },
           ...pick('itemized'), S('panelItem'), S('deduction'), ...pick('personalExemption', 'dependentExemption', 'childDeduction'), S('exemptions'),
           { id: S('taxable'), show: 'always' }] },

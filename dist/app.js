@@ -932,6 +932,8 @@ class TaxApp {
             federalTaxWithheld: Number(src?.federalTaxWithheld) || 0,
             usTreasuryInterest: Number(src?.usTreasuryInterest) || 0,
             inStateTaxExemptInterest: Number(src?.inStateTaxExemptInterest) || 0,
+            stateRefund: Number(src?.stateRefund) || 0,
+            priorItemizedExcess: Number(src?.priorItemizedExcess) || 0,
             taxableAmount: src?.taxableAmount === undefined || src?.taxableAmount === null || src?.taxableAmount === '' ? undefined : Number(src.taxableAmount) || 0,
             rollover: Boolean(src?.rollover),
             capitalGainDistributions: Number(src?.capitalGainDistributions) || 0,
@@ -999,6 +1001,7 @@ class TaxApp {
             },
             itemizedDeductions: {
                 ...numericFields(parsed.itemizedDeductions),
+                mortgageGrandfathered: Boolean(parsed.itemizedDeductions?.mortgageGrandfathered),
                 medicalExpenses: Number(parsed.itemizedDeductions?.medicalExpenses) || 0,
                 realEstateTax: Number(parsed.itemizedDeductions?.realEstateTax) || 0,
                 mortgageInterest: Number(parsed.itemizedDeductions?.mortgageInterest) || 0,
@@ -4144,11 +4147,14 @@ class TaxApp {
                     + check('Rollover (Code G / H)', 'rollover', src.rollover, 'Rolled over — not taxable')
                     + check('Early Withdrawal (10% Penalty)', 'earlyDistributionPenalty', src.earlyDistributionPenalty, 'Code 1 Early Distribution')
                     + money('Amount Meeting a 10% Exception (Form 5329)', 'penaltyExceptionAmount', src.penaltyExceptionAmount || 0)
-                : src.type === '1099-INT'
-                    ? money('US Treasury Interest (Box 3)', 'usTreasuryInterest', src.usTreasuryInterest || 0)
-                        + money('Tax-Exempt Interest (Box 8)', 'taxExemptInterest', src.taxExemptInterest || 0)
-                        + money("…of which from your own state's bonds", 'inStateTaxExemptInterest', src.inStateTaxExemptInterest || 0)
-                    : '';
+                : src.type === '1099-G'
+                    ? money('State/Local Tax Refund (Box 2)', 'stateRefund', src.stateRefund || 0)
+                        + money("Last Year's Itemized Deductions Above the Standard Deduction", 'priorItemizedExcess', src.priorItemizedExcess || 0)
+                    : src.type === '1099-INT'
+                        ? money('US Treasury Interest (Box 3)', 'usTreasuryInterest', src.usTreasuryInterest || 0)
+                            + money('Tax-Exempt Interest (Box 8)', 'taxExemptInterest', src.taxExemptInterest || 0)
+                            + money("…of which from your own state's bonds", 'inStateTaxExemptInterest', src.inStateTaxExemptInterest || 0)
+                        : '';
         const inputsHtml = `
       <div class="panel-multi-inputs">
         <div>
@@ -4209,6 +4215,11 @@ class TaxApp {
                 case 'input-itemized-gambling-losses': return Number(this.state.itemizedDeductions?.gamblingLosses) || 0;
                 case 'input-itemized-investment-interest': return Number(this.state.itemizedDeductions?.investmentInterest) || 0;
                 case 'input-itemized-casualty': return Number(this.state.itemizedDeductions?.casualtyLoss) || 0;
+                case 'input-itemized-other-income-tax': return Number(this.state.itemizedDeductions?.otherStateLocalIncomeTax) || 0;
+                case 'input-itemized-personal-property': return Number(this.state.itemizedDeductions?.personalPropertyTax) || 0;
+                case 'input-itemized-sales-tax': return Number(this.state.itemizedDeductions?.salesTax) || 0;
+                case 'input-itemized-charity-noncash': return Number(this.state.itemizedDeductions?.charityNoncash) || 0;
+                case 'input-itemized-mortgage-balance': return Number(this.state.itemizedDeductions?.mortgageBalance) || 0;
                 case 'input-alimony-received': return Number(this.state.otherIncome?.alimonyReceived) || 0;
                 case 'input-foreign-earned-excl': return Number(this.state.otherIncome?.foreignEarnedIncomeExclusion) || 0;
                 case 'input-unreported-tips': return Number(this.state.otherIncome?.unreportedTips) || 0;
@@ -4300,6 +4311,27 @@ class TaxApp {
           </select>
         </div>
         <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-hsa-catchup" ${this.state.adjustments?.hsaCatchUp ? 'checked' : ''}> Age 55+ catch-up</label>
+      </div>`;
+        }
+        else if (entry.key === 'itemized-real-estate') {
+            inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-itemized-real-estate', 'Real Estate Taxes')}
+        ${numBox('input-itemized-other-income-tax', 'Other State/Local Income Tax Paid')}
+        ${numBox('input-itemized-personal-property', 'Personal Property Tax')}
+        ${numBox('input-itemized-sales-tax', 'General Sales Tax (if larger than income tax)')}
+      </div>`;
+        }
+        else if (entry.key === 'itemized-mortgage') {
+            inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-itemized-mortgage', 'Mortgage Interest (Form 1098)')}
+        ${numBox('input-itemized-mortgage-balance', 'Average Loan Balance (if over $750,000)')}
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-mortgage-grandfathered" ${this.state.itemizedDeductions?.mortgageGrandfathered ? 'checked' : ''}> Loan taken out before Dec 16, 2017</label>
+      </div>`;
+        }
+        else if (entry.key === 'itemized-charity') {
+            inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-itemized-charity', 'Cash Gifts')}
+        ${numBox('input-itemized-charity-noncash', 'Gifts of Property (appreciated)')}
       </div>`;
         }
         else if (entry.key === 'adj-educator') {
@@ -4427,6 +4459,14 @@ class TaxApp {
         bindNum('input-itemized-gambling-losses', v => getItemized().gamblingLosses = v);
         bindNum('input-itemized-investment-interest', v => getItemized().investmentInterest = v);
         bindNum('input-itemized-casualty', v => getItemized().casualtyLoss = v);
+        bindNum('input-itemized-other-income-tax', v => getItemized().otherStateLocalIncomeTax = v);
+        bindNum('input-itemized-personal-property', v => getItemized().personalPropertyTax = v);
+        bindNum('input-itemized-sales-tax', v => getItemized().salesTax = v);
+        bindNum('input-itemized-charity-noncash', v => getItemized().charityNoncash = v);
+        bindNum('input-itemized-mortgage-balance', v => getItemized().mortgageBalance = v);
+        const grandf = document.getElementById('check-mortgage-grandfathered');
+        if (grandf)
+            grandf.addEventListener('change', () => { getItemized().mortgageGrandfathered = grandf.checked; this.recalculateAndRender(); });
         // Dependents list
         document.querySelectorAll('[data-dep-id]').forEach(el => {
             const id = parseInt(el.dataset.depId || '', 10);

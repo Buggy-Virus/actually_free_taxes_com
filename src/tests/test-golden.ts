@@ -482,6 +482,43 @@ const CASES: Golden[] = [
     expect: [['deduction', fed('fed.deduction'), 3000]]
   },
 
+  {
+    name: 'Charitable cash gifts limited to 60% of AGI; excess carries forward',
+    source: 'IRC §170(b)(1)(G), Pub. 526: $40,000 cash on $50,000 AGI → $30,000 allowed, $10,000 carryover',
+    state: ret({ w2s: [w2(50000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 40000 } }),
+    expect: [['charitable deduction', fed('fed.charityDeduction'), 30000], ['carryforward', fed('fed.charityCarryforward'), 10000]]
+  },
+  {
+    name: 'Gifts of appreciated property limited to 30% of AGI',
+    source: 'IRC §170(b)(1)(C): $40,000 property on $100,000 AGI → $30,000; cash $35,000 limited to 60% − $30,000 = $30,000',
+    state: ret({ w2s: [w2(100000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 35000, charityNoncash: 40000 } }),
+    expect: [['charitable deduction', fed('fed.charityDeduction'), 60000], ['carryforward', fed('fed.charityCarryforward'), 15000]]
+  },
+  {
+    name: 'Mortgage interest on debt over $750,000',
+    source: 'Pub. 936 Table 1: $45,000 × ($750,000 ÷ $1,000,000) = $33,750',
+    state: ret({ w2s: [w2(300000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 45000, charity: 0, mortgageBalance: 1000000 } }),
+    expect: [['mortgage deduction', fed('fed.mortgageDeduction'), 33750]]
+  },
+  {
+    name: 'Mortgage grandfathered $1M limit (loan before Dec 16, 2017)',
+    source: 'Pub. 936: $1,000,000 balance on a pre-12/16/2017 loan is fully deductible',
+    state: ret({ w2s: [w2(300000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 45000, charity: 0, mortgageBalance: 1000000, mortgageGrandfathered: true } }),
+    expect: [['mortgage deduction', fed('fed.mortgageDeduction'), 45000]]
+  },
+  {
+    name: 'SALT: general sales tax election in a no-income-tax state',
+    source: 'Schedule A line 5a (box checked for sales tax): $2,500 sales tax + $5,000 real estate',
+    state: ret({ residentState: 'TX', w2s: [w2(60000, { state: 'TX' })], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 5000, mortgageInterest: 0, charity: 0, salesTax: 2500 } }),
+    expect: [['SALT', fed('fed.salt'), 7500]]
+  },
+  {
+    name: 'State tax refund taxable only to the extent of last year\'s benefit',
+    source: 'State and Local Income Tax Refund Worksheet: $1,000 refund, last year itemized $600 above standard → $600 taxable; state subtracts it',
+    state: ret({ residentState: 'CA', w2s: [w2(50000, { state: 'CA' })], otherIncome: { interest: 0, sources: [src(1, '1099-G', 0, { stateRefund: 1000, priorItemizedExcess: 600 })] } }),
+    expect: [['taxable refund', fed('fed.taxableStateRefund'), 600], ['AGI', fed('fed.agi'), 50600], ['CA income', st('CA', 'agi'), 50000]]
+  },
+
   // ---------------- Federal: adjustment limits ----------------
   {
     name: 'Student loan interest phaseout, single MAGI $87,500',

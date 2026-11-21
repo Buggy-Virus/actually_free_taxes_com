@@ -77,6 +77,8 @@ function defineInputs(g) {
                 taxExempt: f(`${c.label} Tax-Exempt Interest`, false, true),
                 treasury: f(`${c.label} US Treasury Interest (Box 3)`, false, true),
                 inStateExempt: f(`${c.label} Tax-Exempt Interest From Own State's Bonds`, false, true),
+                stateRefund: f(`${c.label} State/Local Refund (Box 2)`, false, true),
+                priorItemizedExcess: f(`${c.label} Last Year's Itemized Excess Over Standard`, false, true),
                 qdiv: f(`${c.label} Qualified Dividends`),
                 capGainDist: f(`${c.label} Capital Gain Distributions (Box 2a)`, false, true),
                 taxable: f(`${c.label} Taxable Amount (Box 2a)`),
@@ -142,6 +144,11 @@ function defineInputs(g) {
     io('in.gamblingLosses', 'Gambling Losses', 'input-itemized-gambling-losses', 'itemized-gambling-losses', 'itemized', { optional: true });
     io('in.investmentInterest', 'Investment Interest Paid', 'input-itemized-investment-interest', 'itemized-investment-interest', 'itemized', { optional: true });
     io('in.casualty', 'Casualty Loss', 'input-itemized-casualty', 'itemized-casualty', 'itemized', { optional: true });
+    io('in.otherSaltIncomeTax', 'Other State/Local Income Tax Paid', 'input-itemized-other-income-tax', 'itemized-real-estate', 'itemized', { optional: true });
+    io('in.personalPropertyTax', 'Personal Property Tax', 'input-itemized-personal-property', 'itemized-real-estate', 'itemized', { optional: true });
+    io('in.salesTax', 'General Sales Tax', 'input-itemized-sales-tax', 'itemized-real-estate', 'itemized', { optional: true });
+    io('in.charityNoncash', 'Gifts of Property', 'input-itemized-charity-noncash', 'itemized-charity', 'itemized', { optional: true });
+    io('in.mortgageBalance', 'Average Mortgage Balance', 'input-itemized-mortgage-balance', 'itemized-mortgage', 'itemized', { optional: true });
     // Dependents & credits
     io('in.children', 'Qualifying Children', 'input-children-count', 'cred-children', 'credits', { unit: 'count', optional: true });
     io('in.otherDependents', 'Other Dependents', 'input-other-dependents', 'cred-other-dependents', 'credits', { unit: 'count', optional: true });
@@ -295,13 +302,17 @@ function defineQuantities(g, year) {
     q({ id: 'fed.earlyDistributions', label: 'Early Distributions Subject to 10% Tax', unit: 'usd', display: 'inline',
         expr: atLeast0(sub(each('src.r', 'taxable', 'penalty'), each('src.r', 'penaltyException', 'penalty'))) });
     q({ id: 'fed.gambling', label: 'Gambling Winnings', unit: 'usd', form: 'Schedule 1 Line 8b', category: 'wages', optional: true, expr: each('src.w2g', 'amount') });
+    // Schedule 1 line 1 (State and Local Income Tax Refund Worksheet, simplified): taxable only to the extent the tax
+    // reduced last year's tax — at most last year's itemized deductions above the standard deduction.
+    q({ id: 'fed.taxableStateRefund', label: 'Taxable State/Local Tax Refund', unit: 'usd', form: 'Schedule 1 Line 1', category: 'wages', optional: true,
+        expr: sumOver('src.g', min(field('stateRefund'), field('priorItemizedExcess'))) });
     q({ id: 'fed.otherSourceIncome', label: 'Other 1099 Income', unit: 'usd', form: 'Schedule 1 Line 8z', category: 'wages', optional: true,
         expr: add(each('src.misc', 'amount'), each('src.g', 'amount'), each('src.other', 'amount')) });
     q({ id: 'fed.ssaGross', label: 'Social Security Benefits', unit: 'usd', form: 'Form 1040 Line 6a', optional: true, expr: each('src.ssa', 'amount') });
     q({ id: 'fed.extraWithholding', label: '1099 Federal Tax Withheld', unit: 'usd', form: 'Form 1040 Line 25b', category: 'withholding', optional: true,
         expr: add(...['src.nec', 'src.k', 'src.f', 'src.int', 'src.div', 'src.k1', 'src.r', 'src.ssa', 'src.w2g', 'src.misc', 'src.g', 'src.other'].map(c => each(c, 'fedWithheld'))) });
     q({ id: 'fed.documentIncome', label: '1099 & Business Income', unit: 'usd', display: 'inline',
-        expr: add(R('fed.businessProfit'), R('fed.interest1099'), R('fed.dividends'), R('fed.k1Income'), R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome')) });
+        expr: add(R('fed.businessProfit'), R('fed.interest1099'), R('fed.dividends'), R('fed.k1Income'), R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableStateRefund')) });
     // ---------- Self-employment tax (Schedule SE) ----------
     q({ id: 'fed.seEarnings', label: 'Net SE Earnings', unit: 'usd', form: 'Schedule SE Line 4a', category: 'tax', optional: true,
         expr: when(gte(R('fed.businessProfit'), lit(400)), mul(R('fed.businessProfit'), rate(0.9235)), lit(0)) });
@@ -399,7 +410,7 @@ function defineQuantities(g, year) {
     // ---------- Total income & AGI ----------
     q({ id: 'fed.feie', label: 'Foreign Earned Income Exclusion', unit: 'usd', display: 'inline', optional: true, expr: min(R('in.feie'), P('fed.feieLimit')) });
     q({ id: 'fed.totalIncome', label: 'Total Income', unit: 'usd', form: 'Form 1040 Line 9', category: 'wages',
-        expr: round(atLeast0(sub(add(R('fed.wages'), R('fed.depCareTaxable'), R('fed.interestTotal'), R('fed.dividends'), R('fed.businessProfit'), R('fed.k1Income'), R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableSS'), R('fed.capAllowed'), R('fed.rentalAllowed'), R('in.alimonyReceived'), R('in.tips')), R('fed.feie')))) });
+        expr: round(atLeast0(sub(add(R('fed.wages'), R('fed.depCareTaxable'), R('fed.interestTotal'), R('fed.dividends'), R('fed.businessProfit'), R('fed.k1Income'), R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableStateRefund'), R('fed.taxableSS'), R('fed.capAllowed'), R('fed.rentalAllowed'), R('in.alimonyReceived'), R('in.tips')), R('fed.feie')))) });
     q({ id: 'fed.agi', label: 'Adjusted Gross Income', unit: 'usd', form: 'Form 1040 Line 11', category: 'wages',
         expr: round(atLeast0(sub(R('fed.totalIncome'), R('fed.adjustments')))) });
     // ---------- Deductions ----------
@@ -415,8 +426,13 @@ function defineQuantities(g, year) {
             // P.L. 119-21: $40,000 cap reduced by 30% of MAGI over $500,000, but not below $10,000.
             ? max(P('fed.saltFloor'), sub(P('fed.saltCapBase'), mul(atLeast0(sub(add(R('fed.agi'), R('fed.feie')), P('fed.saltPhaseStart'))), rate(0.3))))
             : P('fed.saltCapBase') });
+    // Schedule A line 5a: state/local income taxes (withheld + other paid) or, by election, general sales taxes — whichever is larger.
+    q({ id: 'fed.saltIncomeTaxes', label: 'State & Local Income Taxes Paid', unit: 'usd', display: 'inline',
+        expr: add(R('fed.stateWithheld'), R('fed.localWithheld'), R('in.otherSaltIncomeTax')) });
+    q({ id: 'fed.saltIncomeOrSales', label: 'Income Taxes or General Sales Taxes (larger)', unit: 'usd', display: 'inline',
+        expr: max(R('fed.saltIncomeTaxes'), R('in.salesTax')) });
     q({ id: 'fed.salt', label: 'SALT Deduction', unit: 'usd', form: 'Schedule A Line 5e', category: 'itemized', optional: true,
-        expr: min(R('fed.saltCap'), add(R('in.realEstateTax'), R('fed.stateWithheld'), R('fed.localWithheld'))) });
+        expr: min(R('fed.saltCap'), add(R('in.realEstateTax'), R('fed.saltIncomeOrSales'), R('in.personalPropertyTax'))) });
     q({ id: 'fed.gamblingLossDeduction', label: 'Deductible Gambling Losses', unit: 'usd', form: 'Schedule A Line 16', category: 'itemized', optional: true,
         expr: min(R('fed.gambling'), R('in.gamblingLosses')) });
     q({ id: 'fed.investmentInterestDeduction', label: 'Deductible Investment Interest', unit: 'usd', form: 'Schedule A Line 9', category: 'itemized', optional: true,
@@ -424,8 +440,22 @@ function defineQuantities(g, year) {
     // Form 4684: personal casualty loss (federally declared disaster) less $100 per event and 10% of AGI.
     q({ id: 'fed.casualtyDeduction', label: 'Deductible Casualty Loss', unit: 'usd', form: 'Schedule A Line 15', category: 'itemized', optional: true,
         presentIf: gt(R('in.casualty'), lit(0)), expr: atLeast0(sub(R('in.casualty'), lit(100), mul(R('fed.agi'), rate(0.1)))) });
+    // Pub. 936: interest on acquisition debt above $750,000 ($1,000,000 for loans before Dec 16, 2017) is not deductible.
+    const grandfathered = flag('fed.mortgageGrandfathered', 'loan taken out before Dec 16, 2017', 'loan after Dec 15, 2017', 'check-mortgage-grandfathered');
+    q({ id: 'fed.mortgageDebtLimit', label: 'Mortgage Debt Limit', unit: 'usd', display: 'inline', expr: when(grandfathered, lit(1000000), lit(750000)) });
+    q({ id: 'fed.mortgageDeduction', label: 'Deductible Mortgage Interest', unit: 'usd', form: 'Schedule A Line 8', category: 'itemized', optional: true,
+        presentIf: gt(R('in.mortgage'), lit(0)),
+        expr: when(gt(R('in.mortgageBalance'), R('fed.mortgageDebtLimit')), round(mul(R('in.mortgage'), div(R('fed.mortgageDebtLimit'), R('in.mortgageBalance')))), R('in.mortgage')) });
+    // Charitable limits (IRC §170(b)): cash up to 60% of AGI; appreciated property up to 30%; the excess carries forward 5 years.
+    q({ id: 'fed.charityNoncashAllowed', label: 'Property Gifts Allowed (30% of AGI)', unit: 'usd', display: 'inline', optional: true,
+        expr: min(R('in.charityNoncash'), mul(R('fed.agi'), rate(0.3))) });
+    q({ id: 'fed.charityDeduction', label: 'Deductible Charitable Gifts', unit: 'usd', form: 'Schedule A Line 14', category: 'itemized', optional: true,
+        presentIf: gt(add(R('in.charity'), R('in.charityNoncash')), lit(0)),
+        expr: add(min(R('in.charity'), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')) });
+    q({ id: 'fed.charityCarryforward', label: 'Charitable Gifts Carried to Next Year', unit: 'usd', category: 'itemized', optional: true,
+        expr: sub(add(R('in.charity'), R('in.charityNoncash')), R('fed.charityDeduction')) });
     q({ id: 'fed.itemized', label: 'Itemized Deductions', unit: 'usd', form: 'Schedule A Line 17', category: 'itemized',
-        expr: add(R('fed.medicalDeduction'), R('fed.salt'), R('in.mortgage'), R('in.charity'), R('fed.gamblingLossDeduction'), R('fed.investmentInterestDeduction'), R('fed.casualtyDeduction')) });
+        expr: add(R('fed.medicalDeduction'), R('fed.salt'), R('fed.mortgageDeduction'), R('fed.charityDeduction'), R('fed.gamblingLossDeduction'), R('fed.investmentInterestDeduction'), R('fed.casualtyDeduction')) });
     const forceItemized = flag('fed.forceItemized', 'you chose to itemize', 'you did not force itemizing', 'select-deduction-method');
     const forceStandard = flag('fed.forceStandard', 'you chose the standard deduction', 'you did not force the standard deduction', 'select-deduction-method');
     // MFS: if your spouse itemizes, you must itemize too (standard deduction is $0).
@@ -612,7 +642,7 @@ function defineQuantities(g, year) {
         expr: round(mul(R('fed.niitBase'), P('fed.niitRate'))) });
     q({ id: 'fed.amti', label: 'Alternative Minimum Taxable Income', unit: 'usd', form: 'Form 6251 Line 4', category: 'tax',
         // Form 6251: standard-deduction filers get no deduction against AMTI; itemizers keep everything except SALT.
-        expr: atLeast0(sub(R('fed.agi'), when(gt(R('fed.itemizing'), num(0)), add(R('fed.medicalDeduction'), R('in.mortgage'), R('in.charity'), R('fed.gamblingLossDeduction')), lit(0)), R('fed.qbi'))) });
+        expr: atLeast0(sub(R('fed.agi'), when(gt(R('fed.itemizing'), num(0)), add(R('fed.medicalDeduction'), R('fed.mortgageDeduction'), R('fed.charityDeduction'), R('fed.gamblingLossDeduction')), lit(0)), R('fed.qbi'))) });
     q({ id: 'fed.amtExemptionAllowed', label: 'AMT Exemption After Phaseout', unit: 'usd', category: 'tax',
         expr: atLeast0(sub(P('fed.amtExemption'), mul(atLeast0(sub(R('fed.amti'), P('fed.amtPhaseStart'))), rate(0.25)))) });
     q({ id: 'fed.amtOrdinaryBase', label: 'AMT Base Excluding Preferential Income', unit: 'usd', display: 'inline',
@@ -709,6 +739,8 @@ export function federalContext(state) {
                 taxExempt: n(s.taxExemptInterest),
                 treasury: n(s.usTreasuryInterest),
                 inStateExempt: n(s.inStateTaxExemptInterest),
+                stateRefund: n(s.stateRefund),
+                priorItemizedExcess: n(s.priorItemizedExcess),
                 qdiv: n(s.qualifiedDividends),
                 capGainDist: n(s.capitalGainDistributions),
                 // 1099-R: box 2a taxable amount (box 1 gross if not determined); rollovers are not taxable.
@@ -739,6 +771,7 @@ export function federalContext(state) {
             'fed.iraCatchUp': Boolean(state.adjustments?.iraCatchUp),
             'fed.livedApart': Boolean(state.livedApartFromSpouse) && state.filingStatus === 'married_separate',
             'fed.taxpayerBlind': Boolean(state.taxpayer?.blind),
+            'fed.mortgageGrandfathered': Boolean(state.itemizedDeductions?.mortgageGrandfathered),
             'fed.bothEducators': Boolean(state.adjustments?.bothEducators) && state.filingStatus === 'married_joint',
             'fed.spouseItemizes': Boolean(state.spouseItemizes) && state.filingStatus === 'married_separate',
             'fed.spouseBlind': Boolean(state.spouse?.blind)
@@ -783,6 +816,11 @@ export function federalContext(state) {
             'in.gamblingLosses': n(i.gamblingLosses),
             'in.investmentInterest': n(i.investmentInterest),
             'in.casualty': n(i.casualtyLoss),
+            'in.otherSaltIncomeTax': n(i.otherStateLocalIncomeTax),
+            'in.personalPropertyTax': n(i.personalPropertyTax),
+            'in.salesTax': n(i.salesTax),
+            'in.charityNoncash': n(i.charityNoncash),
+            'in.mortgageBalance': n(i.mortgageBalance),
             'in.children': int(d.childrenCount),
             'in.otherDependents': int(d.otherDependentsCount),
             'in.age65Blind': int(d.age65OrBlindCount),
@@ -809,12 +847,12 @@ export const FEDERAL_BLOCKS = [
         quantities: ['fed.rentalNet', 'fed.suspendedRentalLoss', 'fed.rentalAllowed', 'fed.k1Income'] },
     { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',
         quantities: ['fed.interestTotal', 'fed.taxExemptInterest', 'fed.dividends', 'fed.qualifiedDividends', 'fed.businessProfit', 'fed.retirement',
-            'fed.gambling', 'fed.otherSourceIncome', 'fed.ssaGross', 'fed.provisionalIncome', 'fed.taxableSS',
+            'fed.gambling', 'fed.otherSourceIncome', 'fed.taxableStateRefund', 'fed.ssaGross', 'fed.provisionalIncome', 'fed.taxableSS',
             'fed.depCareTaxable', { id: 'fed.totalIncome', show: 'always' }, 'fed.seRetirementLimit', 'fed.seRetirementDeduction', 'fed.seHealthDeduction', 'fed.hsaLimit', 'fed.hsaDeduction', 'fed.iraMagi', 'fed.iraDeductibleLimit', 'fed.iraDeduction',
             'fed.studentLoanMagi', 'fed.studentLoanDeduction', { id: 'fed.adjustments', show: 'always' },
             { id: 'fed.agi', show: 'always' }] },
     { id: 'calc-itemized-deductions', stepLabel: 'Step 4a • Schedule A Itemized Deductions', title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',
-        quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.casualtyDeduction', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
+        quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.mortgageDeduction', 'fed.charityDeduction', 'fed.charityCarryforward', 'fed.casualtyDeduction', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
     { id: 'calc-taxable-income', stepLabel: 'Step 4 • Deductions & Taxable Income', title: 'Deduction & Taxable Income',
         quantities: ['fed.taxpayerAge', 'fed.spouseAge', 'fed.age65BlindBoxes', { id: 'fed.stdDeduction', show: 'always' }, { id: 'fed.deduction', show: 'always' }, 'fed.qbiIncome', 'fed.qbiIncomeLimit', 'fed.qbi',
             'fed.tipsDeduction', 'fed.overtimeDeduction', 'fed.carLoanDeduction', 'fed.seniorDeduction', 'fed.sched1a',

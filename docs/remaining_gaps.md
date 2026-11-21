@@ -36,15 +36,15 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B5 | P1 | Form 1040 line 1e: W-2 box 10 dependent care benefits over $5,000 taxable; reduce Form 2441 limit | Ignored | Box 10 already entered | ✅ `fed.depCareExcluded`, `fed.depCareTaxable` |
 | B6 | P1 | Form 5329 exceptions to the 10% early-distribution tax | 10% on all code-1 distributions | Exception amount input on 1099-R | ✅ 1099-R exception amount |
 | B7 | P1 | 1099-R distribution codes beyond G/H and 1 (2, 3, 4, 7, J, Q, T, B) | Rollover + code 1 checkbox | Code select per 1099-R | ⬜ |
-| B8 | P1 | State/local refund (1099-G box 2) tax-benefit rule | Pooled into taxable other income | Box 2 field + prior-year itemized flag | ⬜ |
+| B8 | P1 | State/local refund (1099-G box 2) tax-benefit rule | Pooled into taxable other income | Box 2 field + prior-year itemized flag | ✅ 1099-G box 2 + last year's itemized excess; state subtraction |
 | B9 | P1 | 2026: charitable deduction for non-itemizers ($1,000 / $2,000) | — | Needs A3 | ⬜ |
 | B10 | P1 | 2026: 0.5%-of-AGI floor on itemized charity; 37%-bracket itemized limitation | — | Needs A3 | ⬜ |
 | B11 | P1 | 2026: dependent care credit rate up to 50% | — | Needs A3 | ⬜ |
 | B12 | P2 | 2026: gambling losses limited to 90% | — | Needs A3 | ⬜ |
 | B13 | P2 | 2026: AMT exemption phase-out 50% from $500k / $1M; QBI wider phase-in and $400 minimum | — | Needs A3 | ⬜ |
-| B14 | P1 | Charitable AGI limits (60% cash / 30% property) and carryover | Uncapped | Cash vs property inputs | ⬜ |
-| B15 | P1 | Mortgage interest debt limit ($750k / $1M grandfathered) | Uncapped | Loan balance + origination date | ⬜ |
-| B16 | P1 | SALT: estimated state payments, prior-year balance paid, sales-tax option, personal property tax | W-2 boxes 17/19 + real estate | Extra SALT inputs | ⬜ |
+| B14 | P1 | Charitable AGI limits (60% cash / 30% property) and carryover | Uncapped | Cash vs property inputs | ✅ 60% cash / 30% property limits + carryforward amount |
+| B15 | P1 | Mortgage interest debt limit ($750k / $1M grandfathered) | Uncapped | Loan balance + origination date | ✅ Pub. 936 ratio with $750k / $1M grandfathered |
+| B16 | P1 | SALT: estimated state payments, prior-year balance paid, sales-tax option, personal property tax | W-2 boxes 17/19 + real estate | Extra SALT inputs | ✅ Other income tax paid, personal property tax, sales-tax election |
 | B17 | P1 | Casualty loss $100 + 10% AGI floor | Entered amount | Form 4684 math | ✅ `fed.casualtyDeduction` |
 | B18 | P1 | Educator expense cap $600 only if both spouses educators | $600 for any MFJ | "Both educators" checkbox | ✅ "Both educators" checkbox |
 | B19 | P1 | SEP / SIMPLE / solo 401(k) limits; SE health insurance limited to net profit | Entered amounts | Limits from net SE earnings | ✅ `fed.seRetirementLimit` (solo 401(k) max), `fed.seHealthDeduction` |

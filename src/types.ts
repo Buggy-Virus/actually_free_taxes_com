@@ -87,6 +87,8 @@ export interface IncomeSource {
   federalTaxWithheld?: number; // Box 4 federal income tax withheld on 1099
   usTreasuryInterest?: number; // 1099-INT Box 3 interest on US savings bonds & Treasury obligations (state-exempt)
   inStateTaxExemptInterest?: number; // Part of 1099-INT Box 8 from your own state's bonds (stays state-exempt)
+  stateRefund?: number; // 1099-G Box 2 state or local income tax refund
+  priorItemizedExcess?: number; // Last year's itemized deductions above the standard deduction (0 if you took the standard deduction)
   taxableAmount?: number; // 1099-R Box 2a taxable amount (defaults to Box 1 gross when blank)
   rollover?: boolean; // 1099-R distribution code G/H direct rollover (not taxable)
   capitalGainDistributions?: number; // 1099-DIV Box 2a total capital gain distributions (long-term)
@@ -117,6 +119,12 @@ export interface ItemizedDeductionsInput {
   gamblingLosses?: number; // Deductible on Schedule A Line 16 up to W-2G gambling winnings
   investmentInterest?: number; // Form 4952 / Schedule A Line 9 (capped at Net Investment Income)
   casualtyLoss?: number; // Form 4684 / Schedule A Line 15 (federally declared disaster)
+  otherStateLocalIncomeTax?: number; // State/local income tax paid outside W-2s (estimates, prior-year balance due)
+  personalPropertyTax?: number; // Value-based personal property tax (e.g. vehicle registration portion)
+  salesTax?: number; // General sales tax paid, if electing sales tax instead of income tax
+  charityNoncash?: number; // Gifts of appreciated property (30% AGI limit)
+  mortgageBalance?: number; // Average acquisition debt balance (Pub. 936)
+  mortgageGrandfathered?: boolean; // Loan taken out before Dec 16, 2017 ($1M limit)
 }
 
 export interface OtherIncome {
