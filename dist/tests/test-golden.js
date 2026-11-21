@@ -928,6 +928,25 @@ const CASES = [
         state: ret({ year: 2025, w2s: [w2(40000)], dependents: { childrenCount: 0, adoptionCredit: 25000 } }),
         expect: [['adoption credit', fed('fed.adoptionAllowed'), 17280], ['refundable part', fed('fed.adoptionRefundable'), 5000], ['nonrefundable part', fed('fed.adoptionCredit'), 12280]]
     },
+    // ---------------- Federal: Schedule R (B34) ----------------
+    {
+        name: 'Schedule R: single age 70, $10,000 pension, no Social Security',
+        source: 'Schedule R Part III: $5,000 − ½ × ($10,000 − $7,500) = $3,750 × 15% = $562.50',
+        state: ret({ taxpayer: { birthYear: 1954 }, otherIncome: { interest: 0, sources: [src(1, '1099-R', 10000, { distributionCode: '7' })] } }),
+        expect: [['Schedule R credit', fed('fed.elderlyCredit'), 562.5]]
+    },
+    {
+        name: 'Schedule R: MFJ both 65+, nontaxable Social Security reduces the $7,500',
+        source: 'Schedule R: $7,500 − $4,000 nontaxable SS − ½ × ($12,000 − $10,000) = $2,500 × 15% = $375',
+        state: ret({ filingStatus: 'married_joint', taxpayer: { birthYear: 1950 }, spouse: { birthYear: 1952 }, otherIncome: { interest: 0, sources: [src(1, '1099-R', 12000, { distributionCode: '7' }), src(2, 'SSA-1099', 4000)] } }),
+        expect: [['taxable SS', fed('fed.taxableSS'), 0], ['Schedule R credit', fed('fed.elderlyCredit'), 375]]
+    },
+    {
+        name: 'Schedule R: married filing separately while living together gets no credit',
+        source: 'Schedule R instructions: MFS filers qualify only if they lived apart all year',
+        state: ret({ filingStatus: 'married_separate', taxpayer: { birthYear: 1950 }, otherIncome: { interest: 0, sources: [src(1, '1099-R', 6000, { distributionCode: '7' })] } }),
+        expect: [['Schedule R credit', fed('fed.elderlyCredit'), 0]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];

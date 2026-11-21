@@ -632,8 +632,16 @@ function defineQuantities(g, year) {
     q({ id: 'fed.adoptionRefundable', label: 'Refundable Adoption Credit', unit: 'usd', form: 'Form 8839 / Form 1040 Line 30', category: 'credits', optional: true,
         expr: min(P('fed.adoptionRefundableMax'), R('fed.adoptionAllowed')) });
     q({ id: 'fed.adoptionCredit', label: 'Nonrefundable Adoption Credit', unit: 'usd', display: 'inline', optional: true, expr: sub(R('fed.adoptionAllowed'), R('fed.adoptionRefundable')) });
+    // Schedule R (65+): 15% × (initial amount − nontaxable Social Security − ½ of AGI over the threshold). Amounts are fixed by
+    // statute (IRC §22, not indexed). Under-65 disability filers enter their credit (limited to taxable disability income).
+    const mfsApart = and(statusIs('married_separate'), flag('fed.livedApart', 'you lived apart from your spouse all year', 'you lived with your spouse', 'check-lived-apart'));
+    q({ id: 'fed.elderlyInitialAmount', label: 'Schedule R Initial Amount', unit: 'usd', display: 'inline',
+        expr: when(statusIs('married_separate'), when(mfsApart, lit(3750), lit(0)), when(and(statusIs('married_joint'), gte(R('fed.seniorsCount'), num(2))), lit(7500), lit(5000))) });
+    q({ id: 'fed.elderlyCredit', label: 'Credit for the Elderly or Disabled', unit: 'usd', form: 'Schedule R', category: 'credits', optional: true,
+        presentIf: or(gt(R('fed.seniorsCount'), num(0)), gt(R('in.elderly'), lit(0))),
+        expr: when(gt(R('fed.seniorsCount'), num(0)), round(mul(atLeast0(sub(R('fed.elderlyInitialAmount'), sub(R('fed.ssaGross'), R('fed.taxableSS')), mul(atLeast0(sub(R('fed.agi'), when(statusIs('married_joint'), lit(10000), when(statusIs('married_separate'), lit(5000), lit(7500))))), rate(0.5)))), rate(0.15))), R('in.elderly')) });
     q({ id: 'fed.nonrefundableBeforeLimit', label: 'Nonrefundable Credits Before Tax Limit', unit: 'usd', category: 'credits', optional: true,
-        expr: add(R('fed.ctcAfterPhaseout'), R('fed.odcAfterPhaseout'), R('fed.childCareCredit'), R('fed.educationNonrefundable'), R('fed.saversCredit'), R('in.foreignTaxCredit'), R('in.cleanEnergy'), R('fed.adoptionCredit'), R('in.elderly')) });
+        expr: add(R('fed.ctcAfterPhaseout'), R('fed.odcAfterPhaseout'), R('fed.childCareCredit'), R('fed.educationNonrefundable'), R('fed.saversCredit'), R('in.foreignTaxCredit'), R('in.cleanEnergy'), R('fed.adoptionCredit'), R('fed.elderlyCredit')) });
     q({ id: 'fed.nonrefundableCredits', label: 'Nonrefundable Credits', unit: 'usd', form: 'Form 1040 Line 21', category: 'credits', optional: true,
         expr: round(min(R('fed.tax'), R('fed.nonrefundableBeforeLimit'))) });
     q({ id: 'fed.ctcAllowed', label: 'Child Tax Credit Allowed', unit: 'usd', display: 'inline', expr: min(R('fed.tax'), R('fed.ctcAfterPhaseout')) });
@@ -936,7 +944,7 @@ export const FEDERAL_BLOCKS = [
             'fed.collectiblesTax', 'fed.regularTaxRow', 'fed.regularTax', { id: 'fed.tax', show: 'always' }] },
     { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
         quantities: ['fed.ctcChildren', 'fed.odcDependents', 'fed.eitcChildren', 'fed.careQualifyingPersons', 'fed.depCareExcluded', 'fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.careEarnedIncomeLimit', 'fed.childCareCredit', 'fed.aotcTotal',
-            'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.adoptionAllowed', 'fed.adoptionRefundable', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
+            'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.adoptionAllowed', 'fed.adoptionRefundable', 'fed.elderlyCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
             'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
     { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',
         quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',
