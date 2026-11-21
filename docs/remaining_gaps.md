@@ -18,8 +18,8 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 
 | ID | Pri | Gap | Today | Approach / inputs needed | Status |
 | :-- | :-: | :-- | :-- | :-- | :-: |
-| A1 | P0 | **Taxpayer & spouse records**: birth year, blind, SSN/ITIN present | Ages only via "65+/blind box" count, catch-up checkboxes, seniors count | Basic Info fields; derive 65+/blind boxes, senior deduction, HSA/IRA catch-up, EITC age test, state age exclusions from ages | ⬜ |
-| A2 | P0 | **Dependent records**: name, birth year, relationship, months lived with you, student, disabled, SSN | Only `childrenCount` / `otherDependentsCount` | Dependents list; qualifying-child / qualifying-relative tests as graph conditions per dependent; counts for CTC (< 17), ODC, EITC (< 19 / < 24 student / disabled), Form 2441 (< 13) | ⬜ |
+| A1 | P0 | **Taxpayer & spouse records**: birth year, blind, SSN/ITIN present | Ages only via "65+/blind box" count, catch-up checkboxes, seniors count | Basic Info fields; derive 65+/blind boxes, senior deduction, HSA/IRA catch-up, EITC age test, state age exclusions from ages | ✅ Basic Info birth years + blind; `fed.age65BlindBoxes`, `fed.seniorsCount`, catch-ups |
+| A2 | P0 | **Dependent records**: name, birth year, relationship, months lived with you, student, disabled, SSN | Only `childrenCount` / `otherDependentsCount` | Dependents list; qualifying-child / qualifying-relative tests as graph conditions per dependent; counts for CTC (< 17), ODC, EITC (< 19 / < 24 student / disabled), Form 2441 (< 13) | ✅ Dependents panel; per-dependent tests in `fed.ctcChildren`, `fed.eitcChildren`, `fed.careQualifyingPersons` |
 | A3 | P0 | **TY2026 parameters** (Rev. Proc. 2025-32 + P.L. 119-21 2026 rules) | Year selector stops at 2025 | Add 2026 to `tax-constants.ts` from the published Rev. Proc.; 2026-only rules below (B9–B13). Must be entered from the source document, not memory | ⬜ |
 | A4 | P1 | Per-person ownership of 1099s, Schedule C, IRA, HSA | Only W-2s have an owner | `owner` on income sources / businesses / IRA; per-person SE tax and IRA limits | ⬜ |
 | A5 | P1 | Multi-year carryovers: capital loss ST/LT, passive losses, charity, investment interest, NOL, AMT credit, FTC, §179, QBI loss | Capital loss carryforward computed as one number | "Prior-year carryovers" panel + computed next-year carryovers in a summary card | ⬜ |
@@ -29,9 +29,9 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 
 | ID | Pri | Gap | Today | Approach / inputs needed | Status |
 | :-- | :-: | :-- | :-- | :-- | :-: |
-| B1 | P0 | Child Tax Credit age (< 17) and SSN tests | Count entered directly | From A2 | ⬜ |
-| B2 | P0 | EITC eligibility: qualifying-child age/residency/relationship; age 25–64 with no child | Only filing status, investment income, dependent flag | From A1/A2 | ⬜ |
-| B3 | P0 | Form 2441 qualifying person under 13 (or disabled) | All children counted | From A2 | ⬜ |
+| B1 | P0 | Child Tax Credit age (< 17) and SSN tests | Count entered directly | From A2 | ✅ Age < 17 + SSN (golden test) |
+| B2 | P0 | EITC eligibility: qualifying-child age/residency/relationship; age 25–64 with no child | Only filing status, investment income, dependent flag | From A1/A2 | ✅ Qualifying-child age/student/disabled/residency + no-child age 25–64 (golden tests) |
+| B3 | P0 | Form 2441 qualifying person under 13 (or disabled) | All children counted | From A2 | ✅ Under 13 or disabled (golden test) |
 | B4 | P1 | Filing status eligibility checks (HOH qualifying person, QSS timing) | No validation | Warnings from A2 | ⬜ |
 | B5 | P1 | Form 1040 line 1e: W-2 box 10 dependent care benefits over $5,000 taxable; reduce Form 2441 limit | Ignored | Box 10 already entered | ⬜ |
 | B6 | P1 | Form 5329 exceptions to the 10% early-distribution tax | 10% on all code-1 distributions | Exception amount input on 1099-R | ⬜ |

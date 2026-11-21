@@ -11,8 +11,8 @@
 import { TaxAppState, IncomeSourceType, PanelSectionCategory } from '../types.js';
 import { TAX_CONSTANTS, YearTaxRules, normalizeFilingStatus } from '../tax-constants.js';
 import {
-  Expr, add, and, atLeast0, brackets, ceil, count, div, each, field, flag, floor, gt, gte, lit, lookup, lt, lte,
-  max, min, mul, neg, not, num, param, rate, ref, round, statusIs, sub, sumOver, when
+  Expr, Cond, add, and, atLeast0, quietly, brackets, ceil, count, div, each, field, flag, floor, gt, gte, itemFlag, lit, lookup, lt, lte,
+  max, min, mul, neg, not, num, or, param, rate, ref, round, statusIs, sub, sumOver, when
 } from './expr.js';
 import { BlockSpec, CollectionItem, CoreStatus, FormulaGraph, GraphContext } from './graph.js';
 
@@ -128,6 +128,22 @@ function defineInputs(g: FormulaGraph): void {
   io('in.qualifiedOvertime', 'Qualified Overtime Premium', 'input-sched1a-overtime', 'sched1a-overtime', 'adjustments', { optional: true });
   io('in.carLoanInterest', 'Car Loan Interest Paid', 'input-sched1a-car-loan', 'sched1a-car-loan', 'adjustments', { optional: true });
   io('in.seniors', 'Taxpayer/Spouse Age 65+', 'input-sched1a-seniors', 'sched1a-senior', 'adjustments', { unit: 'count', optional: true, max: 2 });
+  io('in.taxpayerBirthYear', 'Your Birth Year', 'input-taxpayer-birth-year', undefined, undefined, { unit: 'count', optional: true });
+  io('in.spouseBirthYear', 'Spouse Birth Year', 'input-spouse-birth-year', undefined, undefined, { unit: 'count', optional: true });
+  const depDom = (it: CollectionItem) => `dep-${it.id}-birth-year`;
+  g.collection({
+    id: 'dep',
+    countLabel: 'Number of Dependents',
+    itemLabel: (_i, it) => it.name || 'Dependent',
+    fields: {
+      birthYear: { label: 'Birth Year', unit: 'count', domId: depDom, panelKey: 'cred-dependents-list', panelSection: 'credits' },
+      isChild: { label: 'Child / Sibling Relationship', unit: 'count', domId: depDom },
+      monthsLived: { label: 'Months Lived With You', unit: 'count', domId: depDom },
+      student: { label: 'Full-Time Student', unit: 'count', domId: depDom },
+      disabled: { label: 'Permanently Disabled', unit: 'count', domId: depDom },
+      hasSsn: { label: 'Has SSN Valid for Work', unit: 'count', domId: depDom }
+    }
+  });
   io('in.priorYearTax', "Last Year's Total Tax", 'input-prior-year-tax', 'cred-prior-year-safe-harbor', 'credits', { optional: true });
   io('in.priorYearAgi', "Last Year's AGI", 'input-prior-year-agi', 'cred-prior-year-safe-harbor', 'credits', { optional: true });
 
@@ -183,6 +199,7 @@ function defineParams(g: FormulaGraph): void {
     c => (c.status === 'married_joint' ? (c.year >= 2025 ? 170000 : 165000) : (c.year >= 2025 ? 85000 : 80000)), 'Pub. 970 ch. 4', YEAR_STATUS);
   p('fed.slPhaseRange', 'Student Loan Interest Phase-Out Range', 'usd', c => (c.status === 'married_joint' ? 30000 : 15000), 'Pub. 970 ch. 4', ['select-filing-status']);
   p('fed.medicareRate', 'Medicare Employee Rate', 'rate', c => rules(c.year).medicareRate, 'IRC §3101(b)(1)', []);
+  p('fed.taxYear', 'Tax Year', 'count', c => c.year, 'Form 1040', ['select-tax-year']);
   p('fed.dependentStdMin', 'Dependent Standard Deduction Minimum', 'usd', c => (c.year >= 2025 ? 1350 : 1300), 'IRC §63(c)(5)', ['select-tax-year']);
   g.param({ id: 'fed.hsaLimitSelf', label: 'HSA Limit (Self-Only)', unit: 'usd', source: 'Rev. Proc. 2023-23 / 2024-25', domSources: ['select-tax-year'], resolve: c => (c.year >= 2025 ? 4300 : 4150) });
   g.param({ id: 'fed.hsaLimitFamily', label: 'HSA Limit (Family)', unit: 'usd', source: 'Rev. Proc. 2023-23 / 2024-25', domSources: ['select-tax-year'], resolve: c => (c.year >= 2025 ? 8550 : 8300) });
@@ -232,6 +249,39 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   type Q = Parameters<FormulaGraph['quantity']>[0];
   const q = (def: Q) => g.quantity(def);
   const R = ref, P = param;
+
+  // ---------- People & dependents ----------
+  // Ages are figured at the end of the tax year. When no birth years / dependent records are entered,
+  // the count fields (65+/blind boxes, children, other dependents, seniors) are used instead.
+  const hasAges = quietly(gt(R('in.taxpayerBirthYear'), num(0)));
+  const spouseAgeKnown = and(flag('fed.jointReturn', 'married filing jointly', 'not a joint return'), gt(R('in.spouseBirthYear'), num(0)));
+  q({ id: 'fed.taxpayerAge', label: 'Your Age at Year End', unit: 'count', category: 'status', appliesWhen: hasAges, expr: sub(P('fed.taxYear'), R('in.taxpayerBirthYear')) });
+  q({ id: 'fed.spouseAge', label: 'Spouse Age at Year End', unit: 'count', category: 'status', appliesWhen: spouseAgeKnown, expr: sub(P('fed.taxYear'), R('in.spouseBirthYear')) });
+  const one = (c: Cond) => when(c, num(1), num(0));
+  q({ id: 'fed.age65BlindBoxes', label: 'Age 65+ / Blind Boxes', unit: 'count', category: 'status',
+    expr: when(hasAges,
+      add(one(gte(R('fed.taxpayerAge'), num(65))), one(flag('fed.taxpayerBlind', 'you are blind', 'you are not blind', 'check-taxpayer-blind')),
+        when(spouseAgeKnown, add(one(gte(R('fed.spouseAge'), num(65))), one(flag('fed.spouseBlind', 'your spouse is blind', 'your spouse is not blind', 'check-spouse-blind'))), num(0))),
+      R('in.age65Blind')) });
+  q({ id: 'fed.seniorsCount', label: 'Taxpayer/Spouse Age 65+', unit: 'count', display: 'inline',
+    expr: when(hasAges, add(one(gte(R('fed.taxpayerAge'), num(65))), when(spouseAgeKnown, one(gte(R('fed.spouseAge'), num(65))), num(0))), R('in.seniors')) });
+
+  const hasDeps = quietly(gt(count('dep'), num(0)));
+  const depAge = sub(P('fed.taxYear'), field('birthYear'));
+  // Qualifying child (IRC §152(c)): relationship, lived with you more than half the year, and under 19,
+  // under 24 and a full-time student, or permanently disabled.
+  const qualifyingChild = and(itemFlag('isChild', 'child/sibling relationship', 'not a child/sibling'), gt(field('monthsLived'), num(6)),
+    or(lt(depAge, num(19)), and(itemFlag('student', 'full-time student', 'not a student'), lt(depAge, num(24))), itemFlag('disabled', 'permanently disabled', 'not disabled')));
+  const hasSsn = itemFlag('hasSsn', 'has an SSN', 'no SSN');
+  q({ id: 'fed.ctcChildren', label: 'Children Qualifying for the Child Tax Credit', unit: 'count', category: 'credits', optional: true,
+    expr: when(hasDeps, sumOver('dep', one(and(qualifyingChild, lt(depAge, num(17)), hasSsn))), R('in.children')) });
+  q({ id: 'fed.odcDependents', label: 'Dependents Qualifying for the $500 Credit', unit: 'count', category: 'credits', optional: true,
+    expr: when(hasDeps, sub(count('dep'), R('fed.ctcChildren')), R('in.otherDependents')) });
+  q({ id: 'fed.eitcChildren', label: 'EITC Qualifying Children', unit: 'count', category: 'credits', optional: true,
+    expr: when(hasDeps, sumOver('dep', one(and(qualifyingChild, hasSsn))), R('in.children')) });
+  q({ id: 'fed.careQualifyingPersons', label: 'Qualifying Persons for Care (under 13 or disabled)', unit: 'count', category: 'credits', optional: true,
+    expr: when(hasDeps, sumOver('dep', one(or(lt(depAge, num(13)), itemFlag('disabled', 'permanently disabled', 'not disabled')))),
+      max(num(1), add(R('in.children'), R('in.otherDependents')))) });
 
   // ---------- Wages & payroll ----------
   q({ id: 'fed.wages', label: 'Total W-2 Wages', unit: 'usd', form: 'Form 1040 Line 1a', category: 'wages', expr: each('w2', 'box1') });
@@ -308,7 +358,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: min(R('in.educator'), P('fed.educatorCap')) });
   // Form 8889: contribution limit by coverage (+$1,000 at 55+), reduced by employer contributions (W-2 box 12 W).
   const familyHsa = flag('fed.hsaFamily', 'family HDHP coverage', 'self-only HDHP coverage', 'select-hsa-coverage');
-  const hsaCatch = flag('fed.hsaCatchUp', 'age 55+', 'under 55', 'check-hsa-catchup');
+  const hsaCatch = or(and(hasAges, gte(R('fed.taxpayerAge'), num(55))), and(not(hasAges), flag('fed.hsaCatchUp', 'age 55+ (checked)', 'under 55', 'check-hsa-catchup')));
   q({ id: 'fed.hsaLimit', label: 'HSA Contribution Limit', unit: 'usd', category: 'adjustments', appliesWhen: gt(R('in.hsa'), lit(0)),
     expr: atLeast0(sub(add(when(familyHsa, P('fed.hsaLimitFamily'), P('fed.hsaLimitSelf')), when(hsaCatch, lit(1000), lit(0))), each('w2', 'employerHsa'))) });
   q({ id: 'fed.hsaDeduction', label: 'HSA Deduction', unit: 'usd', form: 'Form 8889 Line 13', category: 'adjustments', optional: true,
@@ -331,7 +381,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   q({ id: 'fed.iraMagi', label: 'MAGI for IRA Deduction', unit: 'usd', category: 'adjustments', appliesWhen: gt(R('in.ira'), lit(0)),
     expr: add(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'), R('fed.taxableSSBeforeIra'),
       R('in.alimonyReceived'), R('in.tips')), R('fed.adjustmentsExIraSli')), R('fed.feie')) });
-  const iraCatch = flag('fed.iraCatchUp', 'age 50+', 'under 50', 'check-ira-catchup');
+  const iraCatch = or(and(hasAges, gte(R('fed.taxpayerAge'), num(50))), and(not(hasAges), flag('fed.iraCatchUp', 'age 50+ (checked)', 'under 50', 'check-ira-catchup')));
   q({ id: 'fed.iraContributionLimit', label: 'IRA Contribution Limit', unit: 'usd', display: 'inline',
     expr: min(add(P('fed.iraLimit'), when(iraCatch, lit(1000), lit(0))), R('fed.earnedIncome')) });
   const coveredT = gt(count('w2', 'retirementPlanTaxpayer'), num(0));
@@ -406,7 +456,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   // IRC §63(c)(5): a dependent's basic standard deduction is the greater of $1,300 ($1,350 in 2025) or earned income + $450, capped at the normal amount.
   q({ id: 'fed.stdDeduction', label: 'Standard Deduction', unit: 'usd', category: 'status',
     expr: add(when(claimedAsDependent, min(P('fed.stdBase'), max(P('fed.dependentStdMin'), add(R('fed.earnedIncome'), lit(450)))), P('fed.stdBase')),
-      mul(R('in.age65Blind'), P('fed.addlStdPerBox'))) });
+      mul(R('fed.age65BlindBoxes'), P('fed.addlStdPerBox'))) });
   q({ id: 'fed.medicalFloor', label: 'Medical 7.5% AGI Floor', unit: 'usd', category: 'itemized', expr: mul(R('fed.agi'), rate(0.075)) });
   q({ id: 'fed.medicalDeduction', label: 'Deductible Medical Expenses', unit: 'usd', form: 'Schedule A Line 4', category: 'itemized', optional: true,
     expr: atLeast0(sub(R('in.medical'), R('fed.medicalFloor'))) });
@@ -456,8 +506,8 @@ function defineQuantities(g: FormulaGraph, year: number): void {
       presentIf: gt(R('in.carLoanInterest'), lit(0)),
       expr: round(atLeast0(sub(min(R('in.carLoanInterest'), lit(10000)), mul(over('fed.carLoanPhaseStart'), rate(0.2))))) });
     q({ id: 'fed.seniorDeduction', label: 'Senior Deduction', unit: 'usd', form: 'Schedule 1-A Part V', category: 'adjustments', optional: true,
-      presentIf: gt(R('in.seniors'), num(0)),
-      expr: notMfs(round(mul(R('in.seniors'), atLeast0(sub(lit(6000), mul(over('fed.seniorPhaseStart'), rate(0.06))))))) });
+      presentIf: gt(R('fed.seniorsCount'), num(0)),
+      expr: notMfs(round(mul(R('fed.seniorsCount'), atLeast0(sub(lit(6000), mul(over('fed.seniorPhaseStart'), rate(0.06))))))) });
     q({ id: 'fed.sched1a', label: 'Schedule 1-A Deductions', unit: 'usd', form: 'Form 1040 Line 13b', category: 'adjustments', optional: true,
       expr: add(R('fed.tipsDeduction'), R('fed.overtimeDeduction'), R('fed.carLoanDeduction'), R('fed.seniorDeduction')) });
   } else {
@@ -505,14 +555,14 @@ function defineQuantities(g: FormulaGraph, year: number): void {
       round(R('fed.ordinaryTax'))) });
 
   // ---------- Credits ----------
-  q({ id: 'fed.ctcMax', label: 'Child Tax Credit Before Phaseout', unit: 'usd', display: 'inline', expr: mul(R('in.children'), P('fed.ctcPerChild')) });
-  q({ id: 'fed.odcMax', label: 'Other Dependent Credit Before Phaseout', unit: 'usd', display: 'inline', expr: mul(R('in.otherDependents'), P('fed.odcPerDependent')) });
+  q({ id: 'fed.ctcMax', label: 'Child Tax Credit Before Phaseout', unit: 'usd', display: 'inline', expr: mul(R('fed.ctcChildren'), P('fed.ctcPerChild')) });
+  q({ id: 'fed.odcMax', label: 'Other Dependent Credit Before Phaseout', unit: 'usd', display: 'inline', expr: mul(R('fed.odcDependents'), P('fed.odcPerDependent')) });
   q({ id: 'fed.ctcPhaseout', label: 'Child Credit Phaseout', unit: 'usd', category: 'credits', optional: true,
     expr: when(gt(R('fed.agi'), P('fed.ctcPhaseStart')), mul(ceil(div(sub(R('fed.agi'), P('fed.ctcPhaseStart')), lit(1000))), lit(50)), lit(0)) });
   q({ id: 'fed.childCreditsAfterPhaseout', label: 'Child & Dependent Credits After Phaseout', unit: 'usd', category: 'credits', optional: true,
     expr: atLeast0(sub(add(R('fed.ctcMax'), R('fed.odcMax')), R('fed.ctcPhaseout'))) });
   q({ id: 'fed.ctcAfterPhaseout', label: 'Child Tax Credit', unit: 'usd', category: 'credits', optional: true,
-    presentIf: gt(R('in.children'), num(0)),
+    presentIf: gt(R('fed.ctcChildren'), num(0)),
     expr: min(R('fed.ctcMax'), R('fed.childCreditsAfterPhaseout')) });
   q({ id: 'fed.odcAfterPhaseout', label: 'Credit for Other Dependents', unit: 'usd', category: 'credits', optional: true,
     expr: atLeast0(sub(R('fed.childCreditsAfterPhaseout'), R('fed.ctcAfterPhaseout'))) });
@@ -521,7 +571,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: when(lte(R('fed.agi'), lit(15000)), rate(0.35),
       max(rate(0.2), sub(rate(0.35), mul(ceil(div(sub(R('fed.agi'), lit(15000)), lit(2000))), rate(0.01))))) });
   q({ id: 'fed.careExpenseCap', label: 'Child Care Expense Cap', unit: 'usd', display: 'inline',
-    expr: when(gte(max(num(1), add(R('in.children'), R('in.otherDependents'))), num(2)), lit(6000), lit(3000)) });
+    expr: when(gte(R('fed.careQualifyingPersons'), num(2)), lit(6000), lit(3000)) });
   // Form 2441 lines 4–6: expenses are limited to earned income (the lower-earning spouse's on a joint return).
   q({ id: 'fed.taxpayerEarnedIncome', label: "Taxpayer's Earned Income", unit: 'usd', display: 'inline', expr: add(each('w2', 'box1', 'isTaxpayer'), atLeast0(R('fed.businessProfit'))) });
   q({ id: 'fed.spouseEarnedIncome', label: "Spouse's Earned Income", unit: 'usd', display: 'inline', expr: each('w2', 'box1', 'isSpouse') });
@@ -530,7 +580,8 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: when(flag('fed.jointReturn', 'married filing jointly', 'not a joint return'), min(R('fed.taxpayerEarnedIncome'), R('fed.spouseEarnedIncome')), R('fed.taxpayerEarnedIncome')) });
   q({ id: 'fed.childCareCredit', label: 'Child & Dependent Care Credit', unit: 'usd', form: 'Form 2441', category: 'credits', optional: true,
     presentIf: gt(R('in.childCare'), lit(0)),
-    expr: when(statusIs('married_separate'), lit(0), round(mul(min(R('fed.careExpenseCap'), R('in.childCare'), R('fed.careEarnedIncomeLimit')), R('fed.careRate')))) });
+    expr: when(or(statusIs('married_separate'), lte(R('fed.careQualifyingPersons'), num(0))), lit(0),
+      round(mul(min(R('fed.careExpenseCap'), R('in.childCare'), R('fed.careEarnedIncomeLimit')), R('fed.careRate')))) });
 
   q({ id: 'fed.eduPhaseFactor', label: 'Education Credit Phase Factor', unit: 'rate', display: 'inline',
     expr: when(statusIs('married_separate'), rate(0),
@@ -568,12 +619,12 @@ function defineQuantities(g: FormulaGraph, year: number): void {
 
   q({ id: 'fed.earnedIncome', label: 'Earned Income', unit: 'usd', category: 'wages', expr: add(R('fed.wages'), atLeast0(R('fed.businessProfit'))) });
   q({ id: 'fed.actc', label: 'Additional Child Tax Credit', unit: 'usd', form: 'Form 1040 Line 28', category: 'credits', optional: true,
-    expr: round(min(atLeast0(sub(R('fed.ctcAfterPhaseout'), R('fed.ctcAllowed'))), mul(R('in.children'), P('fed.actcMaxPerChild')),
+    expr: round(min(atLeast0(sub(R('fed.ctcAfterPhaseout'), R('fed.ctcAllowed'))), mul(R('fed.ctcChildren'), P('fed.actcMaxPerChild')),
       atLeast0(mul(sub(R('fed.earnedIncome'), lit(2500)), rate(0.15))))) });
 
   q({ id: 'fed.eitcInvestmentIncome', label: 'EITC Investment Income', unit: 'usd', display: 'inline',
     expr: add(R('in.interest'), R('fed.interest1099'), R('fed.taxExemptInterest'), R('fed.dividends'), atLeast0(R('fed.capAllowed')), atLeast0(R('fed.rentalAllowed'))) });
-  q({ id: 'fed.eitcKids', label: 'EITC Qualifying Children', unit: 'count', display: 'inline', expr: min(num(3), R('in.children')) });
+  q({ id: 'fed.eitcKids', label: 'EITC Qualifying Children (max 3)', unit: 'count', display: 'inline', expr: min(num(3), R('fed.eitcChildren')) });
   q({ id: 'fed.eitcIncome', label: 'EITC Income (greater of earned income or AGI)', unit: 'usd', display: 'inline', expr: max(R('fed.earnedIncome'), R('fed.agi')) });
   // The EIC Table computes the credit at the midpoint of $50 income bands.
   const eicRow = (x: Expr): Expr => when(gt(x, lit(0)), add(mul(floor(div(x, lit(50))), lit(50)), lit(25)), lit(0));
@@ -589,6 +640,9 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   q({ id: 'fed.eitc', label: 'Earned Income Credit', unit: 'usd', form: 'Form 1040 Line 27', category: 'credits', optional: true,
     expr: when(and(not(statusIs('married_separate')), not(flag('fed.claimedAsDependent', 'someone can claim you as a dependent', 'no one can claim you as a dependent', 'check-claimed-as-dependent')),
       gt(R('fed.earnedIncome'), lit(0)), lte(R('fed.eitcInvestmentIncome'), P('fed.eitcInvCap')),
+      // Without a qualifying child, you (or your spouse on a joint return) must be 25–64.
+      or(gt(R('fed.eitcKids'), num(0)), not(hasAges), and(gte(R('fed.taxpayerAge'), num(25)), lte(R('fed.taxpayerAge'), num(64))),
+        and(spouseAgeKnown, gte(R('fed.spouseAge'), num(25)), lte(R('fed.spouseAge'), num(64)))),
       lt(R('fed.eitcIncome'), lookup('fed.eitcIncomeLimit', R('fed.eitcKids')))),
       round(atLeast0(min(R('fed.eitcPhaseIn'), sub(lookup('fed.eitcMax', R('fed.eitcKids')), R('fed.eitcReduction')))), 'dollar'),
       lit(0)) });
@@ -714,6 +768,11 @@ export function federalContext(state: TaxAppState): GraphContext {
       values: { stateWages: n(s.stateWages), withheld: n(s.stateTaxWithheld), localWithheld: n(s.localTaxWithheld) }
     })))
   };
+  collections.dep = (d0 => (d0.list || []).map(dp => ({
+    id: dp.id, name: dp.name,
+    values: { birthYear: n(dp.birthYear), isChild: dp.relationship === 'relative' ? 0 : 1, monthsLived: n(dp.monthsLived),
+      student: dp.student ? 1 : 0, disabled: dp.disabled ? 1 : 0, hasSsn: dp.hasSsn === false ? 0 : 1 }
+  })))(state.dependents || ({} as TaxAppState['dependents']));
   SOURCE_COLLECTIONS.forEach(c => {
     collections[c.id] = sources.filter(s => c.type.includes(s.type)).map(s => ({
       id: s.id,
@@ -750,7 +809,9 @@ export function federalContext(state: TaxAppState): GraphContext {
       'fed.hsaFamily': state.adjustments?.hsaCoverage === 'family',
       'fed.hsaCatchUp': Boolean(state.adjustments?.hsaCatchUp),
       'fed.iraCatchUp': Boolean(state.adjustments?.iraCatchUp),
-      'fed.livedApart': Boolean(state.livedApartFromSpouse) && state.filingStatus === 'married_separate'
+      'fed.livedApart': Boolean(state.livedApartFromSpouse) && state.filingStatus === 'married_separate',
+      'fed.taxpayerBlind': Boolean(state.taxpayer?.blind),
+      'fed.spouseBlind': Boolean(state.spouse?.blind)
     },
     collections,
     inputs: {
@@ -781,6 +842,8 @@ export function federalContext(state: TaxAppState): GraphContext {
       'in.qualifiedOvertime': n(a.qualifiedOvertime),
       'in.carLoanInterest': n(a.carLoanInterest),
       'in.seniors': int(d.seniorsCount),
+      'in.taxpayerBirthYear': int(state.taxpayer?.birthYear),
+      'in.spouseBirthYear': int(state.spouse?.birthYear),
       'in.priorYearTax': n(state.priorYearTax),
       'in.priorYearAgi': n(state.priorYearAgi),
       'in.medical': n(i.medicalExpenses),
@@ -824,14 +887,14 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
   { id: 'calc-itemized-deductions', stepLabel: 'Step 4a • Schedule A Itemized Deductions', title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',
     quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
   { id: 'calc-taxable-income', stepLabel: 'Step 4 • Deductions & Taxable Income', title: 'Deduction & Taxable Income',
-    quantities: [{ id: 'fed.stdDeduction', show: 'always' }, { id: 'fed.deduction', show: 'always' }, 'fed.qbiIncome', 'fed.qbiIncomeLimit', 'fed.qbi',
+    quantities: ['fed.taxpayerAge', 'fed.spouseAge', 'fed.age65BlindBoxes', { id: 'fed.stdDeduction', show: 'always' }, { id: 'fed.deduction', show: 'always' }, 'fed.qbiIncome', 'fed.qbiIncomeLimit', 'fed.qbi',
       'fed.tipsDeduction', 'fed.overtimeDeduction', 'fed.carLoanDeduction', 'fed.seniorDeduction', 'fed.sched1a',
       { id: 'fed.taxableIncome', show: 'always' }] },
   { id: 'calc-tax-before-credits', stepLabel: 'Step 5 • Tax Brackets', title: 'Federal Income Tax (Before Credits)',
     quantities: ['fed.netLtcg', 'fed.preferentialIncome', 'fed.ordinaryTaxable', 'fed.ordinaryTaxRow', 'fed.ordinaryTax', 'fed.standardPrefTax', 'fed.unrecap1250Tax',
       'fed.collectiblesTax', 'fed.regularTaxRow', 'fed.regularTax', { id: 'fed.tax', show: 'always' }] },
   { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
-    quantities: ['fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.careEarnedIncomeLimit', 'fed.childCareCredit', 'fed.aotcTotal',
+    quantities: ['fed.ctcChildren', 'fed.odcDependents', 'fed.eitcChildren', 'fed.careQualifyingPersons', 'fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.careEarnedIncomeLimit', 'fed.childCareCredit', 'fed.aotcTotal',
       'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
       'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
   { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',

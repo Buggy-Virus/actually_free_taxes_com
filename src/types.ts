@@ -147,7 +147,27 @@ export interface Adjustments {
   carLoanInterest?: number; // 2025-2028 Schedule 1-A: interest on a new US-assembled personal vehicle loan
 }
 
+export interface PersonInfo {
+  birthYear?: number;
+  blind?: boolean;
+}
+
+export interface DependentRecord {
+  id: number;
+  name: string;
+  birthYear: number;
+  /** 'child' = son/daughter/stepchild/foster child/sibling (or their descendant); 'relative' = other qualifying relative */
+  relationship: 'child' | 'relative';
+  monthsLived: number;
+  student?: boolean;
+  disabled?: boolean;
+  /** Has an SSN valid for employment (CTC and EITC require one). */
+  hasSsn?: boolean;
+}
+
 export interface Dependents {
+  /** Per-dependent records; when present they replace the count fields below. */
+  list?: DependentRecord[];
   seniorsCount?: number; // Taxpayer and/or spouse age 65+ (2025-2028 senior deduction)
   childrenCount: number; // Qualifying children under 17 ($2,000 CTC)
   otherDependentsCount?: number; // Qualifying older children/relatives ($500 ODC)
@@ -193,6 +213,8 @@ export interface TaxAppState {
   deductionMethod?: DeductionMethod;
   /** Taxpayer can be claimed as a dependent on someone else's return (limited standard deduction, no EITC). */
   claimedAsDependent?: boolean;
+  taxpayer?: PersonInfo;
+  spouse?: PersonInfo;
   /** Married filing separately and lived apart from spouse all year (SS benefits base amounts). */
   livedApartFromSpouse?: boolean;
   /** Prior-year total tax and AGI (Form 2210 safe harbor). */

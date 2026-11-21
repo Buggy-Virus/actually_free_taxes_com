@@ -152,7 +152,7 @@ function residentPanelKeys(code: string): string[] {
 function defineShared(g: FormulaGraph): void {
   g.param({ id: 'st.taxpayerCount', label: 'Taxpayers on Return', unit: 'count', domSources: ['select-filing-status'],
     resolve: c => (c.status === 'married_joint' ? 2 : 1) });
-  g.quantity({ id: 'ret.dependents', label: 'Dependents', unit: 'count', display: 'inline', expr: add(R('in.children'), R('in.otherDependents')) });
+  g.quantity({ id: 'ret.dependents', label: 'Dependents', unit: 'count', display: 'inline', expr: add(R('fed.ctcChildren'), R('fed.odcDependents')) });
   g.quantity({ id: 'ret.netLtcg', label: 'Net Long-Term Capital Gain (State)', unit: 'usd', category: 'capital',
     expr: atLeast0(add(R('fed.longTermGain'), min(lit(0), R('in.stGain')))) });
   g.quantity({ id: 'ret.interestDividends', label: 'Interest & Dividends', unit: 'usd', category: 'wages',
@@ -245,7 +245,7 @@ function panelItemExpr(key: string, code: string): Expr {
     case 'mo-529-deduction': return min(byMfj(16000, 8000), amt);
     case 'ne-529-deduction': return min(when(statusIs('married_separate'), lit(5000), lit(10000)), amt);
     case 'nj-529-deduction': return when(lte(agi, lit(200000)), min(lit(10000), amt), lit(0));
-    case 'nj-child-credit': return when(lte(agi, lit(80000)), min(mul(max(num(1), R('in.children')), lit(1000)), amt), lit(0));
+    case 'nj-child-credit': return when(lte(agi, lit(80000)), min(mul(max(num(1), R('fed.ctcChildren')), lit(1000)), amt), lit(0));
     case 'nj-medical-2pct': return atLeast0(round(sub(amt, mul(agi, rate(0.02)))));
     case 'ga-child-care-credit': return round(mul(amt, rate(0.3)));
     case 'ok-child-care-credit': return round(mul(amt, rate(0.2)));
@@ -330,7 +330,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
       q('ltcgExciseTax', { label: 'WA Capital Gains Excise Tax', unit: 'usd', form: 'WA Capital Gains Excise Tax Return', category: 'state', optional: true,
         expr: when(gt(R('ret.netLtcg'), lit(thr)), round(mul(sub(R('ret.netLtcg'), lit(thr)), rate(0.07))), lit(0)) });
       q('wftc', { label: 'Working Families Tax Credit', unit: 'usd', form: 'WA WFTC', category: 'state_credit', optional: true,
-        expr: when(gt(R('fed.eitc'), lit(0)), min(lit(1290), add(lit(325), mul(R('in.children'), lit(325)))), lit(0)) });
+        expr: when(gt(R('fed.eitc'), lit(0)), min(lit(1290), add(lit(325), mul(R('fed.ctcChildren'), lit(325)))), lit(0)) });
       q('totalTax', { label: 'WA Total Tax', unit: 'usd', category: 'state', expr: R(S('ltcgExciseTax')) });
       q('net', { label: 'WA Refund / (Owed)', unit: 'usd', category: 'state',
         expr: when(gt(R(S('ltcgExciseTax')), lit(0)), sub(R(S('withholding')), R(S('ltcgExciseTax'))), add(R(S('withholding')), R(S('wftc')))) });
@@ -425,7 +425,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   if (startsFromFti) baseStd = lit(0); // the federal deduction is already in federal taxable income
   else if (code === 'MD') baseStd = min(when(MFJ, lit(5450), lit(2700)), max(when(MFJ, lit(3650), lit(1800)), round(mul(R(S('agi')), rate(0.15)), 'dollar')));
   else if (code === 'LA' && year >= 2025) baseStd = when(MFJ, lit(25000), lit(12500));
-  else if (code === 'DE') baseStd = add(P(S('stdBase')), mul(min(num(2), R('in.age65Blind')), lit(2500)));
+  else if (code === 'DE') baseStd = add(P(S('stdBase')), mul(min(num(2), R('fed.age65BlindBoxes')), lit(2500)));
   else if (code === 'WI') baseStd = atLeast0(round(sub(P(S('stdBase')), mul(atLeast0(sub(R(S('agi')), when(MFJ, lit(26360), lit(18220)))), when(MFJ, rate(0.19778), rate(0.12)))), 'dollar'));
   q('baseStdDeduction', { label: `${code} Standard Deduction`, unit: 'usd', category: 'state', expr: baseStd });
 
@@ -464,7 +464,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   }
   if (code === 'NC') {
     q('childDeduction', { label: 'NC Child Deduction', unit: 'usd', category: 'state', optional: true,
-      expr: mul(R('in.children'), when(lte(R(S('agi')), when(MFJ, lit(40000), lit(20000))), lit(3000),
+      expr: mul(R('fed.ctcChildren'), when(lte(R(S('agi')), when(MFJ, lit(40000), lit(20000))), lit(3000),
         when(lte(R(S('agi')), when(MFJ, lit(100000), lit(50000))), lit(1500), lit(500)))) });
     exTerms.push(R(S('childDeduction')));
   }
@@ -543,7 +543,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
 
   const tp = P('st.taxpayerCount');
   const deps = R('ret.dependents');
-  const kids = R('in.children');
+  const kids = R('fed.ctcChildren');
   const adj = R(S('adjustedIncome'));
   const perPerson = (amount: number) => mul(add(tp, deps), lit(amount));
   let exCredit: Expr = lit(0);
@@ -554,7 +554,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
       exCredit = atLeast0(sub(add(mul(tp, lit(144)), mul(deps, lit(446))),
         when(gt(adj, when(MFJ, lit(474075), lit(237035))), mul(mul(ceil(div(sub(adj, when(MFJ, lit(474075), lit(237035))), lit(2500))), lit(6)), add(tp, deps)), lit(0))));
       break;
-    case 'AZ': exLabel = 'AZ Dependent Credit'; exCredit = add(mul(kids, lit(100)), mul(R('in.otherDependents'), lit(25))); break;
+    case 'AZ': exLabel = 'AZ Dependent Credit'; exCredit = add(mul(kids, lit(100)), mul(R('fed.odcDependents'), lit(25))); break;
     case 'AR': exCredit = perPerson(29); break;
     case 'DE': exCredit = perPerson(110); break;
     case 'ID': exCredit = add(perPerson(120), mul(kids, lit(205))); break;

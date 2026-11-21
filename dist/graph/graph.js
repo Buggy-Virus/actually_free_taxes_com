@@ -130,7 +130,7 @@ function condExprs(e) { return e.k === 'if' ? condOperands(e.cond) : []; }
 function condOperands(c) {
     if (c.k === 'cmp')
         return [c.a, c.b];
-    if (c.k === 'not')
+    if (c.k === 'not' || c.k === 'quiet')
         return condOperands(c.cond);
     if (c.k === 'and' || c.k === 'or')
         return c.conds.flatMap(condOperands);
@@ -320,8 +320,17 @@ export class Evaluation {
                 const p = this.evalCond(c.cond, scope);
                 return { cond: c, value: !p.value, operands: [], parts: [p] };
             }
+            case 'quiet': {
+                const p = this.evalCond(c.cond, scope);
+                return { cond: c, value: p.value, operands: [], parts: [p] };
+            }
             case 'status': return { cond: c, value: c.in.includes(this.ctx.status), operands: [], parts: [] };
             case 'flag': return { cond: c, value: Boolean(this.ctx.flags?.[c.id]), operands: [], parts: [] };
+            case 'itemFlag': {
+                if (!scope)
+                    throw new Error(`itemFlag(${c.field}) used outside sum_over`);
+                return { cond: c, value: this.fieldValue(scope, c.field) !== 0, operands: [], parts: [], scope };
+            }
             default: {
                 const parts = c.conds.map(x => this.evalCond(x, scope));
                 return { cond: c, value: c.k === 'and' ? parts.every(p => p.value) : parts.some(p => p.value), operands: [], parts };
@@ -544,6 +553,8 @@ export class Evaluation {
             }
             case 'status': return [text(`Filing Status ${c.value ? 'is' : 'is not'} ${cond.in.map(s => STATUS_LABEL[s]).join(' / ')}`)];
             case 'flag': return [text(c.value ? cond.label : cond.negLabel)];
+            case 'itemFlag': return [text(c.value ? cond.label : cond.negLabel)];
+            case 'quiet': return [];
             case 'not': return this.explainCond(c.parts[0], vars);
             default: {
                 // and→true / or→false: every part matters. and→false / or→true: only the deciding parts.
@@ -557,7 +568,7 @@ export class Evaluation {
         if (c.cond.k === 'flag')
             return !c.value;
         // Filing status is known context; the general formula already shows status conditions.
-        if (c.cond.k === 'status')
+        if (c.cond.k === 'status' || c.cond.k === 'quiet')
             return true;
         if (c.cond.k === 'not')
             return this.isQuiet(c.parts[0]);
@@ -570,6 +581,8 @@ export class Evaluation {
             case 'cmp': return [...this.renderRaw(c.a), text(CMP_SYMBOL[c.op]), ...this.renderRaw(c.b)];
             case 'status': return [text(`Filing Status is ${c.in.map(s => STATUS_LABEL[s]).join(' / ')}`)];
             case 'flag': return [text(c.label)];
+            case 'itemFlag': return [text(c.label)];
+            case 'quiet': return this.renderCondGeneral(c.cond);
             case 'not': return [text('not ('), ...this.renderCondGeneral(c.cond), text(')')];
             default: {
                 const joiner = c.k === 'and' ? ' and ' : ' or ';
@@ -829,6 +842,8 @@ export class Evaluation {
                 out.add('select-filing-status');
             if (c.cond.k === 'flag' && c.cond.domId && !this.isQuiet(c))
                 out.add(c.cond.domId);
+            if (c.cond.k === 'itemFlag' && c.scope)
+                out.add(this.graph.collections.get(c.scope.collection).fields[c.cond.field].domId(c.scope.item));
             c.operands.forEach(walk);
             c.parts.forEach(walkCond);
         };

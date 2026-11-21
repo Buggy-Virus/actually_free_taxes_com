@@ -224,6 +224,17 @@ export const PANEL_CATALOG: PanelCatalogEntry[] = [
 
   // ===================== CREDITS =====================
   {
+    key: 'cred-dependents-list',
+    section: 'credits',
+    title: 'Dependents (Details)',
+    officialTitle: 'Form 1040 • Dependents • Schedule 8812 / EIC / Form 2441',
+    shortExplanation: 'Add each dependent with birth year, relationship and months lived with you. The qualifying-child and qualifying-relative tests for the Child Tax Credit, EITC and child care credit are then applied automatically.',
+    ratingKey: 'cred-children',
+    size: 'lg',
+    defaultOpen: true,
+    inputIds: []
+  },
+  {
     key: 'cred-children',
     section: 'credits',
     title: 'Qualifying Children (<17)',

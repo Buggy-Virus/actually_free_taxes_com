@@ -57,8 +57,12 @@ function randomReturn(): TaxAppState {
       charity: maybe(0.4, () => money(10000)), gamblingLosses: maybe(0.05, () => money(5000)), investmentInterest: maybe(0.05, () => money(5000)), casualtyLoss: maybe(0.05, () => money(5000)) },
     dependents: { childrenCount: Math.floor(rnd() * 4), otherDependentsCount: Math.floor(rnd() * 2), age65OrBlindCount: Math.floor(rnd() * 3), seniorsCount: Math.floor(rnd() * 3),
       childCareExpenses: maybe(0.3, () => money(8000)), educationExpensesAotc: maybe(0.2, () => money(5000)), educationExpensesLlc: maybe(0.1, () => money(12000)),
-      estimatedTaxPayments: maybe(0.2, () => money(10000)), premiumTaxCredit: maybe(0.05, () => money(2000)), householdEmploymentTax: maybe(0.05, () => money(2000)) },
+      estimatedTaxPayments: maybe(0.2, () => money(10000)), premiumTaxCredit: maybe(0.05, () => money(2000)), householdEmploymentTax: maybe(0.05, () => money(2000)),
+      list: rnd() < 0.5 ? Array.from({ length: Math.floor(rnd() * 4) }, (_, i) => ({ id: i + 1, name: `D${i}`, birthYear: 1950 + Math.floor(rnd() * 75),
+        relationship: rnd() < 0.8 ? 'child' as const : 'relative' as const, monthsLived: Math.floor(rnd() * 13), student: rnd() < 0.3, disabled: rnd() < 0.05, hasSsn: rnd() < 0.95 })) : undefined },
     statePanels: [],
+    taxpayer: rnd() < 0.5 ? { birthYear: 1940 + Math.floor(rnd() * 70), blind: rnd() < 0.05 } : undefined,
+    spouse: rnd() < 0.5 ? { birthYear: 1940 + Math.floor(rnd() * 70), blind: rnd() < 0.05 } : undefined,
     showAllArrows: true
   } as TaxAppState;
 }

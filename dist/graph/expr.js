@@ -41,3 +41,5 @@ export const or = (...conds) => ({ k: 'or', conds });
 export const not = (cond) => ({ k: 'not', cond });
 export const statusIs = (...statuses) => ({ k: 'status', in: statuses });
 export const flag = (id, label, negLabel, domId) => ({ k: 'flag', id, label, negLabel, domId });
+export const quietly = (cond) => ({ k: 'quiet', cond });
+export const itemFlag = (field, label, negLabel) => ({ k: 'itemFlag', field, label, negLabel });

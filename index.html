@@ -338,6 +338,27 @@
             <span class="more-info-icon">ⓘ</span>
           </button>
         </div>
+
+        <!-- People Panel: taxpayer & spouse ages and blindness -->
+        <div class="tax-panel panel-size-sm input-panel" id="panel-people">
+          <div class="panel-top-row">
+            <h3 class="panel-title">You &amp; Your Spouse</h3>
+          </div>
+          <div class="panel-official-title">Form 1040 • Age 65+ / Blind • Ages for credits</div>
+          <div class="panel-inputs panel-multi-inputs">
+            <div>
+              <label for="input-taxpayer-birth-year" class="panel-input-label">Your Birth Year</label>
+              <input type="number" step="1" min="1900" max="2030" class="w2-input" style="padding-left:0.65rem;" id="input-taxpayer-birth-year" placeholder="e.g. 1985">
+            </div>
+            <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-taxpayer-blind"> You are blind</label>
+            <div>
+              <label for="input-spouse-birth-year" class="panel-input-label">Spouse Birth Year (joint returns)</label>
+              <input type="number" step="1" min="1900" max="2030" class="w2-input" style="padding-left:0.65rem;" id="input-spouse-birth-year" placeholder="e.g. 1987">
+            </div>
+            <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-spouse-blind"> Spouse is blind</label>
+          </div>
+          <div class="panel-short-desc">Ages determine the 65+ standard deduction, senior deduction, EITC age test, and HSA/IRA catch-up limits. Leave blank to use the count fields instead.</div>
+        </div>
       </div>
     </section>
 

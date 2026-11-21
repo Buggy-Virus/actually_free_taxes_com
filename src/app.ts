@@ -25,7 +25,7 @@ import {
   PanelSectionCategory,
   StatePanelItem,
   AutoPanelItem
-} from './types.js';
+, DependentRecord } from './types.js';
 import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlocks, buildAutoPanels, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
 import { GraphBlock } from './graph/graph.js';
@@ -1041,6 +1041,13 @@ class TaxApp {
       },
       dependents: {
         ...numericFields(parsed.dependents),
+        list: Array.isArray(parsed.dependents?.list)
+          ? parsed.dependents.list.map((d: any, i: number) => ({
+              id: typeof d?.id === 'number' ? d.id : i + 1, name: String(d?.name ?? `Dependent ${i + 1}`), birthYear: Number(d?.birthYear) || 0,
+              relationship: d?.relationship === 'relative' ? 'relative' : 'child', monthsLived: d?.monthsLived === undefined ? 12 : Number(d.monthsLived) || 0,
+              student: Boolean(d?.student), disabled: Boolean(d?.disabled), hasSsn: d?.hasSsn !== false
+            }))
+          : [],
         childrenCount: Number(parsed.dependents?.childrenCount) || 0,
         otherDependentsCount: Number(parsed.dependents?.otherDependentsCount) || 0,
         age65OrBlindCount: Number(parsed.dependents?.age65OrBlindCount) || 0,
@@ -1061,6 +1068,8 @@ class TaxApp {
       },
       deductionMethod: parsed.deductionMethod === 'standard' || parsed.deductionMethod === 'itemized' ? parsed.deductionMethod : 'auto',
       claimedAsDependent: Boolean(parsed.claimedAsDependent),
+      taxpayer: { birthYear: Number(parsed.taxpayer?.birthYear) || undefined, blind: Boolean(parsed.taxpayer?.blind) },
+      spouse: { birthYear: Number(parsed.spouse?.birthYear) || undefined, blind: Boolean(parsed.spouse?.blind) },
       livedApartFromSpouse: Boolean(parsed.livedApartFromSpouse),
       priorYearTax: Number(parsed.priorYearTax) || 0,
       priorYearAgi: Number(parsed.priorYearAgi) || 0,
@@ -1557,6 +1566,23 @@ class TaxApp {
         this.recalculateAndRender();
       });
     }
+
+    const personInput = (id: string, who: 'taxpayer' | 'spouse', field: 'birthYear' | 'blind') => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (!el) return;
+      const person = () => (this.state[who] || (this.state[who] = {}));
+      if (field === 'blind') {
+        el.checked = Boolean(this.state[who]?.blind);
+        el.addEventListener('change', () => { person().blind = el.checked; this.recalculateAndRender(); });
+      } else {
+        el.value = this.state[who]?.birthYear ? String(this.state[who]!.birthYear) : '';
+        el.addEventListener('input', () => { person().birthYear = Number(el.value) || undefined; this.recalculateAndRender(); });
+      }
+    };
+    personInput('input-taxpayer-birth-year', 'taxpayer', 'birthYear');
+    personInput('check-taxpayer-blind', 'taxpayer', 'blind');
+    personInput('input-spouse-birth-year', 'spouse', 'birthYear');
+    personInput('check-spouse-blind', 'spouse', 'blind');
 
     const apartCheck = document.getElementById('check-lived-apart') as HTMLInputElement | null;
     if (apartCheck) {
@@ -4160,7 +4186,8 @@ class TaxApp {
       { cat: 'itemized', gridId: 'grid-federal-itemized' }
     ];
 
-    const openMap = this.uiPrefs.openPanels || { '1099-int': true };
+    const openMap = { ...(this.uiPrefs.openPanels || { '1099-int': true }) };
+    if ((this.state.dependents?.list || []).length > 0) openMap['cred-dependents-list'] = true;
 
     sections.forEach(({ cat, gridId }) => {
       // 1. Populate Add Panel Dropdown
@@ -4397,6 +4424,27 @@ class TaxApp {
           </select>
         </div>
       </div>`;
+    } else if (entry.key === 'cred-dependents-list') {
+      const deps = this.state.dependents?.list || [];
+      const row = (d: DependentRecord) => `
+        <div class="dependent-row" style="display:grid;grid-template-columns:1.4fr 0.8fr 1fr 0.7fr auto;gap:0.4rem;align-items:end;margin-bottom:0.5rem;">
+          <div><label class="panel-input-label">Name</label><input type="text" class="w2-input" style="padding-left:0.5rem;" data-dep-id="${d.id}" data-dep-field="name" value="${esc(d.name)}"></div>
+          <div><label class="panel-input-label">Birth Year</label><input type="number" step="1" class="w2-input" style="padding-left:0.5rem;" id="dep-${d.id}-birth-year" data-dep-id="${d.id}" data-dep-field="birthYear" value="${d.birthYear || ''}"></div>
+          <div><label class="panel-input-label">Relationship</label>
+            <select class="w2-input" data-dep-id="${d.id}" data-dep-field="relationship">
+              <option value="child" ${d.relationship !== 'relative' ? 'selected' : ''}>Child / sibling (or their descendant)</option>
+              <option value="relative" ${d.relationship === 'relative' ? 'selected' : ''}>Other relative / household member</option>
+            </select></div>
+          <div><label class="panel-input-label">Months lived with you</label><input type="number" step="1" min="0" max="12" class="w2-input" style="padding-left:0.5rem;" data-dep-id="${d.id}" data-dep-field="monthsLived" value="${d.monthsLived ?? 12}"></div>
+          <button type="button" class="btn btn-sm" data-remove-dep="${d.id}" title="Remove dependent">✕</button>
+          <div style="grid-column:1 / -1;display:flex;gap:0.9rem;flex-wrap:wrap;font-size:0.8rem;">
+            <label><input type="checkbox" data-dep-id="${d.id}" data-dep-field="student" ${d.student ? 'checked' : ''}> Full-time student</label>
+            <label><input type="checkbox" data-dep-id="${d.id}" data-dep-field="disabled" ${d.disabled ? 'checked' : ''}> Permanently disabled</label>
+            <label><input type="checkbox" data-dep-id="${d.id}" data-dep-field="hasSsn" ${d.hasSsn !== false ? 'checked' : ''}> Has SSN valid for work</label>
+          </div>
+        </div>`;
+      inputsHtml = `<div>${deps.map(row).join('')}
+        <button type="button" class="btn btn-primary btn-sm" data-add-dependent="1">+ Add Dependent</button></div>`;
     } else if (entry.key === 'cred-prior-year-safe-harbor') {
       inputsHtml = `<div class="panel-multi-inputs">
         ${numBox('input-prior-year-tax', 'Last Year\'s Total Tax (Form 1040 Line 24)')}
@@ -4532,6 +4580,38 @@ class TaxApp {
     bindNum('input-itemized-gambling-losses', v => getItemized().gamblingLosses = v);
     bindNum('input-itemized-investment-interest', v => getItemized().investmentInterest = v);
     bindNum('input-itemized-casualty', v => getItemized().casualtyLoss = v);
+
+    // Dependents list
+    document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-dep-id]').forEach(el => {
+      const id = parseInt(el.dataset.depId || '', 10);
+      const field = el.dataset.depField as keyof DependentRecord;
+      const dep = (this.state.dependents.list || []).find(d => d.id === id);
+      if (!dep || !field) return;
+      const handler = () => {
+        if (el instanceof HTMLInputElement && el.type === 'checkbox') (dep as any)[field] = el.checked;
+        else if (el instanceof HTMLInputElement && el.type === 'number') (dep as any)[field] = Number(el.value) || 0;
+        else (dep as any)[field] = el.value;
+        this.recalculateAndRender();
+      };
+      el.addEventListener(el instanceof HTMLSelectElement || (el as HTMLInputElement).type === 'checkbox' ? 'change' : 'input', handler);
+    });
+    document.querySelectorAll<HTMLElement>('[data-add-dependent]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const list = this.state.dependents.list || (this.state.dependents.list = []);
+        const nextId = list.reduce((m, d) => Math.max(m, d.id), 0) + 1;
+        list.push({ id: nextId, name: `Dependent ${nextId}`, birthYear: (this.state.year || 2024) - 8, relationship: 'child', monthsLived: 12, hasSsn: true });
+        this.renderFederalPanelSections();
+        this.recalculateAndRender();
+      });
+    });
+    document.querySelectorAll<HTMLElement>('[data-remove-dep]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = parseInt(btn.dataset.removeDep || '', 10);
+        this.state.dependents.list = (this.state.dependents.list || []).filter(d => d.id !== id);
+        this.renderFederalPanelSections();
+        this.recalculateAndRender();
+      });
+    });
 
     // Dynamic 1099 sources
     document.querySelectorAll<HTMLInputElement>('[data-src-id]').forEach(el => {

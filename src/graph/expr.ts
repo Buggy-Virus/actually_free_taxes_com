@@ -23,7 +23,11 @@ export type Cond =
   /** Filing status is one of the listed statuses. */
   | { k: 'status'; in: CoreStatus[] }
   /** A user choice that is not a number (e.g. "force itemized deductions"). */
-  | { k: 'flag'; id: string; label: string; negLabel: string; domId?: string };
+  | { k: 'flag'; id: string; label: string; negLabel: string; domId?: string }
+  /** A yes/no field of the current collection item (only inside sum_over), e.g. "is a full-time student". */
+  | { k: 'itemFlag'; field: string; label: string; negLabel: string }
+  /** Evaluates `cond` but is never explained in With Your Numbers (for internal switches, e.g. "records entered"). */
+  | { k: 'quiet'; cond: Cond };
 
 export type Expr =
   | { k: 'lit'; value: number; unit: Unit }
@@ -88,3 +92,5 @@ export const or = (...conds: Cond[]): Cond => ({ k: 'or', conds });
 export const not = (cond: Cond): Cond => ({ k: 'not', cond });
 export const statusIs = (...statuses: CoreStatus[]): Cond => ({ k: 'status', in: statuses });
 export const flag = (id: string, label: string, negLabel: string, domId?: string): Cond => ({ k: 'flag', id, label, negLabel, domId });
+export const quietly = (cond: Cond): Cond => ({ k: 'quiet', cond });
+export const itemFlag = (field: string, label: string, negLabel: string): Cond => ({ k: 'itemFlag', field, label, negLabel });

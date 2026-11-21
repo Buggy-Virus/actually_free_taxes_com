@@ -104,6 +104,62 @@ const CASES = [
         state: ret({ filingStatus: 'married_joint', w2s: [w2(90000), { ...w2(2000), owner: 'spouse' }], dependents: { childrenCount: 1, childCareExpenses: 3000 } }),
         expect: [['earned income limit', fed('fed.careEarnedIncomeLimit'), 2000], ['child care credit', fed('fed.childCareCredit'), 400]]
     },
+    // ---------------- People & dependents (records) ----------------
+    {
+        name: 'Dependent records — CTC under 17, ODC for an 18-year-old and a 20-year-old student, all three EITC children',
+        source: 'IRC §152(c), §24(c): CTC needs age < 17 at year end; qualifying child for EITC is < 19, or < 24 and a full-time student',
+        state: ret({ filingStatus: 'married_joint', w2s: [w2(100000)], dependents: { childrenCount: 0, list: [
+                    { id: 1, name: 'Ann', birthYear: 2016, relationship: 'child', monthsLived: 12, hasSsn: true },
+                    { id: 2, name: 'Ben', birthYear: 2006, relationship: 'child', monthsLived: 12, hasSsn: true },
+                    { id: 3, name: 'Cara', birthYear: 2004, relationship: 'child', monthsLived: 12, student: true, hasSsn: true }
+                ] } }),
+        expect: [['CTC children', fed('fed.ctcChildren'), 1], ['ODC dependents', fed('fed.odcDependents'), 2], ['EITC children', fed('fed.eitcChildren'), 3],
+            ['child credits', fed('fed.childCreditsAfterPhaseout'), 3000]]
+    },
+    {
+        name: 'Child care credit requires a qualifying person under 13',
+        source: 'Form 2441 instructions: qualifying person is under 13 (or disabled); a 14-year-old does not qualify',
+        state: ret({ filingStatus: 'head_of_household', w2s: [w2(40000)], dependents: { childrenCount: 0, childCareExpenses: 3000, list: [
+                    { id: 1, name: 'Teen', birthYear: 2010, relationship: 'child', monthsLived: 12, hasSsn: true }
+                ] } }),
+        expect: [['qualifying persons', fed('fed.careQualifyingPersons'), 0], ['child care credit', fed('fed.childCareCredit'), 0]]
+    },
+    {
+        name: 'EITC with no qualifying child — age 22 does not qualify',
+        source: 'IRC §32(c)(1)(A)(ii): taxpayer without a qualifying child must be at least 25 and under 65',
+        state: ret({ w2s: [w2(10000)], taxpayer: { birthYear: 2002 } }),
+        expect: [['EITC', fed('fed.eitc'), 0]]
+    },
+    {
+        name: 'EITC with no qualifying child — age 30 qualifies',
+        source: '2024 EIC Table, no children, row $10,000–$10,050: $632',
+        state: ret({ w2s: [w2(10000)], taxpayer: { birthYear: 1994 } }),
+        expect: [['EITC', fed('fed.eitc'), 632]]
+    },
+    {
+        name: 'Age 65+ from birth year',
+        source: 'Form 1040: born before January 2, 1960 → 65 at end of 2024; $14,600 + $1,950',
+        state: ret({ w2s: [w2(40000)], taxpayer: { birthYear: 1958 } }),
+        expect: [['65+/blind boxes', fed('fed.age65BlindBoxes'), 1], ['standard deduction', fed('fed.stdDeduction'), 16550]]
+    },
+    {
+        name: 'MFJ, both 65+ and spouse blind — three boxes',
+        source: 'Form 1040: $29,200 + 3 × $1,550 = $33,850',
+        state: ret({ filingStatus: 'married_joint', w2s: [w2(40000)], taxpayer: { birthYear: 1955 }, spouse: { birthYear: 1956, blind: true } }),
+        expect: [['65+/blind boxes', fed('fed.age65BlindBoxes'), 3], ['standard deduction', fed('fed.stdDeduction'), 33850]]
+    },
+    {
+        name: 'Senior deduction from birth year (2025)',
+        source: 'IRC §151(d)(5): $6,000 for a taxpayer 65+ with MAGI under $75,000',
+        state: ret({ year: 2025, w2s: [w2(50000)], taxpayer: { birthYear: 1955 } }),
+        expect: [['senior deduction', fed('fed.seniorDeduction'), 6000]]
+    },
+    {
+        name: 'HSA catch-up from birth year',
+        source: 'Form 8889: age 55+ at year end adds $1,000 → 2024 self-only $5,150',
+        state: ret({ w2s: [w2(80000)], taxpayer: { birthYear: 1965 }, adjustments: { studentLoan: 0, ira: 0, hsa: 5150 } }),
+        expect: [['HSA deduction', fed('fed.hsaDeduction'), 5150]]
+    },
     // ---------------- Federal: refundable credits ----------------
     {
         name: 'HOH, $20,000 wages, 1 child — EITC plateau + refundable ACTC',

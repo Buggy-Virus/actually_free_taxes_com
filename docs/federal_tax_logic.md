@@ -36,9 +36,9 @@ Every federal rule the app must support for a person to prepare and file a compl
 | :-- | :--: | :-- |
 | Five filing statuses incl. Qualifying Surviving Spouse | ✅ | QSS is mapped to MFJ brackets and std deduction |
 | Filing status eligibility tests (HOH: unmarried + qualifying person + >½ cost of home; QSS: spouse died in prior 2 years + dependent child; "considered unmarried") | ❌ | User picks a status with no validation |
-| Separate **taxpayer and spouse** records (age, blindness, SSN/ITIN, which W-2/1099 is whose) | ❌ | Needed for per-person rules: excess SS (§2), SE tax wage base, IRA limits, the senior deduction, HSA catch-up, EITC age test |
-| Dependent records (name, relationship, age, months lived with you, student/disabled, SSN vs ITIN) | ❌ | Today only `childrenCount` / `otherDependentsCount` |
-| Qualifying child tests (relationship, age < 19 / < 24 student / any age disabled, residency > ½ year, support, joint return) and tie-breaker rules | ❌ | Drives CTC (under 17), EITC (under 19/24), dependent care (under 13), HOH |
+| Separate **taxpayer and spouse** records (age, blindness, SSN/ITIN, which W-2/1099 is whose) | ⚠️ | ✅ birth year, blind, W-2 owner; ❌ SSN/ITIN, 1099 owner | Needed for per-person rules: excess SS (§2), SE tax wage base, IRA limits, the senior deduction, HSA catch-up, EITC age test |
+| Dependent records (name, relationship, age, months lived with you, student/disabled, SSN vs ITIN) | ✅ | Dependents panel (count fields remain as fallback) |
+| Qualifying child tests (relationship, age < 19 / < 24 student / any age disabled, residency > ½ year, support, joint return) and tie-breaker rules | ⚠️ | ✅ relationship, age, student, disabled, residency; ❌ support, joint-return, tie-breakers | Drives CTC (under 17), EITC (under 19/24), dependent care (under 13), HOH |
 | Qualifying relative tests (gross income < $5,050 for 2024, support > ½, member of household) | ❌ | Drives ODC and HOH |
 | Taxpayer can be claimed as a dependent → limited std deduction (greater of $1,300 or earned income + $450, 2024) and no EITC | ✅ | Checkbox + `fed.stdDeduction`; golden tests |
 | MFS: if one spouse itemizes, the other's std deduction is $0 | ❌ | |
