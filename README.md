@@ -37,6 +37,26 @@ ActuallyFreeTaxes is a web app designed to demystify taxes. Rather than hiding c
 
 ---
 
+## How the tax math works (formula graph)
+
+All federal and state tax math lives in one formula graph (`src/graph/`). Each tax quantity (AGI, taxable income, a credit, a state's taxable income) is declared once, as a formula over other quantities, user inputs and law constants. The same declaration drives:
+
+- **the calculation** (`graph.evaluate(...)`);
+- **the General Formula and With Your Numbers lines**, rendered from the evaluated tree, so what's shown is exactly the math that ran;
+- **the dependency arrows**, which come from the formula references and land on the line that uses each value;
+- **automatic panels** (credits and deductions applied without user input).
+
+| File | Contents |
+| :-- | :-- |
+| `src/graph/expr.ts` | Formula language (add, min, conditionals, per-document sums, bracket tables, …) |
+| `src/graph/graph.ts` | Evaluator, renderer, variable breakdowns, cards, arrows |
+| `src/graph/federal.ts` | Form 1040: every federal rule, plus card layout |
+| `src/graph/states.ts` | State & local returns: one template that every state fills |
+| `src/tax-constants.ts`, `src/state-rules.ts` | Law constants by year |
+| `docs/federal_tax_logic.md`, `docs/state_local_tax_logic.md` | Complete requirements list with implementation status |
+
+Tests (`npm test`): legacy scenarios, graph invariants (every state graph resolves; rendered math matches evaluated math), **golden returns** hand-computed from IRS/state worked examples, and a 300-return randomized fuzz test.
+
 ## Development & TypeScript Build
 
 This project is written in strict **TypeScript** (`src/`) and compiles to modern ES modules (`dist/`).
