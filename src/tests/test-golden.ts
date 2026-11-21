@@ -913,6 +913,31 @@ const CASES: Golden[] = [
     state: ret({ filingStatus: 'married_joint', w2s: [w2(10000)], adjustments: { studentLoan: 0, ira: 7000, hsa: 0, spouseIra: 7000 } }),
     expect: [['IRA deduction', fed('fed.iraDeduction'), 10000]]
   },
+  // ---------------- Federal: home sale (B28) ----------------
+  {
+    name: '§121: $300,000 home gain, single — $250,000 excluded, $50,000 long-term gain',
+    source: 'Pub. 523 worksheet 3: gain $300,000 − $250,000 exclusion = $50,000 taxable (Form 8949 code H)',
+    state: ret({ w2s: [w2(80000)], otherIncome: { interest: 0, sources: [], capitalGains: { shortTerm: 0, longTerm: 0, homeSaleGain: 300000, homeSaleQualifies: true } } }),
+    expect: [['exclusion', fed('fed.homeSaleExclusion'), 250000], ['net capital gain', fed('fed.capNet'), 50000]]
+  },
+  {
+    name: '§121: joint return where both spouses meet the use test excludes up to $500,000',
+    source: 'Pub. 523: MFJ, both lived there 2 of 5 years — $420,000 gain fully excluded',
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(80000)], otherIncome: { interest: 0, sources: [], capitalGains: { shortTerm: 0, longTerm: 0, homeSaleGain: 420000, homeSaleQualifies: true, homeSaleSpouseQualifies: true } } }),
+    expect: [['exclusion', fed('fed.homeSaleExclusion'), 420000], ['AGI', fed('fed.agi'), 80000]]
+  },
+  {
+    name: '§121: joint return, only one spouse meets the use test — $250,000 limit',
+    source: 'Pub. 523 "Married persons": if only one spouse meets the use test, the maximum exclusion is $250,000',
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(80000)], otherIncome: { interest: 0, sources: [], capitalGains: { shortTerm: 0, longTerm: 0, homeSaleGain: 420000, homeSaleQualifies: true } } }),
+    expect: [['exclusion', fed('fed.homeSaleExclusion'), 250000], ['taxable gain', fed('fed.homeSaleTaxableGain'), 170000]]
+  },
+  {
+    name: '§121: without the 2-of-5-year test, the whole gain is taxable',
+    source: 'IRC §121(a): ownership and use for 2 of the 5 years before the sale (partial exclusions not modeled)',
+    state: ret({ w2s: [w2(80000)], otherIncome: { interest: 0, sources: [], capitalGains: { shortTerm: 0, longTerm: 0, homeSaleGain: 60000 } } }),
+    expect: [['exclusion', fed('fed.homeSaleExclusion'), 0], ['net capital gain', fed('fed.capNet'), 60000]]
+  },
 ];
 
 let passed = 0, gaps = 0;

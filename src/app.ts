@@ -1023,6 +1023,9 @@ class TaxApp {
           shortTerm: Number(parsed.otherIncome?.capitalGains?.shortTerm) || 0,
           longTerm: Number(parsed.otherIncome?.capitalGains?.longTerm) || 0,
           collectiblesGain: Number(parsed.otherIncome?.capitalGains?.collectiblesGain) || 0,
+          homeSaleGain: Number(parsed.otherIncome?.capitalGains?.homeSaleGain) || 0,
+          homeSaleQualifies: Boolean(parsed.otherIncome?.capitalGains?.homeSaleQualifies),
+          homeSaleSpouseQualifies: Boolean(parsed.otherIncome?.capitalGains?.homeSaleSpouseQualifies),
           unrecaptured1250Gain: Number(parsed.otherIncome?.capitalGains?.unrecaptured1250Gain) || 0
         },
         scheduleCExpenses: Number(parsed.otherIncome?.scheduleCExpenses) || 0,
@@ -4174,6 +4177,7 @@ class TaxApp {
 
     ensure('adj-student-loan', (Number(this.state.adjustments?.studentLoan) || 0) !== 0);
     ensure('adj-ira', (Number(this.state.adjustments?.ira) || 0) !== 0);
+    ensure('home-sale-121', (Number(this.state.otherIncome?.capitalGains?.homeSaleGain) || 0) !== 0);
     ensure('adj-hsa', (Number(this.state.adjustments?.hsa) || 0) !== 0);
     ensure('adj-educator', (Number(this.state.adjustments?.educatorExpenses) || 0) !== 0);
     ensure('adj-se-retirement', (Number(this.state.adjustments?.seRetirement) || 0) !== 0);
@@ -4401,6 +4405,7 @@ class TaxApp {
         case 'input-capital-gains-st': return Number(this.state.otherIncome?.capitalGains?.shortTerm) || 0;
         case 'input-capital-gains-lt': return Number(this.state.otherIncome?.capitalGains?.longTerm) || 0;
         case 'input-cap-collectibles': return Number(this.state.otherIncome?.capitalGains?.collectiblesGain) || 0;
+        case 'input-home-sale-gain': return Number(this.state.otherIncome?.capitalGains?.homeSaleGain) || 0;
         case 'input-cap-1250': return Number(this.state.otherIncome?.capitalGains?.unrecaptured1250Gain) || 0;
         case 'input-sched-e-rents': return Number(this.state.otherIncome?.scheduleERental?.grossRents) || 0;
         case 'input-sched-e-expenses': return Number(this.state.otherIncome?.scheduleERental?.expenses) || 0;
@@ -4547,6 +4552,13 @@ class TaxApp {
         ${numBox('input-adj-educator', 'Unreimbursed Classroom Expenses')}
         <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-both-educators" ${this.state.adjustments?.bothEducators ? 'checked' : ''}> Both spouses are educators (joint return)</label>
       </div>`;
+    } else if (entry.key === 'home-sale-121') {
+      const cap = this.state.otherIncome?.capitalGains;
+      inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-home-sale-gain', 'Gain (sale price − selling costs − basis)')}
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-home-sale-qualifies" ${cap?.homeSaleQualifies ? 'checked' : ''}> Owned and lived in it 2 of the last 5 years (no exclusion in the past 2 years)</label>
+        ${this.state.filingStatus === 'married_joint' ? `<label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-home-sale-spouse" ${cap?.homeSaleSpouseQualifies ? 'checked' : ''}> Spouse also lived there 2 of 5 years</label>` : ''}
+      </div>`;
     } else if (entry.key === 'adj-ira') {
       inputsHtml = `<div class="panel-multi-inputs">
         ${numBox('input-adj-ira', 'Traditional IRA Contributions')}
@@ -4603,6 +4615,11 @@ class TaxApp {
     bindNum('input-capital-gains-st', v => getCap().shortTerm = v);
     bindNum('input-capital-gains-lt', v => getCap().longTerm = v);
     bindNum('input-cap-collectibles', v => getCap().collectiblesGain = v);
+    bindNum('input-home-sale-gain', v => getCap().homeSaleGain = v);
+    const homeQ = document.getElementById('check-home-sale-qualifies') as HTMLInputElement | null;
+    if (homeQ) homeQ.addEventListener('change', () => { getCap().homeSaleQualifies = homeQ.checked; this.recalculateAndRender(); });
+    const homeS = document.getElementById('check-home-sale-spouse') as HTMLInputElement | null;
+    if (homeS) homeS.addEventListener('change', () => { getCap().homeSaleSpouseQualifies = homeS.checked; this.recalculateAndRender(); });
     bindNum('input-cap-1250', v => getCap().unrecaptured1250Gain = v);
     bindNum('input-sched-e-rents', v => getSchedE().grossRents = v);
     bindNum('input-sched-e-expenses', v => getSchedE().expenses = v);
@@ -4771,6 +4788,7 @@ class TaxApp {
       case 'schedule-e-rental': this.state.otherIncome.scheduleERental = { grossRents: 0, expenses: 0, depreciation: 0, propertyState: '' }; break;
       case 'adj-student-loan': this.state.adjustments.studentLoan = 0; break;
       case 'adj-ira': this.state.adjustments.ira = 0; break;
+      case 'home-sale-121': if (this.state.otherIncome.capitalGains) Object.assign(this.state.otherIncome.capitalGains, { homeSaleGain: 0, homeSaleQualifies: false, homeSaleSpouseQualifies: false }); break;
       case 'adj-hsa': this.state.adjustments.hsa = 0; break;
       case 'adj-educator': this.state.adjustments.educatorExpenses = 0; break;
       case 'adj-se-retirement': this.state.adjustments.seRetirement = 0; break;

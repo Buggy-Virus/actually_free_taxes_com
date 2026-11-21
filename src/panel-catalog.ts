@@ -74,6 +74,16 @@ export const PANEL_CATALOG: PanelCatalogEntry[] = [
     inputIds: ['input-capital-gains-st', 'input-capital-gains-lt', 'input-cap-collectibles', 'input-cap-1250']
   },
   {
+    key: 'home-sale-121',
+    section: 'other-income',
+    title: 'Sale of Your Main Home',
+    officialTitle: 'IRC §121 • Form 8949 code H / Schedule D',
+    shortExplanation: 'Up to $250,000 of gain ($500,000 joint) is excluded if you owned and lived in the home 2 of the last 5 years. The rest is a long-term capital gain.',
+    ratingKey: 'capital-gains',
+    size: 'full',
+    inputIds: ['input-home-sale-gain']
+  },
+  {
     key: 'schedule-e-rental',
     section: 'other-income',
     title: 'Rental Real Estate',

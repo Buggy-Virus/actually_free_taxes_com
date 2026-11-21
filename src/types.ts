@@ -105,6 +105,12 @@ export interface CapitalGainsInput {
   longTerm: number;
   collectiblesGain?: number; // 28% rate gain (Schedule D Line 18)
   unrecaptured1250Gain?: number; // 25% unrecaptured Section 1250 depreciation gain (Schedule D Line 19)
+  /** Main home sale (§121): gain = amount realized − adjusted basis. */
+  homeSaleGain?: number;
+  /** Owned and lived in the home ≥ 2 of the 5 years before the sale, and no exclusion used in the prior 2 years. */
+  homeSaleQualifies?: boolean;
+  /** Joint return: the spouse also lived there 2 of 5 years and hasn't used an exclusion in 2 years ($500,000 limit). */
+  homeSaleSpouseQualifies?: boolean;
   carryoverLoss?: number; // Prior-year capital loss carryover (Schedule D Line 6/14)
 }
 

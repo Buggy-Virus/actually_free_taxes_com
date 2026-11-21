@@ -57,7 +57,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B25 | P2 | Kiddie tax (Form 8615) | — | Needs A1 + parent's rate | ⬜ |
 | B26 | P2 | Form 8606 nondeductible IRA basis / Roth conversions | — | Basis inputs | ⬜ |
 | B27 | P2 | QCDs, Simplified Method, RRB-1099, SS lump-sum election | — | | ⬜ |
-| B28 | P2 | §121 home sale exclusion | — | Gain, ownership/use years | ⬜ |
+| B28 | P2 | §121 home sale exclusion | — | Gain, ownership/use years | ✅ Home-sale panel: $250k / $500k (both spouses meet use test) exclusion, rest to long-term gain; partial exclusions (job move, health) and depreciation recapture not modeled |
 | B29 | P2 | Form 4797 business property sales, §1245/§1250 recapture | — | | ⬜ |
 | B30 | P2 | QBI above threshold (Form 8995-A: SSTB, W-2 wages / UBIA), REIT/PTP | Simple 20% | W-2 wages / UBIA per business | ⬜ |
 | B31 | P2 | Foreign tax credit limitation (Form 1116) and $300/$600 de minimis | Entered amount | Foreign income/tax inputs | ⬜ |

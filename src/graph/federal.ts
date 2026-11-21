@@ -113,6 +113,7 @@ function defineInputs(g: FormulaGraph): void {
   io('in.capCarryover', 'Prior-Year Capital Loss Carryover', 'section-federal-other-income', 'capital-gains', 'other-income', { optional: true });
   io('in.collectibles', '28% Collectibles Gain', 'input-cap-collectibles', 'capital-gains', 'other-income', { optional: true });
   io('in.unrecap1250', 'Unrecaptured §1250 Gain', 'input-cap-1250', 'capital-gains', 'other-income', { optional: true });
+  io('in.homeSaleGain', 'Gain on Sale of Main Home', 'input-home-sale-gain', 'home-sale-121', 'other-income', { optional: true });
   io('in.rents', 'Gross Rents', 'input-sched-e-rents', 'schedule-e-rental', 'other-income', { optional: true });
   io('in.rentalExpenses', 'Rental Expenses', 'input-sched-e-expenses', 'schedule-e-rental', 'other-income', { optional: true });
   io('in.rentalDepreciation', 'Rental Depreciation', 'input-sched-e-depreciation', 'schedule-e-rental', 'other-income', { optional: true });
@@ -312,7 +313,17 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   // ---------- Capital gains (Schedule D) ----------
   q({ id: 'fed.capGainDistributions', label: 'Capital Gain Distributions', unit: 'usd', form: 'Schedule D Line 13', category: 'capital', optional: true,
     expr: each('src.div', 'capGainDist') });
-  q({ id: 'fed.longTermGain', label: 'Net Long-Term Gain/Loss', unit: 'usd', display: 'inline', expr: add(R('in.ltGain'), R('fed.capGainDistributions')) });
+  // §121: exclude up to $250,000 ($500,000 joint when both spouses meet the use test) of gain on a main home owned and
+  // lived in 2 of the last 5 years. The rest is long-term gain (Form 8949 code H). Losses on a personal home are not deductible.
+  const homeQualifies = flag('fed.homeSaleQualifies', 'you owned and lived in the home 2 of the last 5 years', 'the 2-of-5-year test is not met', 'check-home-sale-qualifies');
+  const spouseQualifies = and(flag('fed.jointReturn', 'married filing jointly', 'not a joint return'),
+    flag('fed.homeSaleSpouseQualifies', 'your spouse also meets the use test', 'your spouse does not meet the use test', 'check-home-sale-spouse'));
+  q({ id: 'fed.homeSaleExclusion', label: 'Home Sale Exclusion', unit: 'usd', form: 'IRC §121 / Form 8949 code H', category: 'capital', optional: true,
+    presentIf: gt(R('in.homeSaleGain'), lit(0)),
+    expr: when(homeQualifies, min(R('in.homeSaleGain'), when(spouseQualifies, lit(500000), lit(250000))), lit(0)) });
+  q({ id: 'fed.homeSaleTaxableGain', label: 'Taxable Gain on Home Sale', unit: 'usd', category: 'capital', optional: true,
+    presentIf: gt(R('in.homeSaleGain'), lit(0)), expr: atLeast0(sub(R('in.homeSaleGain'), R('fed.homeSaleExclusion'))) });
+  q({ id: 'fed.longTermGain', label: 'Net Long-Term Gain/Loss', unit: 'usd', display: 'inline', expr: add(R('in.ltGain'), R('fed.capGainDistributions'), R('fed.homeSaleTaxableGain')) });
   q({ id: 'fed.capNet', label: 'Net Capital Gain/Loss', unit: 'usd', form: 'Schedule D Line 16', category: 'capital',
     expr: sub(add(R('in.stGain'), R('fed.longTermGain')), R('in.capCarryover')) });
   q({ id: 'fed.capAllowed', label: 'Capital Gain/Loss on Return', unit: 'usd', form: 'Form 1040 Line 7', category: 'capital', optional: true,
@@ -917,6 +928,8 @@ export function federalContext(state: TaxAppState): GraphContext {
     status: normalizeFilingStatus(state.filingStatus || 'single') as CoreStatus,
     flags: {
       'fed.forceItemized': state.deductionMethod === 'itemized',
+      'fed.homeSaleQualifies': Boolean(state.otherIncome?.capitalGains?.homeSaleQualifies),
+      'fed.homeSaleSpouseQualifies': Boolean(state.otherIncome?.capitalGains?.homeSaleSpouseQualifies),
       'fed.forceStandard': state.deductionMethod === 'standard',
       'fed.claimedAsDependent': Boolean(state.claimedAsDependent),
       // QSS uses joint brackets but is not a joint return (no spouse on the return).
@@ -940,6 +953,7 @@ export function federalContext(state: TaxAppState): GraphContext {
       'in.capCarryover': n(o.capitalGains?.carryoverLoss),
       'in.collectibles': n(o.capitalGains?.collectiblesGain),
       'in.unrecap1250': n(o.capitalGains?.unrecaptured1250Gain),
+      'in.homeSaleGain': n(o.capitalGains?.homeSaleGain),
       'in.rents': n(o.scheduleERental?.grossRents),
       'in.rentalExpenses': n(o.scheduleERental?.expenses),
       'in.rentalDepreciation': n(o.scheduleERental?.depreciation),
@@ -999,7 +1013,7 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
   { id: 'calc-total-w2-wages', stepLabel: 'Step 1 • Wage & Payroll Aggregation', title: 'W-2 Wages, Withholding & FICA',
     quantities: [{ id: 'fed.wages', show: 'always' }, 'fed.w2Withholding', 'fed.ssTaxWithheld', 'fed.medTaxWithheld', 'fed.ficaWithheld'] },
   { id: 'calc-capital-gains', stepLabel: 'Step 2a • Schedule D / Form 8949', title: 'Capital Gains & Loss Limitation',
-    quantities: ['fed.capGainDistributions', 'fed.capNet', 'fed.capAllowed', 'fed.capLossCarryforward'] },
+    quantities: ['fed.homeSaleExclusion', 'fed.homeSaleTaxableGain', 'fed.capGainDistributions', 'fed.capNet', 'fed.capAllowed', 'fed.capLossCarryforward'] },
   { id: 'calc-schedule-e', stepLabel: 'Step 2b • Schedule E / Form 8582', title: 'Rental Real Estate & K-1 Income',
     quantities: ['fed.rentalNet', 'fed.suspendedRentalLoss', 'fed.rentalAllowed', 'fed.k1Income'] },
   { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',
