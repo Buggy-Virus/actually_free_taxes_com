@@ -36,7 +36,7 @@ export type Expr =
   /** A field of the current collection item (only valid inside `sum_over`). */
   | { k: 'field'; name: string }
   /** Number of items in a collection. */
-  | { k: 'count'; collection: string }
+  | { k: 'count'; collection: string; where?: string }
   | { k: 'add'; terms: Expr[] }
   | { k: 'sub'; a: Expr; minus: Expr[] }
   | { k: 'neg'; e: Expr }
@@ -63,7 +63,7 @@ export const ref = (id: string): Expr => ({ k: 'ref', id });
 export const field = (name: string): Expr => ({ k: 'field', name });
 export const sumOver = (collection: string, body: Expr, where?: string): Expr => ({ k: 'sum_over', collection, body, where });
 export const each = (collection: string, fieldName: string, where?: string): Expr => sumOver(collection, field(fieldName), where);
-export const count = (collection: string): Expr => ({ k: 'count', collection });
+export const count = (collection: string, where?: string): Expr => ({ k: 'count', collection, where });
 export const add = (...terms: Expr[]): Expr => ({ k: 'add', terms });
 export const sub = (a: Expr, ...minus: Expr[]): Expr => ({ k: 'sub', a, minus });
 export const neg = (e: Expr): Expr => ({ k: 'neg', e });

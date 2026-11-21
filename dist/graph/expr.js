@@ -17,7 +17,7 @@ export const ref = (id) => ({ k: 'ref', id });
 export const field = (name) => ({ k: 'field', name });
 export const sumOver = (collection, body, where) => ({ k: 'sum_over', collection, body, where });
 export const each = (collection, fieldName, where) => sumOver(collection, field(fieldName), where);
-export const count = (collection) => ({ k: 'count', collection });
+export const count = (collection, where) => ({ k: 'count', collection, where });
 export const add = (...terms) => ({ k: 'add', terms });
 export const sub = (a, ...minus) => ({ k: 'sub', a, minus });
 export const neg = (e) => ({ k: 'neg', e });

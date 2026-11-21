@@ -162,9 +162,20 @@ const CASES: Golden[] = [
   {
     name: 'MFJ, each spouse $150,000 from one employer — no excess Social Security',
     source: 'Schedule 3 line 11 instructions: computed separately for each spouse; neither exceeded $10,453.20',
-    state: ret({ filingStatus: 'married_joint', w2s: [w2(150000, { employer: 'Spouse A Co' }), w2(150000, { employer: 'Spouse B Co' })] }),
-    expect: [['excess SS credit', fed('fed.excessSS'), 0]],
-    knownGap: 'Excess SS is computed on both spouses combined (engine claims $8,146.80)'
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(150000, { employer: 'Spouse A Co' }), { ...w2(150000, { employer: 'Spouse B Co' }), owner: 'spouse' }] }),
+    expect: [['excess SS credit', fed('fed.excessSS'), 0]]
+  },
+  {
+    name: 'MFJ, spouse had two employers — excess credit only for that spouse',
+    source: 'Schedule 3 line 11: spouse withheld $7,440 + $6,200 = $13,640 − $10,453.20 = $3,186.80; taxpayer one employer → $0',
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(150000), { ...w2(120000), owner: 'spouse' }, { ...w2(100000), owner: 'spouse' }] }),
+    expect: [['excess SS credit', fed('fed.excessSS'), 3186.8]]
+  },
+  {
+    name: 'MFJ, spouse W-2 $170,000 + taxpayer self-employed $50,000 — SE wage base is per person',
+    source: 'Schedule SE line 8a counts only the self-employed person\'s own SS wages: full 12.4% applies → SE tax $7,064.78',
+    state: ret({ filingStatus: 'married_joint', w2s: [{ ...w2(170000), owner: 'spouse' }], otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 50000)] } }),
+    expect: [['SE tax', fed('fed.seTax'), 7064.78]]
   },
   {
     name: 'Single, $250,000 wages — Additional Medicare Tax and its withholding credit',

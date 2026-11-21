@@ -213,8 +213,10 @@ export class Evaluation {
                 if (!scope)
                     throw new Error(`field(${e.name}) used outside sum_over`);
                 return { expr: e, value: this.fieldValue(scope, e.name), children: [], scope };
-            case 'count':
-                return { expr: e, value: this.items(e.collection).length, children: [] };
+            case 'count': {
+                const items = this.items(e.collection).filter((item, index) => !e.where || this.fieldValue({ collection: e.collection, item, index }, e.where));
+                return { expr: e, value: items.length, children: [] };
+            }
             case 'sum_over': {
                 const coll = this.graph.collections.get(e.collection);
                 const firstField = firstFieldName(e.body) || Object.keys(coll.fields)[0];
@@ -432,7 +434,7 @@ export class Evaluation {
             }
             case 'count': {
                 const c = this.graph.collections.get(e.collection);
-                const label = c.countLabel || `Number of ${e.collection}`;
+                const label = `${c.countLabel || `Number of ${e.collection}`}${e.where ? ` (${c.fields[e.where].label})` : ''}`;
                 return [plugged ? text(show(n.value)) : text(label)];
             }
             case 'sum_over': {

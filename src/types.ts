@@ -24,6 +24,8 @@ export interface StateTaxLine {
 
 export interface W2Data {
   id: number;
+  /** Whose W-2 this is on a joint return (per-person rules: excess SS credit, SE tax wage base). Default taxpayer. */
+  owner?: 'taxpayer' | 'spouse';
   employer: string;
   ein: string;
   employeeSsn?: string;

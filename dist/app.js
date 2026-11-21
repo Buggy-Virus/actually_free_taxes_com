@@ -1292,6 +1292,7 @@ class TaxApp {
             statusSelect.value = this.state.filingStatus;
             statusSelect.addEventListener('change', (e) => {
                 this.state.filingStatus = e.target.value;
+                this.renderW2Forms(); // the "Whose W-2?" selector only appears on joint returns
                 this.recalculateAndRender();
             });
         }
@@ -2910,7 +2911,15 @@ class TaxApp {
             </h3>
             ${renderW2HeaderCircles()}
           </div>
-          <div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            ${this.state.filingStatus === 'married_joint' ? `
+              <label class="w2-owner-label" style="font-size: 0.85rem; font-weight: 700; color: #334155;">Whose W-2?
+                <select class="w2-owner-select" id="w2-${w2.id}-owner" data-w2-owner="${w2.id}" style="margin-left: 0.25rem;">
+                  <option value="taxpayer" ${w2.owner !== 'spouse' ? 'selected' : ''}>Taxpayer</option>
+                  <option value="spouse" ${w2.owner === 'spouse' ? 'selected' : ''}>Spouse</option>
+                </select>
+              </label>
+            ` : ''}
             ${this.state.w2s.length > 1 ? `
               <button type="button" class="btn btn-sm" style="color: #dc2626; border-color: #fecaca; background: #fef2f2; font-weight: 700;" data-remove-w2="${w2.id}">
                 ✕ Remove Employer
@@ -3143,6 +3152,13 @@ class TaxApp {
                     if (this.arrowEngine?.getSelectedNode() === `w2-fed-${w2.id}`) {
                         fedCard.classList.add('panel-selected');
                     }
+                });
+            }
+            const ownerSel = document.querySelector(`[data-w2-owner="${w2.id}"]`);
+            if (ownerSel) {
+                ownerSel.addEventListener('change', () => {
+                    w2.owner = ownerSel.value === 'spouse' ? 'spouse' : 'taxpayer';
+                    this.recalculateAndRender();
                 });
             }
             const bindTextProp = (field) => {

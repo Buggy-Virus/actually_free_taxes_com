@@ -42,7 +42,9 @@ function defineInputs(g) {
             box3: w2Field('box3', 'Box 3 Social Security Wages'),
             box4: w2Field('box4', 'Box 4 Social Security Tax'),
             box5: w2Field('box5', 'Box 5 Medicare Wages'),
-            box6: w2Field('box6', 'Box 6 Medicare Tax')
+            box6: w2Field('box6', 'Box 6 Medicare Tax'),
+            isTaxpayer: { label: "Taxpayer's W-2", unit: 'count', domId: (it) => `w2-${it.id}-owner` },
+            isSpouse: { label: "Spouse's W-2", unit: 'count', domId: (it) => `w2-${it.id}-owner` }
         }
     });
     const stateLineDom = (suffix) => (it) => `w2-${Math.floor(it.id / 1000)}-state-${it.id % 1000}-${suffix}`;
@@ -219,8 +221,10 @@ function defineQuantities(g, year) {
     // ---------- Self-employment tax (Schedule SE) ----------
     q({ id: 'fed.seEarnings', label: 'Net SE Earnings', unit: 'usd', form: 'Schedule SE Line 4a', category: 'tax', optional: true,
         expr: when(gte(R('fed.businessProfit'), lit(400)), mul(R('fed.businessProfit'), rate(0.9235)), lit(0)) });
+    // Schedule SE line 8: only the self-employed person's own W-2 Social Security wages use up the wage base.
+    q({ id: 'fed.taxpayerSsWages', label: "Taxpayer's Social Security Wages", unit: 'usd', display: 'inline', expr: each('w2', 'box3', 'isTaxpayer') });
     q({ id: 'fed.seSsRoom', label: 'Remaining Social Security Wage Base', unit: 'usd', display: 'inline',
-        expr: atLeast0(sub(P('fed.ssWageBase'), R('fed.ssWages'))) });
+        expr: atLeast0(sub(P('fed.ssWageBase'), R('fed.taxpayerSsWages'))) });
     q({ id: 'fed.seSsTax', label: 'SE Social Security Tax', unit: 'usd', category: 'tax',
         expr: round(mul(min(R('fed.seEarnings'), R('fed.seSsRoom')), rate(0.124))) });
     q({ id: 'fed.seMedTax', label: 'SE Medicare Tax', unit: 'usd', category: 'tax', expr: round(mul(R('fed.seEarnings'), rate(0.029))) });
@@ -407,8 +411,15 @@ function defineQuantities(g, year) {
         expr: round(add(R('fed.actc'), R('fed.eitc'), R('fed.aotcRefundable'), R('in.ptc'))) });
     // ---------- Other taxes (Schedule 2) & excess Social Security ----------
     q({ id: 'fed.ssMaxTax', label: 'Max Social Security Tax per Year', unit: 'usd', display: 'inline', expr: round(mul(P('fed.ssWageBase'), P('fed.ssRate'))) });
+    // Schedule 3 line 11 is figured separately for each spouse, and only when that person had 2+ employers.
+    ['Taxpayer', 'Spouse'].forEach(who => {
+        const w = `is${who}`;
+        q({ id: `fed.ssWithheld${who}`, label: `${who} Social Security Tax Withheld`, unit: 'usd', display: 'inline', expr: each('w2', 'box4', w) });
+        q({ id: `fed.excessSS${who}`, label: `${who} Excess Social Security Tax`, unit: 'usd', category: 'withholding', optional: true,
+            expr: when(and(gt(count('w2', w), num(1)), gt(R(`fed.ssWithheld${who}`), R('fed.ssMaxTax'))), round(sub(R(`fed.ssWithheld${who}`), R('fed.ssMaxTax'))), lit(0)) });
+    });
     q({ id: 'fed.excessSS', label: 'Excess Social Security Tax Credit', unit: 'usd', form: 'Schedule 3 Line 11', category: 'withholding', optional: true,
-        expr: when(and(gt(count('w2'), num(1)), gt(R('fed.ssTaxWithheld'), R('fed.ssMaxTax'))), round(sub(R('fed.ssTaxWithheld'), R('fed.ssMaxTax'))), lit(0)) });
+        expr: add(R('fed.excessSSTaxpayer'), R('fed.excessSSSpouse')) });
     q({ id: 'fed.medicareAndSeWages', label: 'Medicare Wages + SE Earnings', unit: 'usd', display: 'inline', expr: add(R('fed.medWages'), R('fed.seEarnings')) });
     q({ id: 'fed.excessMedicareWages', label: 'Wages Over Additional Medicare Threshold', unit: 'usd', category: 'medicare',
         expr: atLeast0(sub(R('fed.medicareAndSeWages'), P('fed.addlMedThreshold'))) });
@@ -475,7 +486,12 @@ export function federalContext(state) {
     const sources = state.otherIncome?.sources || [];
     const n = (v) => Number(v) || 0;
     const collections = {
-        w2: w2s.map(w => ({ id: w.id, name: w.employer, values: { box1: n(w.box1), box2: n(w.box2), box3: n(w.box3), box4: n(w.box4), box5: n(w.box5), box6: n(w.box6) } })),
+        w2: w2s.map(w => {
+            // Ownership only matters on a joint return; otherwise every W-2 is the taxpayer's.
+            const spouse = w.owner === 'spouse' && normalizeFilingStatus(state.filingStatus || 'single') === 'married_joint' && state.filingStatus !== 'qualifying_surviving_spouse';
+            return { id: w.id, name: w.employer, values: { box1: n(w.box1), box2: n(w.box2), box3: n(w.box3), box4: n(w.box4), box5: n(w.box5), box6: n(w.box6),
+                    isTaxpayer: spouse ? 0 : 1, isSpouse: spouse ? 1 : 0 } };
+        }),
         w2State: w2s.flatMap(w => (w.states || []).map(s => ({
             id: w.id * 1000 + s.id,
             name: (s.state || '').toUpperCase(),
