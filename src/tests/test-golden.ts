@@ -218,6 +218,50 @@ const CASES: Golden[] = [
     expect: [['SALT deduction', fed('fed.salt'), 10000]]
   },
 
+  // ---------------- Federal: Schedule 1-A (P.L. 119-21, 2025–2028) ----------------
+  {
+    name: 'Single 2025, $60,000 wages incl. $10,000 qualified tips',
+    source: 'IRC §224 (P.L. 119-21): tips deduction up to $25,000, MAGI under $150,000 → taxable $60,000 − $15,750 − $10,000 = $34,250',
+    state: ret({ year: 2025, w2s: [w2(60000)], adjustments: { studentLoan: 0, ira: 0, hsa: 0, qualifiedTips: 10000 } }),
+    expect: [['tips deduction', fed('fed.tipsDeduction'), 10000], ['taxable income', fed('fed.taxableIncome'), 34250]]
+  },
+  {
+    name: 'Single 2025, MAGI $170,000 — tips deduction phase-out',
+    source: 'IRC §224(b)(2): $25,000 − 10% × ($170,000 − $150,000) = $23,000',
+    state: ret({ year: 2025, w2s: [w2(170000)], adjustments: { studentLoan: 0, ira: 0, hsa: 0, qualifiedTips: 30000 } }),
+    expect: [['tips deduction', fed('fed.tipsDeduction'), 23000]]
+  },
+  {
+    name: 'MFJ 2025, $30,000 overtime premium — $25,000 joint cap',
+    source: 'IRC §225 (P.L. 119-21): overtime deduction up to $25,000 on a joint return (MAGI under $300,000)',
+    state: ret({ year: 2025, filingStatus: 'married_joint', w2s: [w2(120000)], adjustments: { studentLoan: 0, ira: 0, hsa: 0, qualifiedOvertime: 30000 } }),
+    expect: [['overtime deduction', fed('fed.overtimeDeduction'), 25000]]
+  },
+  {
+    name: 'Single 2025, MAGI $110,000 — car loan interest phase-out',
+    source: 'IRC §163(h)(4) (P.L. 119-21): $3,000 − $200 per $1,000 over $100,000 = $1,000',
+    state: ret({ year: 2025, w2s: [w2(110000)], adjustments: { studentLoan: 0, ira: 0, hsa: 0, carLoanInterest: 3000 } }),
+    expect: [['car loan interest deduction', fed('fed.carLoanDeduction'), 1000]]
+  },
+  {
+    name: 'MFJ 2025, both 65+, MAGI $160,000 — senior deduction',
+    source: 'IRC §151(d)(5) (P.L. 119-21): 2 × ($6,000 − 6% × ($160,000 − $150,000)) = $10,800',
+    state: ret({ year: 2025, filingStatus: 'married_joint', w2s: [w2(160000)], dependents: { childrenCount: 0, seniorsCount: 2 } }),
+    expect: [['senior deduction', fed('fed.seniorDeduction'), 10800]]
+  },
+  {
+    name: 'Single 2024 — Schedule 1-A deductions do not exist before 2025',
+    source: 'P.L. 119-21 deductions apply to tax years 2025–2028',
+    state: ret({ w2s: [w2(60000)], adjustments: { studentLoan: 0, ira: 0, hsa: 0, qualifiedTips: 10000 }, dependents: { childrenCount: 0, seniorsCount: 1 } }),
+    expect: [['Schedule 1-A total', fed('fed.sched1a'), 0], ['taxable income', fed('fed.taxableIncome'), 45400]]
+  },
+  {
+    name: 'Single, $60,000 wages, Schedule C loss of $5,000',
+    source: 'Schedule 1 line 3: a business loss offsets other income; no SE tax on a loss',
+    state: ret({ w2s: [w2(60000)], otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 10000)], scheduleCExpenses: 15000 } }),
+    expect: [['business profit (loss)', fed('fed.businessProfit'), -5000], ['AGI', fed('fed.agi'), 55000], ['SE tax', fed('fed.seTax'), 0]]
+  },
+
   // ---------------- Federal: adjustment limits ----------------
   {
     name: 'Student loan interest phaseout, single MAGI $87,500',

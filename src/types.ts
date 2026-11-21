@@ -135,9 +135,13 @@ export interface Adjustments {
   militaryMoving?: number; // Form 3903 / Schedule 1 Line 14
   earlyWithdrawalPenalty?: number; // Schedule 1 Line 18 (1099-INT Box 2)
   juryDutyPay?: number; // Schedule 1 Line 24a (Jury duty pay given to employer)
+  qualifiedTips?: number; // 2025-2028 Schedule 1-A: qualified tips (P.L. 119-21)
+  qualifiedOvertime?: number; // 2025-2028 Schedule 1-A: qualified overtime premium pay
+  carLoanInterest?: number; // 2025-2028 Schedule 1-A: interest on a new US-assembled personal vehicle loan
 }
 
 export interface Dependents {
+  seniorsCount?: number; // Taxpayer and/or spouse age 65+ (2025-2028 senior deduction)
   childrenCount: number; // Qualifying children under 17 ($2,000 CTC)
   otherDependentsCount?: number; // Qualifying older children/relatives ($500 ODC)
   age65OrBlindCount?: number; // Number of Age 65+ or Blind boxes checked on Form 1040 (0 to 4)

@@ -458,6 +458,46 @@ export const PANEL_CATALOG: PanelCatalogEntry[] = [
     inputIds: ['input-adj-early-withdrawal']
   },
   {
+    key: 'sched1a-tips',
+    section: 'adjustments',
+    title: 'No Tax on Tips (2025–2028)',
+    officialTitle: 'Schedule 1-A • Qualified Tips Deduction',
+    shortExplanation: 'Up to $25,000 of qualified tips in a listed tipped occupation; phases out above $150,000 MAGI ($300,000 joint). Married couples must file jointly.',
+    ratingKey: 'adj-educator',
+    size: 'sm',
+    inputIds: ['input-sched1a-tips']
+  },
+  {
+    key: 'sched1a-overtime',
+    section: 'adjustments',
+    title: 'No Tax on Overtime (2025–2028)',
+    officialTitle: 'Schedule 1-A • Qualified Overtime Deduction',
+    shortExplanation: 'The premium ("half") portion of FLSA overtime pay, up to $12,500 ($25,000 joint); phases out above $150,000 MAGI ($300,000 joint).',
+    ratingKey: 'adj-educator',
+    size: 'sm',
+    inputIds: ['input-sched1a-overtime']
+  },
+  {
+    key: 'sched1a-car-loan',
+    section: 'adjustments',
+    title: 'Car Loan Interest (2025–2028)',
+    officialTitle: 'Schedule 1-A • Qualified Passenger Vehicle Loan Interest',
+    shortExplanation: 'Interest on a loan taken after 2024 for a new personal vehicle assembled in the US, up to $10,000; phases out above $100,000 MAGI ($200,000 joint).',
+    ratingKey: 'adj-educator',
+    size: 'sm',
+    inputIds: ['input-sched1a-car-loan']
+  },
+  {
+    key: 'sched1a-senior',
+    section: 'adjustments',
+    title: 'Senior Deduction (2025–2028)',
+    officialTitle: 'Schedule 1-A • Enhanced Deduction for Seniors',
+    shortExplanation: '$6,000 for each taxpayer or spouse age 65 or older, reduced by 6% of MAGI over $75,000 ($150,000 joint). Available whether or not you itemize.',
+    ratingKey: 'adj-educator',
+    size: 'sm',
+    inputIds: ['input-sched1a-seniors']
+  },
+  {
     key: 'adj-jury-duty',
     section: 'adjustments',
     title: 'Jury Duty Pay Remitted',

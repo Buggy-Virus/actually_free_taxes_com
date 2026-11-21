@@ -116,6 +116,10 @@ function defineInputs(g: FormulaGraph): void {
   io('in.militaryMoving', 'Military Moving Expenses', 'input-adj-military-moving', 'adj-military-moving', 'adjustments', { optional: true });
   io('in.earlyWithdrawal', 'Early Withdrawal Penalty', 'input-adj-early-withdrawal', 'adj-early-withdrawal-penalty', 'adjustments', { optional: true });
   io('in.juryDuty', 'Jury Duty Pay Given to Employer', 'input-adj-jury-duty', 'adj-jury-duty', 'adjustments', { optional: true });
+  io('in.qualifiedTips', 'Qualified Tips', 'input-sched1a-tips', 'sched1a-tips', 'adjustments', { optional: true });
+  io('in.qualifiedOvertime', 'Qualified Overtime Premium', 'input-sched1a-overtime', 'sched1a-overtime', 'adjustments', { optional: true });
+  io('in.carLoanInterest', 'Car Loan Interest Paid', 'input-sched1a-car-loan', 'sched1a-car-loan', 'adjustments', { optional: true });
+  io('in.seniors', 'Taxpayer/Spouse Age 65+', 'input-sched1a-seniors', 'sched1a-senior', 'adjustments', { unit: 'count', optional: true, max: 2 });
 
   // Itemized deductions
   io('in.medical', 'Medical Expenses', 'input-itemized-medical', 'itemized-medical', 'itemized', { optional: true });
@@ -169,6 +173,10 @@ function defineParams(g: FormulaGraph): void {
     c => (c.status === 'married_joint' ? (c.year >= 2025 ? 170000 : 165000) : (c.year >= 2025 ? 85000 : 80000)), 'Pub. 970 ch. 4', YEAR_STATUS);
   p('fed.slPhaseRange', 'Student Loan Interest Phase-Out Range', 'usd', c => (c.status === 'married_joint' ? 30000 : 15000), 'Pub. 970 ch. 4', ['select-filing-status']);
   p('fed.medicareRate', 'Medicare Employee Rate', 'rate', c => rules(c.year).medicareRate, 'IRC §3101(b)(1)', []);
+  p('fed.tipsOvertimePhaseStart', 'Tips/Overtime Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? 300000 : 150000), 'IRC §224, §225', ['select-filing-status']);
+  p('fed.overtimeCap', 'Overtime Deduction Cap', 'usd', c => (c.status === 'married_joint' ? 25000 : 12500), 'IRC §225', ['select-filing-status']);
+  p('fed.carLoanPhaseStart', 'Car Loan Interest Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? 200000 : 100000), 'IRC §163(h)(4)', ['select-filing-status']);
+  p('fed.seniorPhaseStart', 'Senior Deduction Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? 150000 : 75000), 'IRC §151(d)(5)', ['select-filing-status']);
   p('fed.feieLimit', 'Foreign Earned Income Exclusion Limit', 'usd', c => (c.year === 2025 ? 130000 : 126500), 'Form 2555', ['select-tax-year']);
   p('fed.palAllowance', 'Rental Loss Allowance', 'usd', c => (c.status === 'married_separate' ? 12500 : 25000), 'Form 8582', ['select-filing-status']);
   p('fed.palPhaseStart', 'Rental Allowance Phaseout Start', 'usd', c => (c.status === 'married_separate' ? 50000 : 100000), 'Form 8582', ['select-filing-status']);
@@ -227,8 +235,9 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   // ---------- Business income (Schedule C) ----------
   q({ id: 'fed.businessGross', label: 'Gross Business Receipts', unit: 'usd', display: 'inline',
     expr: add(each('src.nec', 'amount'), each('src.k', 'amount'), each('src.f', 'amount')) });
-  q({ id: 'fed.businessProfit', label: 'Net Business Profit', unit: 'usd', form: 'Schedule C Line 31', category: 'wages', optional: true,
-    expr: atLeast0(sub(R('fed.businessGross'), R('in.schedCExpenses'))) });
+  // A Schedule C loss offsets other income (Schedule 1 line 3); SE tax and QBI use only a profit.
+  q({ id: 'fed.businessProfit', label: 'Net Business Profit (Loss)', unit: 'usd', form: 'Schedule C Line 31', category: 'wages', optional: true,
+    expr: sub(R('fed.businessGross'), R('in.schedCExpenses')) });
 
   // ---------- Interest, dividends, other documents ----------
   q({ id: 'fed.interest1099', label: '1099-INT Interest', unit: 'usd', display: 'inline', optional: true,
@@ -360,8 +369,30 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   q({ id: 'fed.qbi', label: 'QBI Deduction', unit: 'usd', form: 'Form 1040 Line 13', category: 'adjustments', optional: true,
     expr: round(min(mul(R('fed.qbiIncome'), rate(0.2)), mul(R('fed.qbiIncomeLimit'), rate(0.2)))) });
 
+  // ---------- Schedule 1-A (P.L. 119-21, tax years 2025–2028) ----------
+  if (year >= 2025 && year <= 2028) {
+    const notMfs = (e: Expr) => when(statusIs('married_separate'), lit(0), e);
+    q({ id: 'fed.sched1aMagi', label: 'MAGI for Schedule 1-A', unit: 'usd', category: 'adjustments', expr: add(R('fed.agi'), R('fed.feie')) });
+    const over = (startParam: string) => atLeast0(sub(R('fed.sched1aMagi'), P(startParam)));
+    q({ id: 'fed.tipsDeduction', label: 'Qualified Tips Deduction', unit: 'usd', form: 'Schedule 1-A Part II', category: 'adjustments', optional: true,
+      presentIf: gt(R('in.qualifiedTips'), lit(0)),
+      expr: notMfs(round(atLeast0(sub(min(R('in.qualifiedTips'), lit(25000)), mul(over('fed.tipsOvertimePhaseStart'), rate(0.1)))))) });
+    q({ id: 'fed.overtimeDeduction', label: 'Qualified Overtime Deduction', unit: 'usd', form: 'Schedule 1-A Part III', category: 'adjustments', optional: true,
+      presentIf: gt(R('in.qualifiedOvertime'), lit(0)),
+      expr: notMfs(round(atLeast0(sub(min(R('in.qualifiedOvertime'), P('fed.overtimeCap')), mul(over('fed.tipsOvertimePhaseStart'), rate(0.1)))))) });
+    q({ id: 'fed.carLoanDeduction', label: 'Car Loan Interest Deduction', unit: 'usd', form: 'Schedule 1-A Part IV', category: 'adjustments', optional: true,
+      presentIf: gt(R('in.carLoanInterest'), lit(0)),
+      expr: round(atLeast0(sub(min(R('in.carLoanInterest'), lit(10000)), mul(over('fed.carLoanPhaseStart'), rate(0.2))))) });
+    q({ id: 'fed.seniorDeduction', label: 'Senior Deduction', unit: 'usd', form: 'Schedule 1-A Part V', category: 'adjustments', optional: true,
+      presentIf: gt(R('in.seniors'), num(0)),
+      expr: notMfs(round(mul(R('in.seniors'), atLeast0(sub(lit(6000), mul(over('fed.seniorPhaseStart'), rate(0.06))))))) });
+    q({ id: 'fed.sched1a', label: 'Schedule 1-A Deductions', unit: 'usd', form: 'Form 1040 Line 13b', category: 'adjustments', optional: true,
+      expr: add(R('fed.tipsDeduction'), R('fed.overtimeDeduction'), R('fed.carLoanDeduction'), R('fed.seniorDeduction')) });
+  } else {
+    q({ id: 'fed.sched1a', label: 'Schedule 1-A Deductions', unit: 'usd', optional: true, expr: lit(0) });
+  }
   q({ id: 'fed.taxableIncome', label: 'Taxable Income', unit: 'usd', form: 'Form 1040 Line 15', category: 'tax',
-    expr: round(atLeast0(sub(R('fed.agi'), R('fed.deduction'), R('fed.qbi')))) });
+    expr: round(atLeast0(sub(R('fed.agi'), R('fed.deduction'), R('fed.qbi'), R('fed.sched1a')))) });
 
   // ---------- Tax (brackets + Qualified Dividends & Capital Gain worksheet) ----------
   q({ id: 'fed.specialGains', label: '25%/28% Rate Gains', unit: 'usd', display: 'inline',
@@ -630,6 +661,10 @@ export function federalContext(state: TaxAppState): GraphContext {
       'in.militaryMoving': n(a.militaryMoving),
       'in.earlyWithdrawal': n(a.earlyWithdrawalPenalty),
       'in.juryDuty': n(a.juryDutyPay),
+      'in.qualifiedTips': n(a.qualifiedTips),
+      'in.qualifiedOvertime': n(a.qualifiedOvertime),
+      'in.carLoanInterest': n(a.carLoanInterest),
+      'in.seniors': int(d.seniorsCount),
       'in.medical': n(i.medicalExpenses),
       'in.realEstateTax': n(i.realEstateTax),
       'in.mortgage': n(i.mortgageInterest),
@@ -671,6 +706,7 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
     quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
   { id: 'calc-taxable-income', stepLabel: 'Step 4 • Deductions & Taxable Income', title: 'Deduction & Taxable Income',
     quantities: [{ id: 'fed.stdDeduction', show: 'always' }, { id: 'fed.deduction', show: 'always' }, 'fed.qbiIncome', 'fed.qbiIncomeLimit', 'fed.qbi',
+      'fed.tipsDeduction', 'fed.overtimeDeduction', 'fed.carLoanDeduction', 'fed.seniorDeduction', 'fed.sched1a',
       { id: 'fed.taxableIncome', show: 'always' }] },
   { id: 'calc-tax-before-credits', stepLabel: 'Step 5 • Tax Brackets', title: 'Federal Income Tax (Before Credits)',
     quantities: ['fed.netLtcg', 'fed.preferentialIncome', 'fed.ordinaryTaxable', 'fed.ordinaryTaxRow', 'fed.ordinaryTax', 'fed.standardPrefTax', 'fed.unrecap1250Tax',

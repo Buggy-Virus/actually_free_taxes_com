@@ -552,6 +552,9 @@ export class Evaluation {
     isQuiet(c) {
         if (c.cond.k === 'flag')
             return !c.value;
+        // Filing status is known context; the general formula already shows status conditions.
+        if (c.cond.k === 'status')
+            return true;
         if (c.cond.k === 'not')
             return this.isQuiet(c.parts[0]);
         if (c.cond.k === 'and' || c.cond.k === 'or')
@@ -736,7 +739,9 @@ export class Evaluation {
         return show === 'always' || showEmpty || this.value(id) !== 0;
     }
     block(spec, showEmpty = false) {
-        const entries = spec.quantities.map(q => (typeof q === 'string' ? { id: q, show: 'nonzero' } : q));
+        const entries = spec.quantities
+            .map(q => (typeof q === 'string' ? { id: q, show: 'nonzero' } : q))
+            .filter(q => this.graph.quantities.has(q.id)); // some quantities exist only in certain tax years
         const shown = entries.filter(q => this.isShown(q.id, q.show, showEmpty)).map(q => q.id);
         const vars = new Map();
         const lines = shown.flatMap(id => this.lines(id, vars));

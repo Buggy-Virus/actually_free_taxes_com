@@ -4283,6 +4283,10 @@ class TaxApp {
         case 'input-adj-military-moving': return Number(this.state.adjustments?.militaryMoving) || 0;
         case 'input-adj-early-withdrawal': return Number(this.state.adjustments?.earlyWithdrawalPenalty) || 0;
         case 'input-adj-jury-duty': return Number(this.state.adjustments?.juryDutyPay) || 0;
+        case 'input-sched1a-tips': return Number(this.state.adjustments?.qualifiedTips) || 0;
+        case 'input-sched1a-overtime': return Number(this.state.adjustments?.qualifiedOvertime) || 0;
+        case 'input-sched1a-car-loan': return Number(this.state.adjustments?.carLoanInterest) || 0;
+        case 'input-sched1a-seniors': return Number(this.state.dependents?.seniorsCount) || 0;
         case 'input-adoption-credit': return Number(this.state.dependents?.adoptionCredit) || 0;
         case 'input-ptc-credit': return Number(this.state.dependents?.premiumTaxCredit) || 0;
         case 'input-elderly-credit': return Number(this.state.dependents?.elderlyDisabledCredit) || 0;
@@ -4322,7 +4326,7 @@ class TaxApp {
           </select>
         </div>
       </div>`;
-    } else if (entry.key === 'cred-children' || entry.key === 'cred-other-dependents' || entry.key === 'cred-age-blind') {
+    } else if (entry.key === 'cred-children' || entry.key === 'cred-other-dependents' || entry.key === 'cred-age-blind' || entry.key === 'sched1a-senior') {
       inputsHtml = numBox(entry.inputIds[0], undefined, true);
     } else {
       inputsHtml = numBox(entry.inputIds[0]);
@@ -4396,6 +4400,10 @@ class TaxApp {
     bindNum('input-adj-military-moving', v => this.state.adjustments.militaryMoving = v);
     bindNum('input-adj-early-withdrawal', v => this.state.adjustments.earlyWithdrawalPenalty = v);
     bindNum('input-adj-jury-duty', v => this.state.adjustments.juryDutyPay = v);
+    bindNum('input-sched1a-tips', v => this.state.adjustments.qualifiedTips = v);
+    bindNum('input-sched1a-overtime', v => this.state.adjustments.qualifiedOvertime = v);
+    bindNum('input-sched1a-car-loan', v => this.state.adjustments.carLoanInterest = v);
+    bindNum('input-sched1a-seniors', v => this.state.dependents.seniorsCount = Math.max(0, Math.min(2, Math.floor(v))));
 
     bindNum('input-alimony-received', v => this.state.otherIncome.alimonyReceived = v);
     bindNum('input-foreign-earned-excl', v => this.state.otherIncome.foreignEarnedIncomeExclusion = v);
@@ -4511,6 +4519,10 @@ class TaxApp {
       case 'adj-military-moving': this.state.adjustments.militaryMoving = 0; break;
       case 'adj-early-withdrawal-penalty': this.state.adjustments.earlyWithdrawalPenalty = 0; break;
       case 'adj-jury-duty': this.state.adjustments.juryDutyPay = 0; break;
+      case 'sched1a-tips': this.state.adjustments.qualifiedTips = 0; break;
+      case 'sched1a-overtime': this.state.adjustments.qualifiedOvertime = 0; break;
+      case 'sched1a-car-loan': this.state.adjustments.carLoanInterest = 0; break;
+      case 'sched1a-senior': this.state.dependents.seniorsCount = 0; break;
       case 'cred-adoption': this.state.dependents.adoptionCredit = 0; break;
       case 'cred-ptc-8962': this.state.dependents.premiumTaxCredit = 0; break;
       case 'cred-elderly-sched-r': this.state.dependents.elderlyDisabledCredit = 0; break;

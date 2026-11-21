@@ -635,6 +635,8 @@ export class Evaluation {
 
   private isQuiet(c: CondEval): boolean {
     if (c.cond.k === 'flag') return !c.value;
+    // Filing status is known context; the general formula already shows status conditions.
+    if (c.cond.k === 'status') return true;
     if (c.cond.k === 'not') return this.isQuiet(c.parts[0]);
     if (c.cond.k === 'and' || c.cond.k === 'or') return c.parts.every(p => this.isQuiet(p));
     return false;
@@ -817,7 +819,9 @@ export class Evaluation {
   }
 
   block(spec: BlockSpec, showEmpty = false): GraphBlock {
-    const entries = spec.quantities.map(q => (typeof q === 'string' ? { id: q, show: 'nonzero' as const } : q));
+    const entries = spec.quantities
+      .map(q => (typeof q === 'string' ? { id: q, show: 'nonzero' as const } : q))
+      .filter(q => this.graph.quantities.has(q.id)); // some quantities exist only in certain tax years
     const shown = entries.filter(q => this.isShown(q.id, q.show, showEmpty)).map(q => q.id);
     const vars = new Map<string, CalcVariableBreakdown>();
     const lines = shown.flatMap(id => this.lines(id, vars));

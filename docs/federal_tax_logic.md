@@ -22,7 +22,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Requirement | Status | Notes |
 | :-- | :--: | :-- |
 | TY2024 parameters (brackets, std deduction, phaseouts, SS wage base) | ✅ | `src/tax-constants.ts` |
-| TY2025 parameters **after** P.L. 119-21 (signed July 4, 2025) | ⚠️ | ✅ std deduction $15,750 / $31,500 / $23,625; ✅ CTC $2,200; ✅ SALT cap $40,000 with phase-down; ❌ new Schedule 1-A deductions (tips, overtime, car loan interest, senior) |
+| TY2025 parameters **after** P.L. 119-21 (signed July 4, 2025) | ✅ | Std deduction $15,750 / $31,500 / $23,625; CTC $2,200; SALT cap $40,000 with phase-down; Schedule 1-A deductions (tips, overtime, car loan interest, senior) |
 | TY2026 parameters (Rev. Proc. 2025-32) | ❌ | The next filing season (early 2027) is for TY2026. The year selector stops at 2025 |
 | Every year-dependent value is keyed by year | ⚠️ | ✅ brackets, std deduction, SS base, AMT exemption and 28% breakpoint, EITC tables, Saver's Credit tiers, student loan phase-out, SALT cap. ❌ HSA/IRA limits (not enforced yet), mileage rates |
 | Prior-year returns (late filers, amendments) | ⚠️ | Only 2024–2025 |
@@ -64,8 +64,8 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Box 13 retirement plan → IRA deduction phaseout applies | ❌ | |
 | Statutory employee → wages go to Schedule C | ❌ | |
 | Household employee wages without W-2 (Line 1b), Medicaid waiver payments (1d), scholarships (1f text), Form 8919 uncollected FICA wages (1g) | ❌ | |
-| **2025–2028: qualified tips deduction** (≤ $25,000; phase-out $100 per $1,000 MAGI over $150k / $300k MFJ; listed occupations; SSN; MFJ if married) | ❌ | New Schedule 1-A |
-| **2025–2028: qualified overtime deduction** (premium portion of FLSA overtime, ≤ $12,500 / $25,000 MFJ; same phase-out) | ❌ | Schedule 1-A |
+| **2025–2028: qualified tips deduction** (≤ $25,000; phase-out $100 per $1,000 MAGI over $150k / $300k MFJ; listed occupations; SSN; MFJ if married) | ⚠️ | `fed.tipsDeduction`; ✅ cap, phase-out, MFS bar; ❌ occupation/SSN checks; phase-out applied proportionally (verify IRS rounding) |
+| **2025–2028: qualified overtime deduction** (premium portion of FLSA overtime, ≤ $12,500 / $25,000 MFJ; same phase-out) | ✅ | `fed.overtimeDeduction`; golden test |
 
 ### 2.2 Interest and dividends (Schedule B) — `fed.interestTotal`, `fed.dividends`, `fed.qualifiedDividends`
 
@@ -121,7 +121,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 
 | Rule | Status | Notes |
 | :-- | :--: | :-- |
-| 1099-NEC / 1099-K / other receipts minus expenses | ⚠️ | One pooled business; expenses are a single number; **losses are clamped to $0** (a Schedule C loss must offset other income) |
+| 1099-NEC / 1099-K / other receipts minus expenses | ⚠️ | One pooled business; expenses are a single number; ✅ losses offset other income |
 | Multiple businesses (one Schedule C each, per spouse) | ❌ | |
 | Expense categories (Part II lines 8–27), cost of goods sold (Part III) | ❌ | |
 | Home office (Form 8829 or simplified $5/sq ft up to 300 sq ft) | ❌ | |
@@ -197,8 +197,8 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Base amount by status and year | ✅ | 2025 per P.L. 119-21; ❌ 2026 |
 | Additional amount per 65+/blind box | ✅ | Golden test |
 | Dependent limitation, MFS-spouse-itemizes rule | ❌ | See §1 |
-| **2025–2028 senior deduction** $6,000 per individual 65+ (phase-out 6% of MAGI over $75k / $150k MFJ; SSN; MFJ if married), available whether or not itemizing | ❌ | Schedule 1-A |
-| **2025–2028 car loan interest** on new US-assembled personal vehicles, ≤ $10,000, phase-out $200 per $1,000 MAGI over $100k / $200k | ❌ | Schedule 1-A |
+| **2025–2028 senior deduction** $6,000 per individual 65+ (phase-out 6% of MAGI over $75k / $150k MFJ; SSN; MFJ if married), available whether or not itemizing | ✅ | `fed.seniorDeduction`; golden test |
+| **2025–2028 car loan interest** on new US-assembled personal vehicles, ≤ $10,000, phase-out $200 per $1,000 MAGI over $100k / $200k | ✅ | `fed.carLoanDeduction`; golden test |
 | **2026+ charitable deduction for non-itemizers** $1,000 / $2,000 MFJ (cash) | ❌ | |
 
 ### 4.2 Itemized deductions (Schedule A) — `fed.itemized`
