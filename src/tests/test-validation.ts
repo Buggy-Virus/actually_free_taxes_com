@@ -49,4 +49,11 @@ assert.ok(!has(dep({ birthYear: 2003, student: true }), /qualifying child/));
 assert.ok(has({ ...base, priorYearTax: 5000, priorYearAgi: 55000, w2s: [{ ...base.w2s[0], box2: 0 }] }, /underpayment penalty/));
 assert.ok(!has({ ...base, w2s: [{ ...base.w2s[0], box2: 0 }] }, /underpayment penalty/), "no prior-year tax entered: no Form 2210 line");
 
-console.log('✓ Review checks: filing status, W-2 consistency, dependents, underpayment heads-up');
+// Filing requirement
+const low: TaxAppState = { ...base, w2s: [{ ...base.w2s[0], box1: 9000, box2: 300, box3: 9000, box4: 558, box5: 9000, box6: 130.5 }] };
+assert.ok(has(low, /under the \$14,600 filing threshold.*file anyway to get your \$[0-9,]+ refund/), 'low income: not required to file, but refund available');
+assert.ok(!has(base, /filing threshold/));
+assert.ok(!has({ ...low, otherIncome: { interest: 0, sources: [{ id: 9, type: '1099-NEC', payer: 'x', amount: 1000 }] } }, /filing threshold/), '$400+ of SE earnings requires a return');
+assert.ok(has({ ...low, taxpayer: { birthYear: 1950 }, w2s: [{ ...low.w2s[0], box1: 15000, box3: 15000, box5: 15000, box4: 930, box6: 217.5 }] }, /under the \$16,550 filing threshold/), '65+ raises the threshold');
+
+console.log('✓ Review checks: filing status, W-2 consistency, dependents, underpayment heads-up, filing requirement');

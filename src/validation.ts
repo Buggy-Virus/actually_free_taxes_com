@@ -99,6 +99,25 @@ export function reviewReturn(state: TaxAppState, summary?: TaxCalculationSummary
     }
   }
 
+  // ── Filing requirement (Form 1040 instructions, Chart A) ──
+  if (ev && !state.claimedAsDependent) {
+    const status = state.filingStatus;
+    const core = status === 'qualifying_surviving_spouse' ? 'married_joint' : status;
+    const married = core === 'married_joint' || core === 'married_separate';
+    const addl = year >= 2025 ? (married ? 1600 : 2000) : (married ? 1550 : 1950);
+    const seniors = ev.graph.quantities.has('fed.seniorsCount') ? ev.value('fed.seniorsCount') : 0;
+    // 65+ raises the threshold (blindness does not). Married filing separately must file with $5 of gross income.
+    const threshold = core === 'married_separate' ? 5 : (rules.standardDeduction as Record<string, number>)[core] + (status === 'qualifying_surviving_spouse' ? Math.min(1, seniors) : seniors) * addl;
+    const gross = ev.value('fed.totalIncome') - ev.value('fed.businessProfit') + ev.value('fed.businessGross') + Math.max(0, -ev.value('fed.capAllowed'));
+    const seEarnings = ev.value('fed.seEarnings');
+    if (gross > 0 && gross < threshold && seEarnings < 400) {
+      const refund = ev.applies('fed.refund') ? ev.value('fed.refund') : 0;
+      out.push({ severity: 'info',
+        message: `Your gross income (${money(gross)}) is under the ${money(threshold)} filing threshold, so you may not be required to file a federal return`
+          + (refund > 0 ? ` — but file anyway to get your ${money(refund)} refund.` : '. You must still file if you owe special taxes (e.g. on an IRA or HSA) or received advance Premium Tax Credit payments.') });
+    }
+  }
+
   const order = { error: 0, warning: 1, info: 2 } as const;
   return out.sort((a, b) => order[a.severity] - order[b.severity]);
 }

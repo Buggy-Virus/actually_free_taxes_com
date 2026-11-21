@@ -69,7 +69,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B37 | P2 | AMT preferences (ISO spread, PAB interest), Form 8801 credit | Basic AMT | | ⬜ |
 | B38 | P2 | NIIT on passive K-1 and royalties | | From B23 | ⬜ |
 | B39 | P2 | MFS: spouse itemizes → standard deduction $0 | | Checkbox | ✅ "MFS: spouse itemizes" checkbox |
-| B40 | P2 | Filing requirement check ("Do I need to file?") | | Gross income vs thresholds | ⬜ |
+| B40 | P2 | Filing requirement check ("Do I need to file?") | | Gross income vs thresholds | ✅ Review card: Chart A gross-income threshold (65+ amounts, MFS $5, $400 SE earnings), suggests filing for a refund; dependents filers not yet covered |
 | B41 | P2 | Form 2210 penalty amount (quarterly), annualized method | Required payment + shortfall only | | ⬜ |
 | B42 | P2 | Extension payment (Form 4868), refund applied to next year, split refunds | | | ⬜ |
 | B43 | P3 | §1202 QSBS, §1256 (6781), installment sales, like-kind exchanges, NOL computation, at-risk, §461(l), COD (982) | — | Detect & refer | ⬜ |
