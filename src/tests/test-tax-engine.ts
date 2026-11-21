@@ -143,7 +143,7 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   const res = calculateTaxes(state);
   assert.strictEqual(res.finalResultCalc.isRefund, false, 'Should owe taxes when withholding is low');
   assert(res.finalResultCalc.result > 0, 'Amount owed must be positive');
-  assert(res.finalResultCalc.generalFormula.includes('Amount Owed'), 'General formula should reflect Amount Owed');
+  assert(res.finalResultCalc.generalFormula.includes('Amount You Owe'), 'General formula should reflect Amount Owed');
   assert.strictEqual(res.stateTaxCalc.totalStateWithheld, 0, 'Texas has 0 state tax');
 
   console.log("✓ TS Test 3: Tax Balance Owed verified correctly!");
@@ -248,8 +248,8 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   assert.strictEqual(res.otherTaxesCalc.selfEmploymentTax, 1130.36, 'Schedule SE tax on $8,000 NEC is $1,130.36');
   assert.strictEqual(res.otherTaxesCalc.halfSelfEmploymentTaxDeduction, 565.18, 'Half SE tax deduction is $565.18');
   assert.strictEqual(res.agiCalc.result, 79634.82, 'AGI with $500 student loan + $565.18 half SE tax adjustment');
-  assert(res.grossIncomeCalc.sourceFields.includes('input-income-source-1'), 'Sources include freelance input');
-  assert(res.grossIncomeCalc.sourceFields.includes('input-income-source-2'), 'Sources include dividends input');
+  assert(res.grossIncomeCalc.sourceFields.includes('q-fed-businessProfit'), 'Sources include freelance input');
+  assert(res.grossIncomeCalc.sourceFields.includes('q-fed-dividends'), 'Sources include dividends input');
 
   console.log("✓ TS Test 5: Additional Income Sources (1099-NEC + 1099-DIV + Auto Schedule SE) verified correctly!");
 }
@@ -863,8 +863,8 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   assert.ok((res14A.creditsCalc.otherDependentsCredit || 0) === 500, 'Credit for Other Dependents ($500) applied');
   assert.ok((res14A.creditsCalc.childCareCredit || 0) === 600, 'Form 2441 Child Care Credit (20% of $3,000) = $600');
   assert.ok((res14A.creditsCalc.educationCreditRefundable || 0) === 1000, 'Form 8863 40% Refundable AOTC = $1,000');
-  assert.ok(res14A.withholdingCalc.pluggedFormula.includes('$1,000 (1099 WH)'), 'Includes 1099 Box 4 withholding');
-  assert.ok(res14A.withholdingCalc.pluggedFormula.includes('$1,500 (1040-ES)'), 'Includes Form 1040-ES estimated payments');
+  assert.ok(res14A.withholdingCalc.pluggedFormula.includes('$1,000.00'), 'Includes 1099 Box 4 withholding');
+  assert.ok(res14A.withholdingCalc.pluggedFormula.includes('$1,500.00'), 'Includes Form 1040-ES estimated payments');
   const scRet = res14A.stateReturnsCalc.find(s => s.state === 'SC')!;
   // SC starts from Federal AGI and excludes 44% of $10,000 LTCG ($4,400)
   assert.strictEqual(scRet.stateWages, res14A.agiCalc.result - 4400, 'SC applies 44% net long-term capital gain exclusion ($4,400)');

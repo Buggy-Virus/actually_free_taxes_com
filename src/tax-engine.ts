@@ -46,212 +46,10 @@ import {
   BracketSliceNode
 } from './formula-graph.js';
 
-export type CoreFilingStatus = 'single' | 'married_joint' | 'married_separate' | 'head_of_household';
-
-interface YearTaxRules {
-  standardDeduction: Record<CoreFilingStatus, number>;
-  ssWageLimit: number;
-  ssRate: number;
-  medicareRate: number;
-  additionalMedicareRate: number;
-  additionalMedicareThreshold: Record<CoreFilingStatus, number>;
-  niitRate: number;
-  niitThreshold: Record<CoreFilingStatus, number>;
-  childTaxCreditPerChild: number;
-  childTaxCreditRefundableMax: number;
-  childTaxCreditPhaseout: Record<CoreFilingStatus, number>;
-  brackets: Record<CoreFilingStatus, BracketDef[]>;
-  ltcgBrackets: Record<CoreFilingStatus, BracketDef[]>;
-}
-
-export const TAX_CONSTANTS: Record<TaxYear, YearTaxRules> = {
-  2024: {
-    standardDeduction: {
-      single: 14600,
-      married_joint: 29200,
-      married_separate: 14600,
-      head_of_household: 21900
-    },
-    ssWageLimit: 168600,
-    ssRate: 0.062,
-    medicareRate: 0.0145,
-    additionalMedicareRate: 0.009,
-    additionalMedicareThreshold: {
-      single: 200000,
-      married_joint: 250000,
-      married_separate: 125000,
-      head_of_household: 200000
-    },
-    niitRate: 0.038,
-    niitThreshold: {
-      single: 200000,
-      married_joint: 250000,
-      married_separate: 125000,
-      head_of_household: 200000
-    },
-    childTaxCreditPerChild: 2000,
-    childTaxCreditRefundableMax: 1700,
-    childTaxCreditPhaseout: {
-      single: 200000,
-      married_joint: 400000,
-      married_separate: 200000,
-      head_of_household: 200000
-    },
-    brackets: {
-      single: [
-        { rate: 0.10, min: 0, max: 11600 },
-        { rate: 0.12, min: 11600, max: 47150 },
-        { rate: 0.22, min: 47150, max: 100525 },
-        { rate: 0.24, min: 100525, max: 191950 },
-        { rate: 0.32, min: 191950, max: 243725 },
-        { rate: 0.35, min: 243725, max: 609350 },
-        { rate: 0.37, min: 609350, max: Infinity }
-      ],
-      married_joint: [
-        { rate: 0.10, min: 0, max: 23200 },
-        { rate: 0.12, min: 23200, max: 94300 },
-        { rate: 0.22, min: 94300, max: 201050 },
-        { rate: 0.24, min: 201050, max: 383900 },
-        { rate: 0.32, min: 383900, max: 487450 },
-        { rate: 0.35, min: 487450, max: 731200 },
-        { rate: 0.37, min: 731200, max: Infinity }
-      ],
-      married_separate: [
-        { rate: 0.10, min: 0, max: 11600 },
-        { rate: 0.12, min: 11600, max: 47150 },
-        { rate: 0.22, min: 47150, max: 100525 },
-        { rate: 0.24, min: 100525, max: 191950 },
-        { rate: 0.32, min: 191950, max: 243725 },
-        { rate: 0.35, min: 243725, max: 365600 },
-        { rate: 0.37, min: 365600, max: Infinity }
-      ],
-      head_of_household: [
-        { rate: 0.10, min: 0, max: 16550 },
-        { rate: 0.12, min: 16550, max: 63100 },
-        { rate: 0.22, min: 63100, max: 100500 },
-        { rate: 0.24, min: 100500, max: 191950 },
-        { rate: 0.32, min: 191950, max: 243700 },
-        { rate: 0.35, min: 243700, max: 609350 },
-        { rate: 0.37, min: 609350, max: Infinity }
-      ]
-    },
-    ltcgBrackets: {
-      single: [
-        { rate: 0.00, min: 0, max: 47025 },
-        { rate: 0.15, min: 47025, max: 518900 },
-        { rate: 0.20, min: 518900, max: Infinity }
-      ],
-      married_joint: [
-        { rate: 0.00, min: 0, max: 94050 },
-        { rate: 0.15, min: 94050, max: 583750 },
-        { rate: 0.20, min: 583750, max: Infinity }
-      ],
-      married_separate: [
-        { rate: 0.00, min: 0, max: 47025 },
-        { rate: 0.15, min: 47025, max: 291850 },
-        { rate: 0.20, min: 291850, max: Infinity }
-      ],
-      head_of_household: [
-        { rate: 0.00, min: 0, max: 63000 },
-        { rate: 0.15, min: 63000, max: 551350 },
-        { rate: 0.20, min: 551350, max: Infinity }
-      ]
-    }
-  },
-  2025: {
-    standardDeduction: {
-      single: 15000,
-      married_joint: 30000,
-      married_separate: 15000,
-      head_of_household: 22500
-    },
-    ssWageLimit: 176100,
-    ssRate: 0.062,
-    medicareRate: 0.0145,
-    additionalMedicareRate: 0.009,
-    additionalMedicareThreshold: {
-      single: 200000,
-      married_joint: 250000,
-      married_separate: 125000,
-      head_of_household: 200000
-    },
-    niitRate: 0.038,
-    niitThreshold: {
-      single: 200000,
-      married_joint: 250000,
-      married_separate: 125000,
-      head_of_household: 200000
-    },
-    childTaxCreditPerChild: 2000,
-    childTaxCreditRefundableMax: 1700,
-    childTaxCreditPhaseout: {
-      single: 200000,
-      married_joint: 400000,
-      married_separate: 200000,
-      head_of_household: 200000
-    },
-    brackets: {
-      single: [
-        { rate: 0.10, min: 0, max: 11925 },
-        { rate: 0.12, min: 11925, max: 48475 },
-        { rate: 0.22, min: 48475, max: 103350 },
-        { rate: 0.24, min: 103350, max: 197300 },
-        { rate: 0.32, min: 197300, max: 250525 },
-        { rate: 0.35, min: 250525, max: 626350 },
-        { rate: 0.37, min: 626350, max: Infinity }
-      ],
-      married_joint: [
-        { rate: 0.10, min: 0, max: 23850 },
-        { rate: 0.12, min: 23850, max: 96950 },
-        { rate: 0.22, min: 96950, max: 206700 },
-        { rate: 0.24, min: 206700, max: 394600 },
-        { rate: 0.32, min: 394600, max: 501050 },
-        { rate: 0.35, min: 501050, max: 751600 },
-        { rate: 0.37, min: 751600, max: Infinity }
-      ],
-      married_separate: [
-        { rate: 0.10, min: 0, max: 11925 },
-        { rate: 0.12, min: 11925, max: 48475 },
-        { rate: 0.22, min: 48475, max: 103350 },
-        { rate: 0.24, min: 103350, max: 197300 },
-        { rate: 0.32, min: 197300, max: 250525 },
-        { rate: 0.35, min: 250525, max: 375800 },
-        { rate: 0.37, min: 375800, max: Infinity }
-      ],
-      head_of_household: [
-        { rate: 0.10, min: 0, max: 17000 },
-        { rate: 0.12, min: 17000, max: 64850 },
-        { rate: 0.22, min: 64850, max: 103350 },
-        { rate: 0.24, min: 103350, max: 197300 },
-        { rate: 0.32, min: 197300, max: 250500 },
-        { rate: 0.35, min: 250500, max: 626350 },
-        { rate: 0.37, min: 626350, max: Infinity }
-      ]
-    },
-    ltcgBrackets: {
-      single: [
-        { rate: 0.00, min: 0, max: 48350 },
-        { rate: 0.15, min: 48350, max: 533400 },
-        { rate: 0.20, min: 533400, max: Infinity }
-      ],
-      married_joint: [
-        { rate: 0.00, min: 0, max: 96700 },
-        { rate: 0.15, min: 96700, max: 600050 },
-        { rate: 0.20, min: 600050, max: Infinity }
-      ],
-      married_separate: [
-        { rate: 0.00, min: 0, max: 48350 },
-        { rate: 0.15, min: 48350, max: 300000 },
-        { rate: 0.20, min: 300000, max: Infinity }
-      ],
-      head_of_household: [
-        { rate: 0.00, min: 0, max: 64750 },
-        { rate: 0.15, min: 64750, max: 566700 },
-        { rate: 0.20, min: 566700, max: Infinity }
-      ]
-    }
-  }
-};
+import { CoreFilingStatus, TAX_CONSTANTS, normalizeFilingStatus } from './tax-constants.js';
+export { TAX_CONSTANTS, normalizeFilingStatus } from './tax-constants.js';
+export type { CoreFilingStatus } from './tax-constants.js';
+import { federalGraph, federalContext } from './graph/federal.js';
 
 export const NYC_LOCAL_BRACKETS: Record<CoreFilingStatus, BracketDef[]> = {
   single: [
@@ -1137,909 +935,209 @@ export function filingStatusLabel(status: FilingStatus): string {
   }
 }
 
-export function normalizeFilingStatus(status: FilingStatus): CoreFilingStatus {
-  if (status === 'qualifying_surviving_spouse') return 'married_joint';
-  return status || 'single';
-}
 
 /**
- * Perform complete tax calculation with fully annotated general & plugged-in equations.
+ * Complete tax calculation. Federal math is evaluated by the formula graph (src/graph/federal.ts);
+ * this function only reads graph results into the summary shape the state engine and UI consume.
+ * Formula strings and source fields are rendered from the same graph, never hand-written.
  */
 export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
   const year = state.year || 2024;
   const filingStatus = state.filingStatus || 'single';
-  const effectiveStatus = normalizeFilingStatus(filingStatus);
-  const rules = TAX_CONSTANTS[year] || TAX_CONSTANTS[2024];
 
   const w2List: W2Data[] = state.w2s && state.w2s.length > 0
     ? state.w2s
     : [{ id: 0, employer: '', ein: '', box1: 0, box2: 0, box3: 0, box4: 0, box5: 0, box6: 0, states: [] }];
 
-  // 1. Total W-2 Wages (Box 1) & FICA W-2 Totals
-  const box1Values = w2List.map(w => Number(w.box1) || 0);
-  const totalW2Wages = box1Values.reduce((sum, val) => sum + val, 0);
-  const w2WageFieldIds = w2List.map((w, idx) => `w2-${w.id || idx}-box1`);
+  const ev = federalGraph().evaluate(federalContext({ ...state, w2s: w2List }));
+  const v = (id: string) => ev.value(id);
+  const calc = (id: string, result = v(id)): CalculationResult => ({
+    result,
+    sourceFields: ev.sources(id),
+    generalFormula: ev.lineText(id, false),
+    pluggedFormula: ev.lineText(id, true)
+  });
 
-  const box3Values = w2List.map(w => Number(w.box3) || 0);
-  const box4Values = w2List.map(w => Number(w.box4) || 0);
-  const box5Values = w2List.map(w => Number(w.box5) || 0);
-  const box6Values = w2List.map(w => Number(w.box6) || 0);
-
-  const totalSSWages = box3Values.reduce((s, v) => s + v, 0);
-  const totalSSTax = box4Values.reduce((s, v) => s + v, 0);
-  const totalMedWages = box5Values.reduce((s, v) => s + v, 0);
-  const totalMedTax = box6Values.reduce((s, v) => s + v, 0);
-  const totalFicaWithheld = totalSSTax + totalMedTax;
-
-  const w2WagesCalc: CalculationResult = {
-    result: totalW2Wages,
-    sourceFields: w2WageFieldIds,
-    generalFormula: w2List.length === 1 ? 'Total Wages = W-2 Box 1' : 'Total Wages = ∑(W-2 Box 1)',
-    pluggedFormula: w2List.length === 1
-      ? `Total Wages = ${formatCurrency(box1Values[0])}`
-      : `Total Wages = ${box1Values.map(v => formatCurrency(v)).join(' + ')} = ${formatCurrency(totalW2Wages)}`
-  };
-
-  // State & Local Tax Summary (Boxes 15-20 across all W-2s) - Computed early for SALT deduction
+  // ---- W-2 wage & state withholding summary (aggregation of inputs; no tax math) ----
   const stateLines = w2List.flatMap(w => (w.states || []).map((s: StateTaxLine) => ({ ...s, w2Id: w.id })));
   const totalStateWages = stateLines.reduce((sum, s) => sum + (Number(s.stateWages) || 0), 0);
   const totalStateTaxWithheld = stateLines.reduce((sum, s) => sum + (Number(s.stateTaxWithheld) || 0), 0);
   const totalLocalTaxWithheld = stateLines.reduce((sum, s) => sum + (Number(s.localTaxWithheld) || 0), 0);
-
   const stateMap = new Map<string, { state: string; stateWages: number; stateTaxWithheld: number; localTaxWithheld: number; sourceFieldIds: string[] }>();
   stateLines.forEach(s => {
     const st = (s.state || 'OTHER').toUpperCase().trim();
-    if (!stateMap.has(st)) {
-      stateMap.set(st, { state: st, stateWages: 0, stateTaxWithheld: 0, localTaxWithheld: 0, sourceFieldIds: [] });
-    }
+    if (!stateMap.has(st)) stateMap.set(st, { state: st, stateWages: 0, stateTaxWithheld: 0, localTaxWithheld: 0, sourceFieldIds: [] });
     const item = stateMap.get(st)!;
     item.stateWages += Number(s.stateWages) || 0;
     item.stateTaxWithheld += Number(s.stateTaxWithheld) || 0;
     item.localTaxWithheld += Number(s.localTaxWithheld) || 0;
     item.sourceFieldIds.push(`w2-${s.w2Id}-state-${s.id}-box17`);
   });
-
-  const byState = Array.from(stateMap.values());
-  const stateWithheldValues = stateLines.map(s => ({
-    state: (s.state || 'State').toUpperCase(),
-    amount: Number(s.stateTaxWithheld) || 0
-  })).filter(x => x.amount > 0);
-
+  const stateWithheldValues = stateLines
+    .map(s => ({ state: (s.state || 'State').toUpperCase(), amount: Number(s.stateTaxWithheld) || 0 }))
+    .filter(x => x.amount > 0);
   const stateTaxCalc: StateTaxCalculation = {
     result: totalStateTaxWithheld,
     totalStateWages,
     totalStateWithheld: totalStateTaxWithheld,
     totalLocalWithheld: totalLocalTaxWithheld,
-    byState,
+    byState: Array.from(stateMap.values()),
     sourceFields: stateLines.map(s => `w2-${s.w2Id}-state-${s.id}-box17`),
     generalFormula: 'Total State Withholding = ∑(W-2 Box 17)',
     pluggedFormula: stateWithheldValues.length > 0
-      ? `Total State Tax = ${stateWithheldValues.map(v => `${v.state}: ${formatCurrencyExact(v.amount)}`).join(' + ')} = ${formatCurrencyExact(totalStateTaxWithheld)}`
+      ? `Total State Tax = ${stateWithheldValues.map(x => `${x.state}: ${formatCurrencyExact(x.amount)}`).join(' + ')} = ${formatCurrencyExact(totalStateTaxWithheld)}`
       : 'Total State Tax = $0'
   };
 
-  // Capital Gains / Losses (Schedule D / Line 7 + 28% Collectibles & 25% Unrecaptured Sec. 1250 Gain)
-  const stGain = Number(state.otherIncome?.capitalGains?.shortTerm) || 0;
-  const ltGain = Number(state.otherIncome?.capitalGains?.longTerm) || 0;
-  const carryoverLoss = Math.max(0, Number(state.otherIncome?.capitalGains?.carryoverLoss) || 0);
-  const collectiblesGain = Math.max(0, Number(state.otherIncome?.capitalGains?.collectiblesGain) || 0);
-  const unrecaptured1250Gain = Math.max(0, Number(state.otherIncome?.capitalGains?.unrecaptured1250Gain) || 0);
-  const netGainLoss = stGain + ltGain - carryoverLoss;
-  const maxLoss = effectiveStatus === 'married_separate' ? -1500 : -3000;
-  const allowableCapitalNet = netGainLoss < 0 ? Math.max(maxLoss, netGainLoss) : netGainLoss;
+  // ---- Federal results, read from the graph ----
+  const capitalGainsCalc: CapitalGainsCalculation = { ...calc('fed.capAllowed'), netTotal: v('fed.capNet'), allowableLoss: v('fed.capAllowed') };
 
-  const capitalGainsCalc: CapitalGainsCalculation = {
-    result: allowableCapitalNet,
-    netTotal: netGainLoss,
-    allowableLoss: allowableCapitalNet,
-    sourceFields: ['input-capital-gains-st', 'input-capital-gains-lt'],
-    generalFormula: 'Net Capital Gain/Loss = Short-Term + Long-Term (Losses capped at -$3,000/yr)',
-    pluggedFormula: netGainLoss < 0
-      ? `Net = ${formatCurrency(stGain)} + ${formatCurrency(ltGain)} = ${formatCurrency(netGainLoss)} ➔ Capped at ${formatCurrency(allowableCapitalNet)}`
-      : `Net = ${formatCurrency(stGain)} + ${formatCurrency(ltGain)} = ${formatCurrency(allowableCapitalNet)}`
-  };
-
-  // Schedule C Business Expenses
-  const scheduleCExpenses = Math.max(0, Number(state.otherIncome?.scheduleCExpenses) || 0);
-
-  // Additional Incomes (1099-NEC, 1099-K, Schedule F, 1099-DIV, 1099-INT, 1099-MISC, 1099-R, SSA-1099, Schedule K-1, 1099-G, W-2G)
-  const interestIncome = Number(state.otherIncome?.interest) || 0;
-  const alimonyReceived = Math.max(0, Number(state.otherIncome?.alimonyReceived) || 0);
-  const feieLimit = year === 2025 ? 130000 : 126500;
-  const foreignEarnedExclusion = Math.min(feieLimit, Math.max(0, Number(state.otherIncome?.foreignEarnedIncomeExclusion) || 0));
-  const unreportedTips = Math.max(0, Number(state.otherIncome?.unreportedTips) || 0);
-  const unreportedTipsFicaTax = Math.round(unreportedTips * 0.0765 * 100) / 100;
-  const extraSources = state.otherIncome?.sources || [];
-  let nonSsaExtraSourcesTotal = 0;
-  let qualifiedDividendsTotal = 0;
-  let net1099InterestTotal = 0;
-  let taxExemptInterestTotal = 0;
-  let total1099Dividends = 0;
-  let netScheduleCProfit = 0;
-  let k1IncomeTotal = 0;
-  let ssaGrossTotal = 0;
-  let gamblingWinningsTotal = 0;
-  let retirement1099RTotal = 0;
-  let earlyDist1099RTotal = 0;
-  let extra1099WithheldTotal = 0;
-
-  let remainingSchedCExpenses = scheduleCExpenses;
-  extraSources.forEach(s => {
-    let amt = Number(s.amount) || 0;
-    extra1099WithheldTotal += Math.max(0, Number(s.federalTaxWithheld) || 0);
-
-    if (s.type === '1099-NEC' || s.type === '1099-K' || s.type === 'Schedule F') {
-      const expUsed = Math.min(Math.max(0, amt), remainingSchedCExpenses);
-      remainingSchedCExpenses -= expUsed;
-      amt = Math.max(0, amt - expUsed);
-      netScheduleCProfit += amt;
-      nonSsaExtraSourcesTotal += amt;
-    } else if (s.type === '1099-INT') {
-      const accrued = Math.max(0, Number(s.accruedInterestPaid) || 0);
-      amt = Math.max(0, amt - accrued);
-      net1099InterestTotal += amt;
-      taxExemptInterestTotal += Math.max(0, Number(s.taxExemptInterest) || 0);
-      nonSsaExtraSourcesTotal += amt;
-    } else if (s.type === '1099-DIV') {
-      total1099Dividends += amt;
-      const qDiv = Math.min(amt, Math.max(0, Number(s.qualifiedDividends) || 0));
-      qualifiedDividendsTotal += qDiv;
-      nonSsaExtraSourcesTotal += amt;
-    } else if (s.type === 'Schedule K-1') {
-      k1IncomeTotal += amt;
-      nonSsaExtraSourcesTotal += amt;
-    } else if (s.type === '1099-R') {
-      retirement1099RTotal += amt;
-      if (s.earlyDistributionPenalty) {
-        earlyDist1099RTotal += Math.max(0, amt);
-      }
-      nonSsaExtraSourcesTotal += amt;
-    } else if (s.type === 'W-2G') {
-      gamblingWinningsTotal += Math.max(0, amt);
-      nonSsaExtraSourcesTotal += amt;
-    } else if (s.type === 'SSA-1099') {
-      ssaGrossTotal += Math.max(0, amt);
-    } else {
-      nonSsaExtraSourcesTotal += amt;
-    }
-  });
-
-  // Schedule SE Self-Employment Tax (15.3% on 92.35% of Net Schedule C Profit when >= $400)
-  let selfEmploymentTax = 0;
-  let halfSelfEmploymentTaxDeduction = 0;
-  let seTaxableEarnings = 0;
-  let seSSPortion = 0;
-  let seMedPortion = 0;
-  if (netScheduleCProfit >= 400) {
-    seTaxableEarnings = netScheduleCProfit * 0.9235;
-    const remainingSSCap = Math.max(0, rules.ssWageLimit - totalSSWages);
-    seSSPortion = Math.round(Math.min(seTaxableEarnings, remainingSSCap) * 0.124 * 100) / 100;
-    seMedPortion = Math.round(seTaxableEarnings * 0.029 * 100) / 100;
-    selfEmploymentTax = Math.round((seSSPortion + seMedPortion) * 100) / 100;
-    halfSelfEmploymentTaxDeduction = Math.round(selfEmploymentTax * 0.50 * 100) / 100;
-  }
-
-  // Above-the-Line Adjustments (Schedule 1 Part II)
-  const studentLoanInterest = Math.min(2500, Math.max(0, Number(state.adjustments?.studentLoan) || 0));
-  const iraDeduction = Math.max(0, Number(state.adjustments?.ira) || 0);
-  const hsaDeduction = Math.max(0, Number(state.adjustments?.hsa) || 0);
-  const maxEducator = effectiveStatus === 'married_joint' ? 600 : 300;
-  const educatorExpenses = Math.min(maxEducator, Math.max(0, Number(state.adjustments?.educatorExpenses) || 0));
-  const seRetirement = Math.max(0, Number(state.adjustments?.seRetirement) || 0);
-  const seHealthInsurance = Math.max(0, Number(state.adjustments?.seHealthInsurance) || 0);
-  const alimonyPaid = Math.max(0, Number(state.adjustments?.alimonyPaid) || 0);
-  const militaryMoving = Math.max(0, Number(state.adjustments?.militaryMoving) || 0);
-  const earlyWithdrawalPenalty = Math.max(0, Number(state.adjustments?.earlyWithdrawalPenalty) || 0);
-  const juryDutyPay = Math.max(0, Number(state.adjustments?.juryDutyPay) || 0);
-
-  const manualAdjustments = studentLoanInterest + iraDeduction + hsaDeduction + educatorExpenses + seRetirement + seHealthInsurance + alimonyPaid + militaryMoving + earlyWithdrawalPenalty + juryDutyPay;
-  const totalAdjustments = Math.round((manualAdjustments + halfSelfEmploymentTaxDeduction) * 100) / 100;
-
-  // Schedule E Rental Real Estate (Schedule 1, Line 5 & Form 8582 Passive Activity Loss Rules)
-  const rentalGross = Math.max(0, Number(state.otherIncome?.scheduleERental?.grossRents) || 0);
-  const rentalExpenses = Math.max(0, Number(state.otherIncome?.scheduleERental?.expenses) || 0);
-  const rentalDepreciation = Math.max(0, Number(state.otherIncome?.scheduleERental?.depreciation) || 0);
   const rentalPropertyState = (state.otherIncome?.scheduleERental?.propertyState || '').toUpperCase().trim();
-  const hasScheduleEInput = rentalGross > 0 || rentalExpenses > 0 || rentalDepreciation > 0;
-  const rentalNetBeforePal = rentalGross - rentalExpenses - rentalDepreciation;
-
-  // Compute MAGI before passive rental loss for Form 8582 $25,000 active participation allowance phaseout ($100k–$150k)
-  const magiBeforeRental = Math.max(0, totalW2Wages + interestIncome + nonSsaExtraSourcesTotal + allowableCapitalNet - totalAdjustments);
-  let allowableRentalNet = rentalNetBeforePal;
-  let disallowedPassiveLoss = 0;
-
-  if (rentalNetBeforePal < 0) {
-    const maxPalAllowance = effectiveStatus === 'married_separate' ? 12500 : 25000;
-    const palPhaseoutStart = effectiveStatus === 'married_separate' ? 50000 : 100000;
-    const palReduction = Math.max(0, (magiBeforeRental - palPhaseoutStart) * 0.5);
-    const allowedLossCap = Math.max(0, maxPalAllowance - palReduction);
-    allowableRentalNet = -Math.min(Math.abs(rentalNetBeforePal), allowedLossCap);
-    disallowedPassiveLoss = Math.abs(rentalNetBeforePal) - Math.abs(allowableRentalNet);
-  }
-
-  // IRS Social Security Benefits Worksheet (Form 1040 Lines 6a & 6b: 0% / 50% / 85% taxable based on Provisional Income)
-  let taxableSocialSecurity = 0;
-  if (ssaGrossTotal > 0) {
-    const provisionalIncome = Math.max(
-      0,
-      totalW2Wages +
-        interestIncome +
-        nonSsaExtraSourcesTotal +
-        allowableCapitalNet +
-        allowableRentalNet +
-        taxExemptInterestTotal +
-        0.5 * ssaGrossTotal -
-        totalAdjustments
-    );
-    const ssBase1 = effectiveStatus === 'married_joint' ? 32000 : (effectiveStatus === 'married_separate' ? 0 : 25000);
-    const ssBase2 = effectiveStatus === 'married_joint' ? 44000 : (effectiveStatus === 'married_separate' ? 0 : 34000);
-
-    if (provisionalIncome > ssBase2) {
-      const tier1Max = (ssBase2 - ssBase1) * 0.5;
-      const tier1 = Math.min(0.5 * ssaGrossTotal, tier1Max);
-      const excessOverBase2 = (provisionalIncome - ssBase2) * 0.85;
-      taxableSocialSecurity = Math.round(Math.min(0.85 * ssaGrossTotal, tier1 + excessOverBase2) * 100) / 100;
-    } else if (provisionalIncome > ssBase1) {
-      taxableSocialSecurity = Math.round(Math.min(0.5 * ssaGrossTotal, (provisionalIncome - ssBase1) * 0.5) * 100) / 100;
-    }
-  }
-
-  const extraSourcesTotal = Math.round((nonSsaExtraSourcesTotal + taxableSocialSecurity) * 100) / 100;
-
   const scheduleECalc: ScheduleECalculation = {
-    result: allowableRentalNet,
-    grossRents: rentalGross,
-    expenses: rentalExpenses,
-    depreciation: rentalDepreciation,
-    netBeforePal: rentalNetBeforePal,
-    allowableNet: allowableRentalNet,
-    disallowedPassiveLoss,
-    k1Income: k1IncomeTotal,
-    propertyState: rentalPropertyState,
-    sourceFields: ['input-rental-gross', 'input-rental-expenses', 'input-rental-depreciation'],
-    generalFormula: 'Schedule E Net Rental Income = Gross Rents − Operating Expenses − MACRS Depreciation (Losses subject to Form 8582 PAL rules)',
-    pluggedFormula: hasScheduleEInput
-      ? (disallowedPassiveLoss > 0
-          ? `Net Rent = ${formatCurrency(rentalGross)} − ${formatCurrency(rentalExpenses)} − ${formatCurrency(rentalDepreciation)} = ${formatCurrency(rentalNetBeforePal)} ➔ Form 8582 Allowed: ${formatCurrency(allowableRentalNet)} (${formatCurrency(disallowedPassiveLoss)} suspended)`
-          : `Net Rent = ${formatCurrency(rentalGross)} − ${formatCurrency(rentalExpenses)} − ${formatCurrency(rentalDepreciation)} = ${formatCurrency(allowableRentalNet)}`)
-      : 'Schedule E Net Rental Income = $0'
+    ...calc('fed.rentalAllowed'),
+    grossRents: ev.inputValue('in.rents'),
+    expenses: ev.inputValue('in.rentalExpenses'),
+    depreciation: ev.inputValue('in.rentalDepreciation'),
+    netBeforePal: v('fed.rentalNet'),
+    allowableNet: v('fed.rentalAllowed'),
+    disallowedPassiveLoss: v('fed.suspendedRentalLoss'),
+    k1Income: v('fed.k1Income'),
+    propertyState: rentalPropertyState
   };
 
-  const otherIncomeTotal = interestIncome + extraSourcesTotal + allowableCapitalNet + allowableRentalNet + alimonyReceived + unreportedTips - foreignEarnedExclusion;
-
-  // 2. Total Gross Income
-  const grossIncome = Math.round(Math.max(0, totalW2Wages + otherIncomeTotal) * 100) / 100;
-  const grossIncomeSourceFields = [
-    'calc-total-w2-wages',
-    ...(interestIncome > 0 ? ['input-other-interest'] : []),
-    ...(allowableCapitalNet !== 0 ? ['calc-capital-gains'] : []),
-    ...(allowableRentalNet !== 0 ? ['calc-schedule-e'] : []),
-    ...extraSources.filter(s => (Number(s.amount) || 0) > 0).map(s => `input-income-source-${s.id}`)
-  ];
-
-  const pluggedFormulaParts = [formatCurrency(totalW2Wages)];
-  if (interestIncome > 0) {
-    pluggedFormulaParts.push(formatCurrency(interestIncome));
-  }
-  let remSchedCForDisplay = scheduleCExpenses;
-  extraSources.forEach(s => {
-    if ((Number(s.amount) || 0) !== 0) {
-      let amt = Number(s.amount) || 0;
-      if (s.type === '1099-NEC' && remSchedCForDisplay > 0) {
-        const expUsed = Math.min(Math.max(0, amt), remSchedCForDisplay);
-        remSchedCForDisplay -= expUsed;
-        amt = Math.max(0, amt - expUsed);
-      } else if (s.type === '1099-INT' && (Number(s.accruedInterestPaid) || 0) > 0) {
-        amt = Math.max(0, amt - (Number(s.accruedInterestPaid) || 0));
-      } else if (s.type === 'SSA-1099') {
-        amt = taxableSocialSecurity;
-      }
-      pluggedFormulaParts.push(formatCurrency(amt));
-    }
-  });
-  if (allowableRentalNet !== 0) {
-    pluggedFormulaParts.push(formatCurrency(allowableRentalNet));
-  }
-  if (allowableCapitalNet !== 0) {
-    pluggedFormulaParts.push(formatCurrency(allowableCapitalNet));
-  }
-  if (pluggedFormulaParts.length === 1) {
-    pluggedFormulaParts.push('$0');
-  }
-
-  const grossIncomeCalc: CalculationResult = {
-    result: grossIncome,
-    sourceFields: grossIncomeSourceFields,
-    generalFormula: (extraSources.length > 0 || allowableRentalNet !== 0)
-      ? 'Gross Income = Total W-2 Wages + Interest + Additional Incomes + Schedule E Rental + Net Capital Gains'
-      : 'Gross Income = Total W-2 Wages + Other Incomes',
-    pluggedFormula: `Gross Income = ${pluggedFormulaParts.join(' + ')} = ${formatCurrency(grossIncome)}`
-  };
-
-  // 3. Adjustments to Income (Above-the-line deductions)
-  const extraAdjParts: string[] = [];
-  if (halfSelfEmploymentTaxDeduction > 0) extraAdjParts.push(`${formatCurrencyExact(halfSelfEmploymentTaxDeduction)} (½ SE Tax)`);
-  if (educatorExpenses > 0) extraAdjParts.push(`${formatCurrency(educatorExpenses)} (Educator)`);
-  if (seRetirement > 0) extraAdjParts.push(`${formatCurrency(seRetirement)} (SEP/SIMPLE)`);
-  if (seHealthInsurance > 0) extraAdjParts.push(`${formatCurrency(seHealthInsurance)} (SE Health)`);
-  if (alimonyPaid > 0) extraAdjParts.push(`${formatCurrency(alimonyPaid)} (Alimony)`);
-
-  const adjustmentsCalc: CalculationResult = {
-    result: totalAdjustments,
-    sourceFields: ['input-adj-student-loan', 'input-adj-ira', 'input-adj-hsa'],
-    generalFormula: extraAdjParts.length > 0
-      ? 'Adjustments = Student Loan Interest + Traditional IRA + HSA + ½ SE Tax & Schedule 1 Adjustments'
-      : 'Adjustments = Student Loan Interest + Traditional IRA + HSA Deduction',
-    pluggedFormula: extraAdjParts.length > 0
-      ? `Adjustments = ${formatCurrency(studentLoanInterest)} + ${formatCurrency(iraDeduction)} + ${formatCurrency(hsaDeduction)} + ${extraAdjParts.join(' + ')} = ${formatCurrencyExact(totalAdjustments)}`
-      : `Adjustments = ${formatCurrency(studentLoanInterest)} + ${formatCurrency(iraDeduction)} + ${formatCurrency(hsaDeduction)} = ${formatCurrency(totalAdjustments)}`
-  };
-
-  // 4. Adjusted Gross Income (AGI) - Line 11 on Form 1040
-  const agi = Math.round(Math.max(0, grossIncome - totalAdjustments) * 100) / 100;
-  const agiCalc: CalculationResult = {
-    result: agi,
-    sourceFields: ['calc-gross-income', 'calc-total-adjustments'],
-    generalFormula: 'Adjusted Gross Income (AGI) = Gross Income − Adjustments',
-    pluggedFormula: `AGI = ${formatCurrency(grossIncome)} − ${formatCurrencyExact(totalAdjustments)} = ${formatCurrencyExact(agi)}`
-  };
-
-  // 5. Standard vs Itemized Deductions (Schedule A) + Age 65+/Blind Additional Standard Deduction + 20% QBI Deduction
-  const age65OrBlindCount = Math.max(0, Math.min(4, parseInt(String(state.dependents?.age65OrBlindCount), 10) || 0));
-  const perBoxAddStdDed = (effectiveStatus === 'single' || effectiveStatus === 'head_of_household')
-    ? (year === 2025 ? 2000 : 1950)
-    : (year === 2025 ? 1600 : 1550);
-  const additionalStandardDeduction = age65OrBlindCount * perBoxAddStdDed;
-  const standardDeductionBase = (rules.standardDeduction[effectiveStatus] || 14600) + additionalStandardDeduction;
-
-  const medicalRaw = Number(state.itemizedDeductions?.medicalExpenses) || 0;
-  const medicalThreshold = 0.075 * agi;
-  const allowableMedical = Math.max(0, medicalRaw - medicalThreshold);
-
-  const realEstateTax = Number(state.itemizedDeductions?.realEstateTax) || 0;
-  const totalSaltPaid = realEstateTax + totalStateTaxWithheld + totalLocalTaxWithheld;
-  const saltCap = effectiveStatus === 'married_separate' ? 5000 : 10000;
-  const allowableSalt = Math.min(saltCap, totalSaltPaid);
-
-  const mortgageInterest = Number(state.itemizedDeductions?.mortgageInterest) || 0;
-  const charity = Number(state.itemizedDeductions?.charity) || 0;
-  const gamblingLossesRaw = Math.max(0, Number(state.itemizedDeductions?.gamblingLosses) || 0);
-  const allowableGamblingLosses = Math.min(gamblingWinningsTotal, gamblingLossesRaw);
-  const investmentInterestRaw = Math.max(0, Number(state.itemizedDeductions?.investmentInterest) || 0);
-  const netInvFor4952 = Math.max(0, interestIncome + net1099InterestTotal + Math.max(0, allowableCapitalNet));
-  const allowableInvestmentInterest = Math.min(netInvFor4952, investmentInterestRaw);
-  const casualtyLoss = Math.max(0, Number(state.itemizedDeductions?.casualtyLoss) || 0);
-
-  const totalItemized = allowableMedical + allowableSalt + mortgageInterest + charity + allowableGamblingLosses + allowableInvestmentInterest + casualtyLoss;
-
-  const method = state.deductionMethod || 'auto';
-  let chosenMethod: 'standard' | 'itemized' = 'standard';
-  let chosenDeduction = standardDeductionBase;
-
-  if (method === 'auto') {
-    if (totalItemized > standardDeductionBase) {
-      chosenMethod = 'itemized';
-      chosenDeduction = totalItemized;
-    } else {
-      chosenMethod = 'standard';
-      chosenDeduction = standardDeductionBase;
-    }
-  } else if (method === 'itemized') {
-    chosenMethod = 'itemized';
-    chosenDeduction = totalItemized;
-  } else {
-    chosenMethod = 'standard';
-    chosenDeduction = standardDeductionBase;
-  }
-
-  // Form 8995: 20% Qualified Business Income (QBI) Deduction (Form 1040 Line 13)
-  const netLtcgEligible = (allowableCapitalNet > 0 && ltGain > 0)
-    ? Math.min(allowableCapitalNet, ltGain)
-    : 0;
-  const taxableIncomeBeforeQbi = Math.max(0, agi - chosenDeduction);
-  const qbiBaseIncome = Math.max(0, netScheduleCProfit - halfSelfEmploymentTaxDeduction - seRetirement - seHealthInsurance) + Math.max(0, k1IncomeTotal);
-  const qbiCapBase = Math.max(0, taxableIncomeBeforeQbi - (qualifiedDividendsTotal + netLtcgEligible));
-  const qbiDeduction = qbiBaseIncome > 0
-    ? Math.round(Math.min(qbiBaseIncome * 0.20, qbiCapBase * 0.20) * 100) / 100
-    : 0;
-
-  const isItemizedBetter = totalItemized > standardDeductionBase;
-  const savingsOverAlternate = Math.abs(totalItemized - standardDeductionBase);
-
+  const totalItemized = v('fed.itemized');
+  const standardDeductionBase = v('fed.stdDeduction');
+  const chosenDeduction = v('fed.deduction');
+  const chosenMethod: 'standard' | 'itemized' = v('fed.itemizing') === 1 ? 'itemized' : 'standard';
   const itemizedCalc: ItemizedDeductionCalculation = {
-    result: totalItemized,
-    sourceFields: [
-      'input-itemized-medical',
-      'input-itemized-salt',
-      'input-itemized-mortgage',
-      'input-itemized-charity',
-      'calc-agi',
-      'select-filing-status'
-    ],
-    generalFormula: 'Schedule A Itemized Total = Medical (>7.5% AGI) + SALT (capped at $10,000) + Mortgage Interest + Charity',
-    pluggedFormula: `Schedule A Total = ${formatCurrency(allowableMedical)} (Medical) + ${formatCurrency(allowableSalt)} (SALT) + ${formatCurrency(mortgageInterest)} (Mortgage) + ${formatCurrency(charity)} (Charity)${allowableGamblingLosses > 0 ? ` + ${formatCurrency(allowableGamblingLosses)} (Gambling Loss)` : ''} = ${formatCurrency(totalItemized)}`,
-    isItemizedBetter,
+    ...calc('fed.itemized'),
+    isItemizedBetter: totalItemized > standardDeductionBase,
     totalItemized,
     totalItemizedDeductions: totalItemized,
-    allowableMedical,
-    medicalDeductible: allowableMedical,
-    allowableSalt,
-    saltDeduction: allowableSalt,
-    mortgage: mortgageInterest,
-    charity,
+    allowableMedical: v('fed.medicalDeduction'),
+    medicalDeductible: v('fed.medicalDeduction'),
+    allowableSalt: v('fed.salt'),
+    saltDeduction: v('fed.salt'),
+    mortgage: ev.inputValue('in.mortgage'),
+    charity: ev.inputValue('in.charity'),
     standardDeductionAmount: standardDeductionBase,
     standardDeduction: standardDeductionBase,
-    qbiDeduction,
+    qbiDeduction: v('fed.qbi'),
     chosenDeduction,
     chosenMethod,
-    savingsOverAlternate
+    savingsOverAlternate: Math.abs(totalItemized - standardDeductionBase)
   };
 
-  const deductionCalc: CalculationResult = {
-    result: chosenDeduction,
-    sourceFields: chosenMethod === 'itemized' 
-      ? ['calc-itemized-deductions', 'select-filing-status'] 
-      : ['select-filing-status', 'select-tax-year'],
-    generalFormula: `Form 1040 Line 12 Deduction = ${method === 'auto' ? 'max(Standard Deduction, Schedule A Itemized Total)' : (chosenMethod === 'itemized' ? 'Schedule A Itemized Total' : 'Standard Deduction')}${qbiDeduction > 0 ? ' (+ Line 13 20% QBI Deduction)' : ''}`,
-    pluggedFormula: `Line 12 Deduction = max(Standard: ${formatCurrency(standardDeductionBase)}, Itemized: ${formatCurrency(totalItemized)}) = ${formatCurrency(chosenDeduction)} (${chosenMethod === 'itemized' ? 'Itemized Applied' : 'Standard Applied'})${qbiDeduction > 0 ? ` + Line 13 QBI Deduction: ${formatCurrencyExact(qbiDeduction)}` : ''}`
-  };
-
-  // 6. Taxable Income - Line 15 on Form 1040 (AGI − Line 12 Deduction − Line 13 QBI Deduction)
-  const taxableIncome = Math.round(Math.max(0, agi - chosenDeduction - qbiDeduction) * 100) / 100;
-  const taxableIncomeCalc: CalculationResult = {
-    result: taxableIncome,
-    sourceFields: ['calc-agi', 'calc-standard-deduction'],
-    generalFormula: qbiDeduction > 0
-      ? 'Taxable Income = max(0, AGI − Line 12 Deduction − Line 13 QBI Deduction)'
-      : 'Taxable Income = max(0, AGI − Deductions)',
-    pluggedFormula: qbiDeduction > 0
-      ? `Taxable Income = max(0, ${formatCurrencyExact(agi)} − ${formatCurrency(chosenDeduction)} − ${formatCurrencyExact(qbiDeduction)} QBI) = ${formatCurrencyExact(taxableIncome)}`
-      : `Taxable Income = max(0, ${formatCurrencyExact(agi)} − ${formatCurrency(chosenDeduction)}) = ${formatCurrencyExact(taxableIncome)}`
-  };
-
-  // 7. Federal Income Tax (Marginal Tax Brackets + Qualified Dividends & Schedule D Tax Worksheet incl. 25%/28% gains)
-  const brackets = rules.brackets[effectiveStatus] || rules.brackets.single;
-  const ltcgBrackets = rules.ltcgBrackets[effectiveStatus] || rules.ltcgBrackets.single;
-
-  const specialCapGains = Math.min(netLtcgEligible, collectiblesGain + unrecaptured1250Gain);
-  const standardLtcgEligible = Math.max(0, netLtcgEligible - specialCapGains);
-  const preferentialIncome = Math.min(taxableIncome, qualifiedDividendsTotal + standardLtcgEligible + specialCapGains);
-  const ordinaryTaxableIncome = Math.max(0, taxableIncome - preferentialIncome);
-
-  const bracketDetails: BracketDetail[] = [];
-  let ordinaryTax = 0;
-  const bracketFormulaParts: string[] = [];
-
-  let remainingOrdinary = ordinaryTaxableIncome;
-  for (let i = 0; i < brackets.length; i++) {
-    const b = brackets[i];
-    const bracketWidth = b.max === Infinity ? Infinity : b.max - b.min;
-    if (ordinaryTaxableIncome > b.min) {
-      const taxableInBracket = Math.min(ordinaryTaxableIncome, b.max) - b.min;
-      const taxFromBracket = taxableInBracket * b.rate;
-      const remBefore = remainingOrdinary;
-      remainingOrdinary = Math.max(0, remainingOrdinary - taxableInBracket);
-      ordinaryTax += taxFromBracket;
-
-      const maxLabel = b.max === Infinity ? '+' : ` to ${formatCurrency(b.max)}`;
-      bracketDetails.push({
-        bracketIndex: i + 1,
-        rate: b.rate,
-        ratePercent: formatPercent(b.rate),
-        range: `${formatCurrency(b.min)}${maxLabel}`,
-        taxableAmount: taxableInBracket,
-        taxAmount: taxFromBracket,
-        formula: `${formatCurrency(taxableInBracket)} × ${formatPercent(b.rate)} = ${formatCurrency(taxFromBracket)}`,
-        bracketWidth,
-        remainingBefore: remBefore,
-        remainingAfter: remainingOrdinary
-      });
-
-      bracketFormulaParts.push(`(${formatCurrency(taxableInBracket)} × ${formatPercent(b.rate)})`);
-    } else {
-      bracketDetails.push({
-        bracketIndex: i + 1,
-        rate: b.rate,
-        ratePercent: formatPercent(b.rate),
-        range: `${formatCurrency(b.min)}${b.max === Infinity ? '+' : ` to ${formatCurrency(b.max)}`}`,
-        taxableAmount: 0,
-        taxAmount: 0,
-        formula: `$0 × ${formatPercent(b.rate)} = $0`,
-        bracketWidth,
-        remainingBefore: 0,
-        remainingAfter: 0
-      });
-    }
-  }
-
-  // Stack standard preferential income (Qualified Dividends + 0/15/20% LTCG) and 25%/28% Schedule D gains
-  let preferentialTax = 0;
-  let collectiblesTax = 0;
-  let unrecaptured1250Tax = 0;
-  const prefFormulaParts: string[] = [];
-
-  const stdPrefIncome = Math.min(preferentialIncome, qualifiedDividendsTotal + standardLtcgEligible);
-  const stdPrefTop = ordinaryTaxableIncome + stdPrefIncome;
-
-  if (stdPrefIncome > 0) {
-    for (const lb of ltcgBrackets) {
-      const sliceBottom = Math.max(ordinaryTaxableIncome, lb.min);
-      const sliceTop = Math.min(stdPrefTop, lb.max);
-      if (sliceTop > sliceBottom) {
-        const chunk = sliceTop - sliceBottom;
-        const chunkTax = chunk * lb.rate;
-        preferentialTax += chunkTax;
-        prefFormulaParts.push(`(${formatCurrency(chunk)} LTCG/QDiv × ${formatPercent(lb.rate)})`);
-      }
-    }
-  }
-
-  const remainingSpecialPref = Math.max(0, preferentialIncome - stdPrefIncome);
-  if (remainingSpecialPref > 0) {
-    const applied1250 = Math.min(remainingSpecialPref, unrecaptured1250Gain);
-    const appliedCollectibles = Math.max(0, remainingSpecialPref - applied1250);
-    if (applied1250 > 0) {
-      unrecaptured1250Tax = applied1250 * 0.25;
-      preferentialTax += unrecaptured1250Tax;
-      prefFormulaParts.push(`(${formatCurrency(applied1250)} Sec. 1250 × 25%)`);
-    }
-    if (appliedCollectibles > 0) {
-      collectiblesTax = appliedCollectibles * 0.28;
-      preferentialTax += collectiblesTax;
-      prefFormulaParts.push(`(${formatCurrency(appliedCollectibles)} Collectibles × 28%)`);
-    }
-  }
-
-  const tentativeTax = Math.round((ordinaryTax + preferentialTax) * 100) / 100;
-  const taxBeforeCredits = tentativeTax;
-  const taxBeforeCreditsCalc: TaxBeforeCreditsResult = {
-    result: taxBeforeCredits,
-    sourceFields: ['calc-taxable-income', 'select-filing-status'],
-    generalFormula: preferentialIncome > 0
-      ? 'Tentative Tax = Ordinary Bracket Tax on (Taxable Income − Preferential Income) + Qualified Dividends & LTCG Tax (0% / 15% / 20%)'
-      : 'Tentative Tax = ∑(Taxable Income in Bracket i × Bracket Rate i)',
-    pluggedFormula: preferentialIncome > 0
-      ? `Ordinary Tax (${formatCurrencyExact(ordinaryTax)} on ${formatCurrency(ordinaryTaxableIncome)}) + Preferential LTCG/QDiv Tax (${prefFormulaParts.join(' + ')} = ${formatCurrencyExact(preferentialTax)}) = ${formatCurrencyExact(taxBeforeCredits)}`
-      : (bracketFormulaParts.length > 0
-          ? `Tentative Tax = ${bracketFormulaParts.join(' + ')} = ${formatCurrencyExact(taxBeforeCredits)}`
-          : `Tentative Tax = $0 × 10% = $0`),
-    brackets: bracketDetails,
-    qualifiedDividendsTotal,
-    preferentialIncome,
-    preferentialTax,
-    ordinaryTaxableIncome,
-    ordinaryTax,
-    collectiblesTax,
-    unrecaptured1250Tax
-  };
-
-  // 8. Tax Credits (Child Tax Credit, Other Dependents Credit, Child Care Form 2441, Education Form 8863, Saver's Form 8880, Foreign Tax Form 1116, Clean Energy Form 5695, Refundable ACTC & EITC)
-  const numChildren = Math.max(0, parseInt(String(state.dependents?.childrenCount), 10) || 0);
-  const numOtherDependents = Math.max(0, parseInt(String(state.dependents?.otherDependentsCount), 10) || 0);
-  let childCreditPhaseoutAmount = 0;
-
-  const maxPotentialCtc = numChildren * rules.childTaxCreditPerChild;
-  const maxPotentialOdc = numOtherDependents * 500;
-  const combinedCtcOdcMax = maxPotentialCtc + maxPotentialOdc;
-
-  if (combinedCtcOdcMax > 0) {
-    const threshold = rules.childTaxCreditPhaseout[effectiveStatus] || 200000;
-    if (agi > threshold) {
-      const excess = agi - threshold;
-      const chunks = Math.ceil(excess / 1000);
-      childCreditPhaseoutAmount = chunks * 50;
-    }
-  }
-
-  const netCtcOdcAfterPhaseout = Math.max(0, combinedCtcOdcMax - childCreditPhaseoutAmount);
-  const ctcAfterPhaseout = Math.min(maxPotentialCtc, netCtcOdcAfterPhaseout);
-  const odcAfterPhaseout = Math.max(0, netCtcOdcAfterPhaseout - ctcAfterPhaseout);
-
-  // Form 2441: Child & Dependent Care Credit (20% to 35% of up to $3,000 for 1 person / $6,000 for 2+)
-  const rawCareExpenses = Math.max(0, Number(state.dependents?.childCareExpenses) || 0);
-  const carePersons = Math.max(1, numChildren + numOtherDependents);
-  const careCap = carePersons >= 2 ? 6000 : 3000;
-  const eligibleCareExpenses = Math.min(careCap, rawCareExpenses);
-  const careRate = agi <= 15000 ? 0.35 : Math.max(0.20, 0.35 - Math.ceil((agi - 15000) / 2000) * 0.01);
-  const childCareCreditRaw = effectiveStatus === 'married_separate' ? 0 : Math.round(eligibleCareExpenses * careRate * 100) / 100;
-
-  // Form 8863: Education Credits (AOTC up to $2,500 w/ 40% refundable + LLC 20% up to $2,000)
-  const aotcTuition = Math.max(0, Number(state.dependents?.educationExpensesAotc) || 0);
-  const llcTuition = Math.max(0, Number(state.dependents?.educationExpensesLlc) || 0);
-  const eduPhaseStart = effectiveStatus === 'married_joint' ? 160000 : 80000;
-  const eduPhaseSpan = effectiveStatus === 'married_joint' ? 20000 : 10000;
-  const eduPhaseFactor = effectiveStatus === 'married_separate'
-    ? 0
-    : Math.max(0, Math.min(1, 1 - Math.max(0, agi - eduPhaseStart) / eduPhaseSpan));
-
-  const rawAotc = aotcTuition > 0
-    ? (Math.min(2000, aotcTuition) + Math.max(0, Math.min(4000, aotcTuition) - 2000) * 0.25) * eduPhaseFactor
-    : 0;
-  const educationCreditRefundable = Math.round(rawAotc * 0.40 * 100) / 100;
-  const aotcNonRefundable = Math.round(rawAotc * 0.60 * 100) / 100;
-  const llcNonRefundable = Math.round(Math.min(10000, llcTuition) * 0.20 * eduPhaseFactor * 100) / 100;
-  const educationCreditNonRefundableRaw = aotcNonRefundable + llcNonRefundable;
-
-  // Form 8880: Saver's Credit (10% / 20% / 50% of up to $2,000 / $4,000 MFJ IRA contribution for low/mod AGI)
-  const saversMaxContribution = effectiveStatus === 'married_joint' ? 4000 : 2000;
-  const saversEligibleContrib = Math.min(saversMaxContribution, iraDeduction);
-  let saversRate = 0;
-  if (saversEligibleContrib > 0) {
-    const t50 = effectiveStatus === 'married_joint' ? 46000 : (effectiveStatus === 'head_of_household' ? 34500 : 23000);
-    const t20 = effectiveStatus === 'married_joint' ? 50000 : (effectiveStatus === 'head_of_household' ? 37500 : 25000);
-    const t10 = effectiveStatus === 'married_joint' ? 76500 : (effectiveStatus === 'head_of_household' ? 57375 : 38250);
-    if (agi <= t50) saversRate = 0.50;
-    else if (agi <= t20) saversRate = 0.20;
-    else if (agi <= t10) saversRate = 0.10;
-  }
-  const saversCreditRaw = Math.round(saversEligibleContrib * saversRate * 100) / 100;
-
-  const foreignTaxCreditRaw = Math.max(0, Number(state.dependents?.foreignTaxCredit) || 0);
-  const cleanEnergyCreditRaw = Math.max(0, Number(state.dependents?.cleanEnergyCredit) || 0);
-  const adoptionCreditRaw = Math.min(year === 2025 ? 17280 : 16810, Math.max(0, Number(state.dependents?.adoptionCredit) || 0));
-  const elderlyDisabledCreditRaw = Math.max(0, Number(state.dependents?.elderlyDisabledCredit) || 0);
-  const premiumTaxCreditRaw = Math.max(0, Number(state.dependents?.premiumTaxCredit) || 0);
-
-  const totalNonRefundableRaw = ctcAfterPhaseout + odcAfterPhaseout + childCareCreditRaw + educationCreditNonRefundableRaw + saversCreditRaw + foreignTaxCreditRaw + cleanEnergyCreditRaw + adoptionCreditRaw + elderlyDisabledCreditRaw;
-  const totalNonRefundableCredits = Math.round(Math.min(taxBeforeCredits, totalNonRefundableRaw) * 100) / 100;
-  const childCreditAllowed = Math.min(taxBeforeCredits, ctcAfterPhaseout);
-  const otherDependentsCredit = Math.min(Math.max(0, taxBeforeCredits - childCreditAllowed), odcAfterPhaseout);
-
-  // Schedule 8812: Refundable Additional Child Tax Credit (ACTC - up to $1,700/child at 15% of earned income over $2,500)
-  const earnedIncomeTotal = totalW2Wages + Math.max(0, netScheduleCProfit);
-  const unusedCtc = Math.max(0, ctcAfterPhaseout - childCreditAllowed);
-  const actcMaxPerKids = numChildren * rules.childTaxCreditRefundableMax;
-  const actcEarnedIncomeFormula = Math.max(0, (earnedIncomeTotal - 2500) * 0.15);
-  const additionalChildTaxCredit = numChildren > 0
-    ? Math.round(Math.min(unusedCtc, actcMaxPerKids, actcEarnedIncomeFormula) * 100) / 100
-    : 0;
-
-  // Schedule EIC: Earned Income Tax Credit (EITC - automatic for eligible low/moderate earned income)
-  const investmentIncomeForEitc = interestIncome + net1099InterestTotal + taxExemptInterestTotal + total1099Dividends + Math.max(0, allowableCapitalNet) + Math.max(0, allowableRentalNet);
-  const eitcInvCap = year === 2025 ? 11950 : 11600;
-  let eitc = 0;
-  if (effectiveStatus !== 'married_separate' && earnedIncomeTotal > 0 && investmentIncomeForEitc <= eitcInvCap) {
-    const kidsBucket = Math.min(3, numChildren) as 0 | 1 | 2 | 3;
-    const eitcParams: Record<0 | 1 | 2 | 3, { maxCredit: number; phaseInRate: number; phaseOutRate: number; singleEnd: number; mfjEnd: number }> = {
-      0: { maxCredit: 632, phaseInRate: 0.0765, phaseOutRate: 0.0765, singleEnd: 18591, mfjEnd: 25511 },
-      1: { maxCredit: 4213, phaseInRate: 0.34, phaseOutRate: 0.1598, singleEnd: 49084, mfjEnd: 56004 },
-      2: { maxCredit: 6960, phaseInRate: 0.40, phaseOutRate: 0.2106, singleEnd: 55768, mfjEnd: 62688 },
-      3: { maxCredit: 7830, phaseInRate: 0.45, phaseOutRate: 0.2106, singleEnd: 59899, mfjEnd: 66819 }
+  // Bracket ladder for the visualizer: every bracket of the table, filled from the graph's slices.
+  const bracketTable = ev.paramValue('fed.brackets') as BracketDef[];
+  const ordinaryNode = ev.bracketNodes(ev.node('fed.ordinaryTax'))[0];
+  let remaining = v('fed.ordinaryTaxable');
+  const brackets: BracketDetail[] = bracketTable.map((b, i) => {
+    const slice = ordinaryNode?.slices?.find(s => s.index === i + 1);
+    const amount = slice?.amount ?? 0;
+    const remBefore = amount > 0 ? remaining : 0;
+    if (amount > 0) remaining = Math.max(0, remaining - amount);
+    const maxLabel = b.max === Infinity ? '+' : ` to ${formatCurrency(b.max)}`;
+    return {
+      bracketIndex: i + 1,
+      rate: b.rate,
+      ratePercent: formatPercent(b.rate),
+      range: `${formatCurrency(b.min)}${maxLabel}`,
+      taxableAmount: amount,
+      taxAmount: slice?.tax ?? 0,
+      formula: `${formatCurrency(amount)} × ${formatPercent(b.rate)} = ${formatCurrency(slice?.tax ?? 0)}`,
+      bracketWidth: b.max === Infinity ? Infinity : b.max - b.min,
+      remainingBefore: remBefore,
+      remainingAfter: amount > 0 ? remaining : 0
     };
-    const p = eitcParams[kidsBucket];
-    const agiLimit = effectiveStatus === 'married_joint' ? p.mfjEnd : p.singleEnd;
-    const baseIncome = Math.max(earnedIncomeTotal, agi);
-    if (baseIncome < agiLimit) {
-      const phaseIn = Math.min(p.maxCredit, earnedIncomeTotal * p.phaseInRate);
-      const phaseOutStart = agiLimit - (p.maxCredit / p.phaseOutRate);
-      const phaseOutReduction = Math.max(0, (baseIncome - phaseOutStart) * p.phaseOutRate);
-      eitc = Math.round(Math.max(0, Math.min(phaseIn, p.maxCredit - phaseOutReduction)) * 100) / 100;
-    }
-  }
-
-  const totalRefundableCredits = Math.round((additionalChildTaxCredit + eitc + educationCreditRefundable + premiumTaxCreditRaw) * 100) / 100;
+  });
+  const taxBeforeCreditsCalc: TaxBeforeCreditsResult = {
+    ...calc('fed.tax'),
+    brackets,
+    qualifiedDividendsTotal: v('fed.qualifiedDividends'),
+    preferentialIncome: v('fed.preferentialIncome'),
+    preferentialTax: v('fed.preferentialTax'),
+    ordinaryTaxableIncome: v('fed.ordinaryTaxable'),
+    ordinaryTax: v('fed.ordinaryTax'),
+    collectiblesTax: v('fed.collectiblesTax'),
+    unrecaptured1250Tax: v('fed.unrecap1250Tax')
+  };
 
   const creditsCalc: CreditsCalculation = {
-    result: totalNonRefundableCredits,
-    childTaxCredit: childCreditAllowed,
-    additionalChildTaxCredit,
-    otherDependentsCredit,
-    eitc,
-    childCareCredit: childCareCreditRaw,
-    educationCreditNonRefundable: educationCreditNonRefundableRaw,
-    educationCreditRefundable,
-    saversCredit: saversCreditRaw,
-    foreignTaxCredit: foreignTaxCreditRaw,
-    cleanEnergyCredit: cleanEnergyCreditRaw,
-    totalNonRefundableCredits,
-    totalRefundableCredits,
-    sourceFields: ['input-children-count', 'calc-agi', 'calc-tax-before-credits'],
-    generalFormula: totalRefundableCredits > 0
-      ? 'Tax Credits = Nonrefundable Credits (CTC/ODC/Care/Edu/Energy) + Refundable Credits (ACTC/EITC/AOTC)'
-      : 'Tax Credits = min(Tax Liability, Qualifying Children × $2,000 + Other Credits − Phaseout)',
-    pluggedFormula: (totalNonRefundableCredits > 0 || totalRefundableCredits > 0)
-      ? `Nonrefundable Credits = ${formatCurrencyExact(totalNonRefundableCredits)}${totalRefundableCredits > 0 ? ` (+ ${formatCurrencyExact(totalRefundableCredits)} Refundable ACTC/EITC/AOTC on Line 27–29)` : ''}`
-      : `Credits = 0 qualifying children = $0`
+    ...calc('fed.nonrefundableCredits'),
+    childTaxCredit: v('fed.ctcAllowed'),
+    additionalChildTaxCredit: v('fed.actc'),
+    otherDependentsCredit: v('fed.odcAllowed'),
+    eitc: v('fed.eitc'),
+    childCareCredit: v('fed.childCareCredit'),
+    educationCreditNonRefundable: v('fed.educationNonrefundable'),
+    educationCreditRefundable: v('fed.aotcRefundable'),
+    saversCredit: v('fed.saversCredit'),
+    foreignTaxCredit: ev.inputValue('in.foreignTaxCredit'),
+    cleanEnergyCredit: ev.inputValue('in.cleanEnergy'),
+    totalNonRefundableCredits: v('fed.nonrefundableCredits'),
+    totalRefundableCredits: v('fed.refundableCredits')
   };
-
-  // 8b. FICA & Other Taxes (Schedule SE, Form 8959 Additional Medicare, Form 8960 NIIT, Form 6251 AMT, Form 5329 Early Withdrawal Penalty)
-  // Excess Social Security Tax Credit (Schedule 3, Line 11): applies when 2+ employers withhold SS tax above the annual cap
-  const maxAnnualSSTax = Math.round(rules.ssWageLimit * rules.ssRate * 100) / 100;
-  const excessSSTaxCredit = w2List.length > 1 && totalSSTax > maxAnnualSSTax
-    ? Math.round((totalSSTax - maxAnnualSSTax) * 100) / 100
-    : 0;
-
-  // Form 8959: 0.9% Additional Medicare Tax on combined Medicare wages (Box 5) + SE earnings above threshold ($200k Single / $250k MFJ)
-  const addMedThreshold = rules.additionalMedicareThreshold[effectiveStatus] || 200000;
-  const combinedMedAndSeWages = totalMedWages + seTaxableEarnings;
-  const excessMedWages = Math.max(0, combinedMedAndSeWages - addMedThreshold);
-  const additionalMedicareTax = Math.round(excessMedWages * rules.additionalMedicareRate * 100) / 100;
-
-  // Form 8960: 3.8% Net Investment Income Tax (NIIT) on min(Net Investment Income, max(0, MAGI - threshold))
-  const niitThreshold = rules.niitThreshold[effectiveStatus] || 200000;
-  const netInvestmentIncome = Math.max(
-    0,
-    interestIncome +
-      net1099InterestTotal +
-      total1099Dividends +
-      Math.max(0, allowableCapitalNet) +
-      Math.max(0, allowableRentalNet)
-  );
-  const magiExcessOverNiit = Math.max(0, agi - niitThreshold);
-  const niitBase = Math.min(netInvestmentIncome, magiExcessOverNiit);
-  const niit = Math.round(niitBase * rules.niitRate * 100) / 100;
-
-  // Form 6251: Alternative Minimum Tax (AMT)
-  // AMTI = AGI - AMT-allowed itemized deductions (Medical + Mortgage + Charity, i.e., SALT and Standard Deduction added back)
-  const amtAllowedDeductions = allowableMedical + mortgageInterest + charity + allowableGamblingLosses;
-  const amti = Math.max(0, agi - amtAllowedDeductions - qbiDeduction);
-  const amtExemptionBase = effectiveStatus === 'married_joint'
-    ? (year === 2025 ? 137000 : 133300)
-    : (effectiveStatus === 'married_separate' ? (year === 2025 ? 68500 : 66650) : (year === 2025 ? 88100 : 85700));
-  const amtPhaseoutThreshold = effectiveStatus === 'married_joint'
-    ? (year === 2025 ? 1252700 : 1218700)
-    : (year === 2025 ? 626350 : 609350);
-  const amtExemptionReduction = Math.max(0, (amti - amtPhaseoutThreshold) * 0.25);
-  const amtExemption = Math.max(0, amtExemptionBase - amtExemptionReduction);
-  const amtTaxableExcess = Math.max(0, amti - amtExemption);
-  const amtOrdinaryExcess = Math.max(0, amtTaxableExcess - preferentialIncome);
-  const amt28Breakpoint = effectiveStatus === 'married_separate' ? 116300 : 232600;
-  const tmtOrdinary = amtOrdinaryExcess <= amt28Breakpoint
-    ? amtOrdinaryExcess * 0.26
-    : (amt28Breakpoint * 0.26 + (amtOrdinaryExcess - amt28Breakpoint) * 0.28);
-  const tentativeMinimumTax = Math.round((tmtOrdinary + preferentialTax) * 100) / 100;
-  const amt = amti > amtExemptionBase ? Math.max(0, Math.round((tentativeMinimumTax - taxBeforeCredits) * 100) / 100) : 0;
-
-  // Form 5329: 10% Early Retirement Distribution Penalty + Schedule H Household + Form 4137 Unreported Tips FICA
-  const earlyDistributionPenaltyTax = Math.round(earlyDist1099RTotal * 0.10 * 100) / 100;
-  const householdEmploymentTax = Math.max(0, Number(state.dependents?.householdEmploymentTax) || 0);
-
-  const totalOtherTaxes = Math.round((selfEmploymentTax + additionalMedicareTax + niit + amt + earlyDistributionPenaltyTax + unreportedTipsFicaTax + householdEmploymentTax) * 100) / 100;
-
-  const otherTaxParts: string[] = [];
-  if (selfEmploymentTax > 0) {
-    otherTaxParts.push(`Schedule SE (${formatCurrencyExact(selfEmploymentTax)})`);
-  }
-  if (additionalMedicareTax > 0 || niit > 0) {
-    otherTaxParts.push(`Form 8959 (${formatCurrency(excessMedWages)} × 0.9% = ${formatCurrencyExact(additionalMedicareTax)}) + Form 8960 (min(NII ${formatCurrency(netInvestmentIncome)}, MAGI Excess ${formatCurrency(magiExcessOverNiit)}) × 3.8% = ${formatCurrencyExact(niit)})`);
-  }
-  if (amt > 0) {
-    otherTaxParts.push(`Form 6251 AMT (${formatCurrencyExact(amt)})`);
-  }
-  if (earlyDistributionPenaltyTax > 0) {
-    otherTaxParts.push(`Form 5329 10% Penalty (${formatCurrencyExact(earlyDistributionPenaltyTax)})`);
-  }
 
   const otherTaxesCalc: OtherTaxesCalculation = {
-    result: totalOtherTaxes,
-    selfEmploymentTax,
-    halfSelfEmploymentTaxDeduction,
-    additionalMedicareTax,
-    niit,
-    amt,
-    earlyDistributionPenaltyTax,
-    netInvestmentIncome,
-    totalOtherTaxes,
-    seTaxableEarnings,
-    seSSPortion,
-    seMedPortion,
-    combinedMedAndSeWages,
-    addMedThreshold,
-    excessMedWages,
-    niitThreshold,
-    magiExcessOverNiit,
-    amti,
-    amtAllowedDeductions,
-    amtExemption,
-    tentativeMinimumTax,
-    earlyDist1099RTotal,
-    sourceFields: ['calc-agi', ...w2List.map((w, idx) => `w2-${w.id || idx}-box5`)],
-    generalFormula: 'Schedule 2 Other Taxes = Schedule SE (15.3%) + Form 8959 Additional Medicare (0.9% over $200k) + Form 8960 NIIT (3.8%) + Form 6251 AMT',
-    pluggedFormula: totalOtherTaxes > 0
-      ? `${otherTaxParts.join(' + ')} = ${formatCurrencyExact(totalOtherTaxes)}`
-      : 'Schedule 2 Other Taxes (Schedule SE / Form 8959 / Form 8960 / AMT) = $0'
+    ...calc('fed.otherTaxes'),
+    selfEmploymentTax: v('fed.seTax'),
+    halfSelfEmploymentTaxDeduction: v('fed.halfSeTax'),
+    additionalMedicareTax: v('fed.additionalMedicareTax'),
+    niit: v('fed.niit'),
+    amt: v('fed.amt'),
+    earlyDistributionPenaltyTax: v('fed.earlyDistributionPenalty'),
+    netInvestmentIncome: v('fed.netInvestmentIncome'),
+    totalOtherTaxes: v('fed.otherTaxes'),
+    seTaxableEarnings: v('fed.seEarnings'),
+    seSSPortion: v('fed.seSsTax'),
+    seMedPortion: v('fed.seMedTax'),
+    combinedMedAndSeWages: v('fed.medicareAndSeWages'),
+    addMedThreshold: ev.paramValue('fed.addlMedThreshold') as number,
+    excessMedWages: v('fed.excessMedicareWages'),
+    niitThreshold: ev.paramValue('fed.niitThreshold') as number,
+    magiExcessOverNiit: Math.max(0, v('fed.agi') - (ev.paramValue('fed.niitThreshold') as number)),
+    amti: v('fed.amti'),
+    amtAllowedDeductions: v('fed.agi') - v('fed.qbi') - v('fed.amti') > 0 ? v('fed.agi') - v('fed.qbi') - v('fed.amti') : 0,
+    amtExemption: v('fed.amtExemptionAllowed'),
+    tentativeMinimumTax: v('fed.tentativeMinimumTax'),
+    earlyDist1099RTotal: v('fed.earlyDistributions')
   };
 
-  // 9. Total Federal Tax Liability (Form 1040 Line 24 = max(0, Tentative Tax − Nonrefundable Credits) + Schedule 2 Other Taxes)
-  const totalTaxLiability = Math.round((Math.max(0, taxBeforeCredits - totalNonRefundableCredits) + totalOtherTaxes) * 100) / 100;
-  const totalTaxCalc: CalculationResult = {
-    result: totalTaxLiability,
-    sourceFields: [
-      'calc-tax-before-credits',
-      'calc-total-credits',
-      ...(totalOtherTaxes > 0 ? ['calc-other-taxes'] : [])
-    ],
-    generalFormula: totalOtherTaxes > 0
-      ? 'Total Tax Liability = max(0, Tentative Tax − Total Credits) + Schedule 2 Other Taxes (Form 8959 & Form 8960)'
-      : 'Total Tax Liability = max(0, Tentative Tax − Total Credits)',
-    pluggedFormula: totalOtherTaxes > 0
-      ? `Total Tax Liability = max(0, ${formatCurrencyExact(taxBeforeCredits)} − ${formatCurrencyExact(totalNonRefundableCredits)}) + ${formatCurrencyExact(totalOtherTaxes)} = ${formatCurrencyExact(totalTaxLiability)}`
-      : `Total Tax Liability = max(0, ${formatCurrencyExact(taxBeforeCredits)} − ${formatCurrencyExact(totalNonRefundableCredits)}) = ${formatCurrencyExact(totalTaxLiability)}`
-  };
-
-  // 10. Total Federal Income Tax Withheld & Payments (W-2 Box 2 + 1099 Box 4 Withholding + Estimated Tax Payments + Refundable Credits + Schedule 3 Line 11 Excess SS Tax Credit)
-  const box2Values = w2List.map(w => Number(w.box2) || 0);
-  const w2Box2Total = box2Values.reduce((sum, val) => sum + val, 0);
-  const estimatedTaxPayments = Math.max(0, Number(state.dependents?.estimatedTaxPayments) || 0);
-  const totalWithheld = Math.round((w2Box2Total + extra1099WithheldTotal + estimatedTaxPayments + totalRefundableCredits + excessSSTaxCredit) * 100) / 100;
-  const w2WithheldFieldIds = [
-    ...w2List.map((w, idx) => `w2-${w.id || idx}-box2`),
-    ...(excessSSTaxCredit > 0 ? ['calc-fica-breakdown'] : []),
-    ...(totalRefundableCredits > 0 ? ['calc-total-credits'] : [])
-  ];
-
-  const paymentExtras: string[] = [];
-  if (extra1099WithheldTotal > 0) paymentExtras.push(`${formatCurrencyExact(extra1099WithheldTotal)} (1099 WH)`);
-  if (estimatedTaxPayments > 0) paymentExtras.push(`${formatCurrencyExact(estimatedTaxPayments)} (1040-ES)`);
-  if (totalRefundableCredits > 0) paymentExtras.push(`${formatCurrencyExact(totalRefundableCredits)} (Refundable Credits)`);
-  if (excessSSTaxCredit > 0) paymentExtras.push(`${formatCurrencyExact(excessSSTaxCredit)} (Excess SS Credit)`);
-
-  const withholdingCalc: CalculationResult = {
-    result: totalWithheld,
-    sourceFields: w2WithheldFieldIds,
-    generalFormula: paymentExtras.length > 0
-      ? 'Total Federal Payments = ∑(W-2 Box 2) + Schedule 3 Line 11 Excess Social Security Tax Credit & Refundable Payments'
-      : (w2List.length === 1 ? 'Total Withholding = W-2 Box 2' : 'Total Withholding = ∑(W-2 Box 2)'),
-    pluggedFormula: paymentExtras.length > 0
-      ? `Total Payments = ${box2Values.map(v => formatCurrencyExact(v)).join(' + ')} + ${paymentExtras.join(' + ')} = ${formatCurrencyExact(totalWithheld)}`
-      : (w2List.length === 1
-          ? `Total Withholding = ${formatCurrencyExact(box2Values[0])}`
-          : `Total Withholding = ${box2Values.map(v => formatCurrencyExact(v)).join(' + ')} = ${formatCurrencyExact(totalWithheld)}`)
-  };
-
-  // 11. Final Refund or Amount You Owe
-  const netDifference = Math.round((totalWithheld - totalTaxLiability) * 100) / 100;
+  const totalTaxLiability = v('fed.totalTax');
+  const totalWithheld = v('fed.payments');
+  const netDifference = v('fed.netResult');
   const isRefund = netDifference >= 0;
-  const finalAmount = Math.abs(netDifference);
-
   const finalResultCalc: FinalResultCalculation = {
-    result: finalAmount,
-    isRefund: isRefund,
-    netDifference: netDifference,
-    sourceFields: ['calc-total-withholding', 'calc-total-tax-liability'],
-    generalFormula: isRefund
-      ? 'Refund = Total Payments (Withholding) − Total Tax Liability'
-      : 'Amount Owed = Total Tax Liability − Total Payments (Withholding)',
-    pluggedFormula: isRefund
-      ? `Refund = ${formatCurrencyExact(totalWithheld)} − ${formatCurrencyExact(totalTaxLiability)} = ${formatCurrencyExact(finalAmount)}`
-      : `Amount Owed = ${formatCurrencyExact(totalTaxLiability)} − ${formatCurrencyExact(totalWithheld)} = ${formatCurrencyExact(finalAmount)}`
+    ...calc(isRefund ? 'fed.refund' : 'fed.owed', Math.abs(netDifference)),
+    isRefund,
+    netDifference
   };
 
-  // 12. FICA Breakdown (Social Security & Medicare from W2 boxes 3, 4, 5, 6 + Excess SS Tax Credit)
   const ficaCalc: FicaCalculation = {
-    result: totalFicaWithheld,
-    ssWages: totalSSWages,
-    ssTax: totalSSTax,
-    medWages: totalMedWages,
-    medTax: totalMedTax,
-    totalFica: totalFicaWithheld,
-    excessSSTaxCredit,
-    sourceFields: [
-      ...w2List.map((w, idx) => `w2-${w.id || idx}-box4`),
-      ...w2List.map((w, idx) => `w2-${w.id || idx}-box6`)
-    ],
-    generalFormula: excessSSTaxCredit > 0
-      ? `Total FICA Withheld = Box 4 SS + Box 6 Medicare (Excess SS over ${formatCurrencyExact(maxAnnualSSTax)} cap = ${formatCurrencyExact(excessSSTaxCredit)} credited on Schedule 3 Line 11)`
-      : 'Total FICA Taxes = Social Security Tax (Box 4) + Medicare Tax (Box 6)',
-    pluggedFormula: excessSSTaxCredit > 0
-      ? `Total FICA = ${formatCurrencyExact(totalSSTax)} (SS) + ${formatCurrencyExact(totalMedTax)} (Medicare) = ${formatCurrencyExact(totalFicaWithheld)} ➔ Schedule 3 Excess SS Credit = ${formatCurrencyExact(excessSSTaxCredit)}`
-      : `Total FICA = ${formatCurrencyExact(totalSSTax)} + ${formatCurrencyExact(totalMedTax)} = ${formatCurrencyExact(totalFicaWithheld)}`
+    ...calc('fed.ficaWithheld'),
+    ssWages: v('fed.ssWages'),
+    ssTax: v('fed.ssTaxWithheld'),
+    medWages: v('fed.medWages'),
+    medTax: v('fed.medTaxWithheld'),
+    totalFica: v('fed.ficaWithheld'),
+    excessSSTaxCredit: v('fed.excessSS')
   };
 
-  // Effective Tax Rate
-  const effectiveRate = grossIncome > 0 ? (totalTaxLiability / grossIncome) : 0;
+  const grossIncome = v('fed.totalIncome');
+  const agi = v('fed.agi');
   const effectiveRateCalc: EffectiveRateCalculation = {
-    rate: effectiveRate,
-    sourceFields: ['calc-total-tax-liability', 'calc-gross-income'],
-    generalFormula: 'Effective Tax Rate = Total Tax Liability ÷ Gross Income',
-    pluggedFormula: `Effective Rate = ${formatCurrencyExact(totalTaxLiability)} ÷ ${formatCurrency(grossIncome)} = ${formatPercent(effectiveRate)}`
+    rate: v('fed.effectiveRate'),
+    sourceFields: ev.sources('fed.effectiveRate'),
+    generalFormula: ev.lineText('fed.effectiveRate', false),
+    pluggedFormula: ev.lineText('fed.effectiveRate', true)
   };
 
-  // 14. Multi-State Tax Return Engine & Unified Summary (Handles OSTC, Reciprocity, NYC Local Tax, DC Form D-30, WA 7% LTCG, NH 3% I&D, & State Itemized Deductions)
+  // ---- State returns & unified summary ----
   const { stateReturnsCalc, unifiedSummaryCalc } = calculateStateReturnsAndUnifiedSummary(
     state,
     w2List,
-    totalW2Wages,
+    v('fed.wages'),
     grossIncome,
     agi,
     filingStatus,
@@ -2056,27 +1154,28 @@ export function calculateTaxes(state: TaxAppState): TaxCalculationSummary {
     year,
     filingStatus,
     w2Count: w2List.length,
-    w2WagesCalc,
-    grossIncomeCalc,
-    adjustmentsCalc,
-    agiCalc,
-    deductionCalc,
-    qbiDeduction,
+    w2WagesCalc: calc('fed.wages'),
+    grossIncomeCalc: calc('fed.totalIncome'),
+    adjustmentsCalc: calc('fed.adjustments'),
+    agiCalc: calc('fed.agi'),
+    deductionCalc: calc('fed.deduction'),
+    qbiDeduction: v('fed.qbi'),
     itemizedCalc,
     capitalGainsCalc,
     scheduleECalc,
-    taxableIncomeCalc,
+    taxableIncomeCalc: calc('fed.taxableIncome'),
     taxBeforeCreditsCalc,
     creditsCalc,
     otherTaxesCalc,
-    totalTaxCalc,
-    withholdingCalc,
+    totalTaxCalc: calc('fed.totalTax'),
+    withholdingCalc: calc('fed.payments'),
     finalResultCalc,
     ficaCalc,
     stateTaxCalc,
     stateReturnsCalc,
     unifiedSummaryCalc,
-    effectiveRateCalc
+    effectiveRateCalc,
+    federalEval: ev
   };
 }
 

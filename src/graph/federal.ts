@@ -1,0 +1,607 @@
+/**
+ * Federal Form 1040 as a formula graph.
+ *
+ * This file is the only place federal tax math exists. calculateTaxes() reads its results,
+ * the calculation blocks render its formulas, and the arrows follow its references.
+ *
+ * Rules intentionally mirror the previous engine line for line (including its known
+ * simplifications) so this port is behavior-neutral; fixes land as separate changes.
+ */
+
+import { TaxAppState, IncomeSourceType, PanelSectionCategory } from '../types.js';
+import { TAX_CONSTANTS, YearTaxRules, normalizeFilingStatus } from '../tax-constants.js';
+import {
+  add, and, atLeast0, brackets, ceil, count, div, each, field, flag, gt, gte, lit, lookup, lt, lte,
+  max, min, mul, neg, not, num, param, rate, ref, round, statusIs, sub, sumOver, when
+} from './expr.js';
+import { BlockSpec, CollectionItem, CoreStatus, FormulaGraph, GraphContext } from './graph.js';
+
+const rules = (year: number): YearTaxRules => TAX_CONSTANTS[year as 2024 | 2025] || TAX_CONSTANTS[2024];
+const byStatus = <T>(map: Partial<Record<CoreStatus, T>> & { other: T }) => (s: CoreStatus): T =>
+  (map[s] !== undefined ? map[s] : map.other) as T;
+const YEAR_STATUS = ['select-tax-year', 'select-filing-status'];
+
+/** Income-source collections, one per document type. */
+export const SOURCE_COLLECTIONS: Array<{ id: string; type: IncomeSourceType[]; label: string; panelKey?: string; allowNegative?: boolean }> = [
+  { id: 'src.nec', type: ['1099-NEC'], label: '1099-NEC', panelKey: '1099-nec' },
+  { id: 'src.k', type: ['1099-K'], label: '1099-K', panelKey: '1099-k' },
+  { id: 'src.f', type: ['Schedule F'], label: 'Schedule F', panelKey: 'sched-f-farm' },
+  { id: 'src.int', type: ['1099-INT'], label: '1099-INT' },
+  { id: 'src.div', type: ['1099-DIV'], label: '1099-DIV', panelKey: '1099-div' },
+  { id: 'src.k1', type: ['Schedule K-1'], label: 'Schedule K-1', panelKey: 'schedule-k1', allowNegative: true },
+  { id: 'src.r', type: ['1099-R'], label: '1099-R', panelKey: '1099-r' },
+  { id: 'src.ssa', type: ['SSA-1099'], label: 'SSA-1099', panelKey: 'ssa-1099' },
+  { id: 'src.w2g', type: ['W-2G'], label: 'W-2G', panelKey: 'w-2g' },
+  { id: 'src.misc', type: ['1099-MISC'], label: '1099-MISC', panelKey: '1099-misc' },
+  { id: 'src.g', type: ['1099-G'], label: '1099-G', panelKey: '1099-g' },
+  { id: 'src.other', type: ['Other'], label: 'Other Income' }
+];
+
+function defineInputs(g: FormulaGraph): void {
+  const io = (id: string, label: string, domId: string, panelKey?: string, panelSection?: PanelSectionCategory,
+    extra: { allowNegative?: boolean; optional?: boolean; max?: number; unit?: 'usd' | 'count' } = {}) =>
+    g.input({ id, label, domId, panelKey, panelSection, unit: extra.unit || 'usd', allowNegative: extra.allowNegative, optional: extra.optional, max: extra.max });
+
+  // W-2s
+  const w2Field = (box: string, label: string) => ({ label, unit: 'usd' as const, domId: (it: CollectionItem) => `w2-${it.id}-${box}` });
+  g.collection({
+    id: 'w2',
+    countLabel: 'Number of W-2s',
+    itemLabel: (i, it) => `W-2 #${i + 1} (${it.name || 'Employer'})`,
+    fields: {
+      box1: w2Field('box1', 'Box 1 Wages'),
+      box2: w2Field('box2', 'Box 2 Federal Withholding'),
+      box3: w2Field('box3', 'Box 3 Social Security Wages'),
+      box4: w2Field('box4', 'Box 4 Social Security Tax'),
+      box5: w2Field('box5', 'Box 5 Medicare Wages'),
+      box6: w2Field('box6', 'Box 6 Medicare Tax')
+    }
+  });
+  const stateLineDom = (suffix: string) => (it: CollectionItem) => `w2-${Math.floor(it.id / 1000)}-state-${it.id % 1000}-${suffix}`;
+  g.collection({
+    id: 'w2State',
+    itemLabel: (_i, it) => `${it.name || 'State'} (W-2 #${Math.floor(it.id / 1000) + 1})`,
+    fields: {
+      stateWages: { label: 'Box 16 State Wages', unit: 'usd', domId: stateLineDom('box16') },
+      withheld: { label: 'Box 17 State Income Tax', unit: 'usd', domId: stateLineDom('box17') },
+      localWithheld: { label: 'Box 19 Local Income Tax', unit: 'usd', domId: it => `w2-${Math.floor(it.id / 1000)}-state-card-${it.id % 1000}` }
+    }
+  });
+
+  // 1099s and other income documents
+  SOURCE_COLLECTIONS.forEach(c => {
+    const f = (label: string, allowNegative = false) => ({
+      label, unit: 'usd' as const, allowNegative, panelKey: c.panelKey, panelSection: 'other-income' as const,
+      domId: (it: CollectionItem) => `input-source-${it.id}-amount`
+    });
+    g.collection({
+      id: c.id,
+      itemLabel: (_i, it) => `${c.label} (${it.name || 'Payer'})`,
+      fields: {
+        amount: f('Amount', c.allowNegative),
+        accrued: f('Accrued Interest Paid'),
+        taxExempt: f('Tax-Exempt Interest'),
+        qdiv: f('Qualified Dividends'),
+        fedWithheld: f('Federal Tax Withheld'),
+        penalty: f('Early Distribution (Code 1)')
+      }
+    });
+  });
+
+  // Other income
+  io('in.interest', 'Taxable Interest', 'input-other-interest', '1099-int', 'other-income', { optional: true });
+  io('in.schedCExpenses', 'Schedule C Expenses', 'input-sched-c-expenses', 'schedule-c-expenses', 'other-income', { optional: true });
+  io('in.stGain', 'Short-Term Capital Gain/Loss', 'input-capital-gains-st', 'capital-gains', 'other-income', { allowNegative: true, optional: true });
+  io('in.ltGain', 'Long-Term Capital Gain/Loss', 'input-capital-gains-lt', 'capital-gains', 'other-income', { allowNegative: true, optional: true });
+  io('in.capCarryover', 'Prior-Year Capital Loss Carryover', 'section-federal-other-income', 'capital-gains', 'other-income', { optional: true });
+  io('in.collectibles', '28% Collectibles Gain', 'input-cap-collectibles', 'capital-gains', 'other-income', { optional: true });
+  io('in.unrecap1250', 'Unrecaptured §1250 Gain', 'input-cap-1250', 'capital-gains', 'other-income', { optional: true });
+  io('in.rents', 'Gross Rents', 'input-sched-e-rents', 'schedule-e-rental', 'other-income', { optional: true });
+  io('in.rentalExpenses', 'Rental Expenses', 'input-sched-e-expenses', 'schedule-e-rental', 'other-income', { optional: true });
+  io('in.rentalDepreciation', 'Rental Depreciation', 'input-sched-e-depreciation', 'schedule-e-rental', 'other-income', { optional: true });
+  io('in.alimonyReceived', 'Alimony Received', 'input-alimony-received', 'alimony-received', 'other-income', { optional: true });
+  io('in.feie', 'Foreign Earned Income Excluded', 'input-foreign-earned-excl', 'foreign-earned-income-2555', 'other-income', { optional: true });
+  io('in.tips', 'Unreported Tips', 'input-unreported-tips', 'unreported-tips-4137', 'other-income', { optional: true });
+
+  // Adjustments
+  io('in.studentLoan', 'Student Loan Interest Paid', 'input-adj-student-loan', 'adj-student-loan', 'adjustments', { optional: true });
+  io('in.ira', 'Traditional IRA Deduction', 'input-adj-ira', 'adj-ira', 'adjustments', { optional: true });
+  io('in.hsa', 'HSA Deduction', 'input-adj-hsa', 'adj-hsa', 'adjustments', { optional: true });
+  io('in.educator', 'Educator Expenses Paid', 'input-adj-educator', 'adj-educator', 'adjustments', { optional: true });
+  io('in.seRetirement', 'SEP / SIMPLE / Solo 401(k)', 'input-adj-se-retirement', 'adj-se-retirement', 'adjustments', { optional: true });
+  io('in.seHealth', 'Self-Employed Health Insurance', 'input-adj-se-health', 'adj-se-health', 'adjustments', { optional: true });
+  io('in.alimonyPaid', 'Alimony Paid', 'input-adj-alimony', 'adj-alimony', 'adjustments', { optional: true });
+  io('in.militaryMoving', 'Military Moving Expenses', 'input-adj-military-moving', 'adj-military-moving', 'adjustments', { optional: true });
+  io('in.earlyWithdrawal', 'Early Withdrawal Penalty', 'input-adj-early-withdrawal', 'adj-early-withdrawal-penalty', 'adjustments', { optional: true });
+  io('in.juryDuty', 'Jury Duty Pay Given to Employer', 'input-adj-jury-duty', 'adj-jury-duty', 'adjustments', { optional: true });
+
+  // Itemized deductions
+  io('in.medical', 'Medical Expenses', 'input-itemized-medical', 'itemized-medical', 'itemized', { optional: true });
+  io('in.realEstateTax', 'Real Estate Tax', 'input-itemized-real-estate', 'itemized-real-estate', 'itemized', { optional: true });
+  io('in.mortgage', 'Mortgage Interest', 'input-itemized-mortgage', 'itemized-mortgage', 'itemized', { optional: true });
+  io('in.charity', 'Charitable Gifts', 'input-itemized-charity', 'itemized-charity', 'itemized', { optional: true });
+  io('in.gamblingLosses', 'Gambling Losses', 'input-itemized-gambling-losses', 'itemized-gambling-losses', 'itemized', { optional: true });
+  io('in.investmentInterest', 'Investment Interest Paid', 'input-itemized-investment-interest', 'itemized-investment-interest', 'itemized', { optional: true });
+  io('in.casualty', 'Casualty Loss', 'input-itemized-casualty', 'itemized-casualty', 'itemized', { optional: true });
+
+  // Dependents & credits
+  io('in.children', 'Qualifying Children', 'input-children-count', 'cred-children', 'credits', { unit: 'count', optional: true });
+  io('in.otherDependents', 'Other Dependents', 'input-other-dependents', 'cred-other-dependents', 'credits', { unit: 'count', optional: true });
+  io('in.age65Blind', 'Age 65+ / Blind Boxes', 'input-age65-blind', 'cred-age-blind', 'credits', { unit: 'count', optional: true, max: 4 });
+  io('in.childCare', 'Child Care Expenses', 'input-child-care', 'cred-child-care', 'credits', { optional: true });
+  io('in.aotc', 'AOTC Tuition', 'input-edu-aotc', 'cred-aotc', 'credits', { optional: true });
+  io('in.llc', 'Lifetime Learning Tuition', 'input-edu-llc', 'cred-llc', 'credits', { optional: true });
+  io('in.foreignTaxCredit', 'Foreign Tax Credit', 'input-foreign-tax-credit', 'cred-foreign-tax', 'credits', { optional: true });
+  io('in.cleanEnergy', 'Clean Energy Credit', 'input-clean-energy-credit', 'cred-clean-energy', 'credits', { optional: true });
+  io('in.adoption', 'Qualified Adoption Expenses', 'input-adoption-credit', 'cred-adoption', 'credits', { optional: true });
+  io('in.elderly', 'Elderly / Disabled Credit', 'input-elderly-credit', 'cred-elderly-sched-r', 'credits', { optional: true });
+  io('in.ptc', 'Net Premium Tax Credit', 'input-ptc-credit', 'cred-ptc-8962', 'credits', { optional: true });
+  io('in.householdTax', 'Household Employment Taxes', 'input-household-tax', 'sched-h-household', 'credits', { optional: true });
+  io('in.estimatedPayments', 'Estimated Tax Payments', 'input-estimated-payments', 'cred-estimated-payments', 'credits', { optional: true });
+}
+
+function defineParams(g: FormulaGraph): void {
+  const p = (id: string, label: string, unit: 'usd' | 'rate' | 'count', resolve: (ctx: GraphContext) => number | number[], source?: string, domSources = YEAR_STATUS) =>
+    g.param({ id, label, unit, resolve, source, domSources });
+
+  p('fed.stdBase', 'Base Standard Deduction', 'usd', c => rules(c.year).standardDeduction[c.status], 'Form 1040 Line 12 instructions');
+  p('fed.addlStdPerBox', 'Additional Standard Deduction per Box', 'usd',
+    c => (c.status === 'single' || c.status === 'head_of_household') ? (c.year === 2025 ? 2000 : 1950) : (c.year === 2025 ? 1600 : 1550), 'IRC §63(f)');
+  p('fed.ssWageBase', 'Social Security Wage Base', 'usd', c => rules(c.year).ssWageLimit, 'SSA annual wage base', ['select-tax-year']);
+  p('fed.ssRate', 'Social Security Employee Rate', 'rate', c => rules(c.year).ssRate, 'IRC §3101(a)', []);
+  p('fed.addlMedRate', 'Additional Medicare Rate', 'rate', c => rules(c.year).additionalMedicareRate, 'Form 8959', []);
+  p('fed.addlMedThreshold', 'Additional Medicare Threshold', 'usd', c => rules(c.year).additionalMedicareThreshold[c.status], 'Form 8959');
+  p('fed.niitRate', 'NIIT Rate', 'rate', c => rules(c.year).niitRate, 'Form 8960', []);
+  p('fed.niitThreshold', 'NIIT Threshold', 'usd', c => rules(c.year).niitThreshold[c.status], 'Form 8960');
+  p('fed.ctcPerChild', 'Child Tax Credit per Child', 'usd', c => rules(c.year).childTaxCreditPerChild, 'Schedule 8812', ['select-tax-year']);
+  p('fed.actcMaxPerChild', 'Refundable ACTC Max per Child', 'usd', c => rules(c.year).childTaxCreditRefundableMax, 'Schedule 8812', ['select-tax-year']);
+  p('fed.ctcPhaseStart', 'CTC Phaseout Threshold', 'usd', c => rules(c.year).childTaxCreditPhaseout[c.status], 'Schedule 8812');
+  p('fed.odcPerDependent', 'Credit per Other Dependent', 'usd', () => 500, 'Schedule 8812', []);
+  p('fed.capLossFloor', 'Capital Loss Limit', 'usd', c => (c.status === 'married_separate' ? -1500 : -3000), 'IRC §1211(b)', ['select-filing-status']);
+  p('fed.studentLoanCap', 'Student Loan Interest Cap', 'usd', () => 2500, 'IRC §221(b)(1)', []);
+  p('fed.educatorCap', 'Educator Expense Cap', 'usd', c => (c.status === 'married_joint' ? 600 : 300), 'IRC §62(a)(2)(D)', ['select-filing-status']);
+  p('fed.saltCap', 'SALT Cap', 'usd', c => (c.status === 'married_separate' ? 5000 : 10000), 'IRC §164(b)(6)', ['select-filing-status']);
+  p('fed.feieLimit', 'Foreign Earned Income Exclusion Limit', 'usd', c => (c.year === 2025 ? 130000 : 126500), 'Form 2555', ['select-tax-year']);
+  p('fed.palAllowance', 'Rental Loss Allowance', 'usd', c => (c.status === 'married_separate' ? 12500 : 25000), 'Form 8582', ['select-filing-status']);
+  p('fed.palPhaseStart', 'Rental Allowance Phaseout Start', 'usd', c => (c.status === 'married_separate' ? 50000 : 100000), 'Form 8582', ['select-filing-status']);
+  p('fed.ssBase1', 'Social Security Base Amount', 'usd', c => byStatus({ married_joint: 32000, married_separate: 0, other: 25000 })(c.status), 'SS Benefits Worksheet', ['select-filing-status']);
+  p('fed.ssBase2', 'Social Security Adjusted Base', 'usd', c => byStatus({ married_joint: 44000, married_separate: 0, other: 34000 })(c.status), 'SS Benefits Worksheet', ['select-filing-status']);
+  p('fed.eduPhaseStart', 'Education Credit Phaseout Start', 'usd', c => (c.status === 'married_joint' ? 160000 : 80000), 'Form 8863', ['select-filing-status']);
+  p('fed.eduPhaseSpan', 'Education Credit Phaseout Range', 'usd', c => (c.status === 'married_joint' ? 20000 : 10000), 'Form 8863', ['select-filing-status']);
+  p('fed.saversMax', "Saver's Credit Contribution Cap", 'usd', c => (c.status === 'married_joint' ? 4000 : 2000), 'Form 8880', ['select-filing-status']);
+  p('fed.saversT50', "Saver's Credit 50% AGI Limit", 'usd', c => byStatus({ married_joint: 46000, head_of_household: 34500, other: 23000 })(c.status), 'Form 8880', ['select-filing-status']);
+  p('fed.saversT20', "Saver's Credit 20% AGI Limit", 'usd', c => byStatus({ married_joint: 50000, head_of_household: 37500, other: 25000 })(c.status), 'Form 8880', ['select-filing-status']);
+  p('fed.saversT10', "Saver's Credit 10% AGI Limit", 'usd', c => byStatus({ married_joint: 76500, head_of_household: 57375, other: 38250 })(c.status), 'Form 8880', ['select-filing-status']);
+  p('fed.adoptionCap', 'Adoption Credit Limit', 'usd', c => (c.year === 2025 ? 17280 : 16810), 'Form 8839', ['select-tax-year']);
+  p('fed.eitcInvCap', 'EITC Investment Income Limit', 'usd', c => (c.year === 2025 ? 11950 : 11600), 'Schedule EIC', ['select-tax-year']);
+  p('fed.eitcMax', 'EITC Maximum Credit', 'usd', () => [632, 4213, 6960, 7830], 'Schedule EIC', []);
+  p('fed.eitcPhaseInRate', 'EITC Phase-In Rate', 'rate', () => [0.0765, 0.34, 0.40, 0.45], 'Schedule EIC', []);
+  p('fed.eitcPhaseOutRate', 'EITC Phase-Out Rate', 'rate', () => [0.0765, 0.1598, 0.2106, 0.2106], 'Schedule EIC', []);
+  p('fed.eitcIncomeLimit', 'EITC Income Limit', 'usd',
+    c => (c.status === 'married_joint' ? [25511, 56004, 62688, 66819] : [18591, 49084, 55768, 59899]), 'Schedule EIC', ['select-filing-status']);
+  p('fed.amtExemption', 'AMT Exemption', 'usd',
+    c => byStatus({ married_joint: c.year === 2025 ? 137000 : 133300, married_separate: c.year === 2025 ? 68500 : 66650, other: c.year === 2025 ? 88100 : 85700 })(c.status), 'Form 6251');
+  p('fed.amtPhaseStart', 'AMT Exemption Phaseout Start', 'usd',
+    c => (c.status === 'married_joint' ? (c.year === 2025 ? 1252700 : 1218700) : (c.year === 2025 ? 626350 : 609350)), 'Form 6251');
+  p('fed.amt28Breakpoint', 'AMT 28% Rate Breakpoint', 'usd', c => (c.status === 'married_separate' ? 116300 : 232600), 'Form 6251', ['select-filing-status']);
+
+  g.param({ id: 'fed.brackets', label: 'Federal Tax Brackets', unit: 'usd', source: 'IRC §1(j)', domSources: YEAR_STATUS, resolve: c => rules(c.year).brackets[c.status] });
+  g.param({ id: 'fed.ltcgBrackets', label: 'Capital Gain Rate Brackets', unit: 'usd', source: 'IRC §1(h)', domSources: YEAR_STATUS, resolve: c => rules(c.year).ltcgBrackets[c.status] });
+}
+
+function defineQuantities(g: FormulaGraph): void {
+  type Q = Parameters<FormulaGraph['quantity']>[0];
+  const q = (def: Q) => g.quantity(def);
+  const R = ref, P = param;
+
+  // ---------- Wages & payroll ----------
+  q({ id: 'fed.wages', label: 'Total W-2 Wages', unit: 'usd', form: 'Form 1040 Line 1a', category: 'wages', expr: each('w2', 'box1') });
+  q({ id: 'fed.w2Withholding', label: 'W-2 Federal Tax Withheld', unit: 'usd', form: 'Form 1040 Line 25a', category: 'withholding', expr: each('w2', 'box2') });
+  q({ id: 'fed.ssWages', label: 'Social Security Wages', unit: 'usd', display: 'inline', expr: each('w2', 'box3') });
+  q({ id: 'fed.ssTaxWithheld', label: 'Social Security Tax Withheld', unit: 'usd', category: 'ss', expr: each('w2', 'box4') });
+  q({ id: 'fed.medWages', label: 'Medicare Wages', unit: 'usd', display: 'inline', expr: each('w2', 'box5') });
+  q({ id: 'fed.medTaxWithheld', label: 'Medicare Tax Withheld', unit: 'usd', category: 'medicare', expr: each('w2', 'box6') });
+  q({ id: 'fed.ficaWithheld', label: 'FICA Payroll Taxes Withheld', unit: 'usd', category: 'ss', expr: add(R('fed.ssTaxWithheld'), R('fed.medTaxWithheld')) });
+  q({ id: 'fed.stateWithheld', label: 'State Income Tax Withheld', unit: 'usd', display: 'inline', optional: true, expr: each('w2State', 'withheld') });
+  q({ id: 'fed.localWithheld', label: 'Local Income Tax Withheld', unit: 'usd', display: 'inline', optional: true, expr: each('w2State', 'localWithheld') });
+
+  // ---------- Capital gains (Schedule D) ----------
+  q({ id: 'fed.capNet', label: 'Net Capital Gain/Loss', unit: 'usd', form: 'Schedule D Line 16', category: 'capital',
+    expr: sub(add(R('in.stGain'), R('in.ltGain')), R('in.capCarryover')) });
+  q({ id: 'fed.capAllowed', label: 'Capital Gain/Loss on Return', unit: 'usd', form: 'Form 1040 Line 7', category: 'capital', optional: true,
+    expr: max(R('fed.capNet'), P('fed.capLossFloor')) });
+
+  // ---------- Business income (Schedule C) ----------
+  q({ id: 'fed.businessGross', label: 'Gross Business Receipts', unit: 'usd', display: 'inline',
+    expr: add(each('src.nec', 'amount'), each('src.k', 'amount'), each('src.f', 'amount')) });
+  q({ id: 'fed.businessProfit', label: 'Net Business Profit', unit: 'usd', form: 'Schedule C Line 31', category: 'wages', optional: true,
+    expr: atLeast0(sub(R('fed.businessGross'), R('in.schedCExpenses'))) });
+
+  // ---------- Interest, dividends, other documents ----------
+  q({ id: 'fed.interest1099', label: '1099-INT Interest', unit: 'usd', display: 'inline', optional: true,
+    expr: sumOver('src.int', atLeast0(sub(field('amount'), field('accrued')))) });
+  q({ id: 'fed.interestTotal', label: 'Taxable Interest', unit: 'usd', form: 'Form 1040 Line 2b', category: 'wages', optional: true,
+    expr: add(R('in.interest'), R('fed.interest1099')) });
+  q({ id: 'fed.taxExemptInterest', label: 'Tax-Exempt Interest', unit: 'usd', form: 'Form 1040 Line 2a', optional: true, expr: each('src.int', 'taxExempt') });
+  q({ id: 'fed.dividends', label: 'Ordinary Dividends', unit: 'usd', form: 'Form 1040 Line 3b', category: 'wages', optional: true, expr: each('src.div', 'amount') });
+  q({ id: 'fed.qualifiedDividends', label: 'Qualified Dividends', unit: 'usd', form: 'Form 1040 Line 3a', category: 'capital', optional: true,
+    expr: sumOver('src.div', min(field('amount'), field('qdiv'))) });
+  q({ id: 'fed.k1Income', label: 'Schedule K-1 Income', unit: 'usd', form: 'Schedule E Part II', category: 'wages', optional: true, expr: each('src.k1', 'amount') });
+  q({ id: 'fed.retirement', label: 'Retirement Distributions', unit: 'usd', form: 'Form 1040 Line 5b', category: 'wages', optional: true, expr: each('src.r', 'amount') });
+  q({ id: 'fed.earlyDistributions', label: 'Early Distributions (Code 1)', unit: 'usd', display: 'inline', expr: each('src.r', 'amount', 'penalty') });
+  q({ id: 'fed.gambling', label: 'Gambling Winnings', unit: 'usd', form: 'Schedule 1 Line 8b', category: 'wages', optional: true, expr: each('src.w2g', 'amount') });
+  q({ id: 'fed.otherSourceIncome', label: 'Other 1099 Income', unit: 'usd', form: 'Schedule 1 Line 8z', category: 'wages', optional: true,
+    expr: add(each('src.misc', 'amount'), each('src.g', 'amount'), each('src.other', 'amount')) });
+  q({ id: 'fed.ssaGross', label: 'Social Security Benefits', unit: 'usd', form: 'Form 1040 Line 6a', optional: true, expr: each('src.ssa', 'amount') });
+  q({ id: 'fed.extraWithholding', label: '1099 Federal Tax Withheld', unit: 'usd', form: 'Form 1040 Line 25b', category: 'withholding', optional: true,
+    expr: add(...['src.nec', 'src.k', 'src.f', 'src.int', 'src.div', 'src.k1', 'src.r', 'src.ssa', 'src.w2g', 'src.misc', 'src.g', 'src.other'].map(c => each(c, 'fedWithheld'))) });
+  q({ id: 'fed.documentIncome', label: '1099 & Business Income', unit: 'usd', display: 'inline',
+    expr: add(R('fed.businessProfit'), R('fed.interest1099'), R('fed.dividends'), R('fed.k1Income'), R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome')) });
+
+  // ---------- Self-employment tax (Schedule SE) ----------
+  q({ id: 'fed.seEarnings', label: 'Net SE Earnings', unit: 'usd', form: 'Schedule SE Line 4a', category: 'tax', optional: true,
+    expr: when(gte(R('fed.businessProfit'), lit(400)), mul(R('fed.businessProfit'), rate(0.9235)), lit(0)) });
+  q({ id: 'fed.seSsRoom', label: 'Remaining Social Security Wage Base', unit: 'usd', display: 'inline',
+    expr: atLeast0(sub(P('fed.ssWageBase'), R('fed.ssWages'))) });
+  q({ id: 'fed.seSsTax', label: 'SE Social Security Tax', unit: 'usd', category: 'tax',
+    expr: round(mul(min(R('fed.seEarnings'), R('fed.seSsRoom')), rate(0.124))) });
+  q({ id: 'fed.seMedTax', label: 'SE Medicare Tax', unit: 'usd', category: 'tax', expr: round(mul(R('fed.seEarnings'), rate(0.029))) });
+  q({ id: 'fed.seTax', label: 'Self-Employment Tax', unit: 'usd', form: 'Schedule SE Line 12', category: 'tax', optional: true,
+    expr: round(add(R('fed.seSsTax'), R('fed.seMedTax'))) });
+  q({ id: 'fed.halfSeTax', label: 'Deductible Half of SE Tax', unit: 'usd', form: 'Schedule 1 Line 15', category: 'adjustments', optional: true,
+    expr: round(mul(R('fed.seTax'), rate(0.5))) });
+
+  // ---------- Adjustments (Schedule 1 Part II) ----------
+  q({ id: 'fed.studentLoanDeduction', label: 'Student Loan Interest Deduction', unit: 'usd', display: 'inline', optional: true,
+    expr: min(R('in.studentLoan'), P('fed.studentLoanCap')) });
+  q({ id: 'fed.educatorDeduction', label: 'Educator Expense Deduction', unit: 'usd', display: 'inline', optional: true,
+    expr: min(R('in.educator'), P('fed.educatorCap')) });
+  q({ id: 'fed.adjustments', label: 'Adjustments to Income', unit: 'usd', form: 'Schedule 1 Line 26', category: 'adjustments',
+    expr: round(add(R('fed.studentLoanDeduction'), R('in.ira'), R('in.hsa'), R('fed.educatorDeduction'), R('in.seRetirement'), R('in.seHealth'),
+      R('in.alimonyPaid'), R('in.militaryMoving'), R('in.earlyWithdrawal'), R('in.juryDuty'), R('fed.halfSeTax'))) });
+
+  // ---------- Rental real estate (Schedule E / Form 8582) ----------
+  q({ id: 'fed.rentalNet', label: 'Net Rental Income Before Loss Limits', unit: 'usd', form: 'Schedule E Line 26', category: 'wages', optional: true,
+    expr: sub(R('in.rents'), R('in.rentalExpenses'), R('in.rentalDepreciation')) });
+  q({ id: 'fed.magiForRental', label: 'MAGI for Rental Loss Allowance', unit: 'usd', category: 'adjustments',
+    expr: atLeast0(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed')), R('fed.adjustments'))) });
+  q({ id: 'fed.rentalLossAllowance', label: 'Allowed Rental Loss', unit: 'usd', form: 'Form 8582', category: 'adjustments',
+    expr: atLeast0(sub(P('fed.palAllowance'), mul(atLeast0(sub(R('fed.magiForRental'), P('fed.palPhaseStart'))), rate(0.5)))) });
+  q({ id: 'fed.rentalAllowed', label: 'Rental Income on Return', unit: 'usd', form: 'Schedule 1 Line 5', category: 'wages', optional: true,
+    expr: when(lt(R('fed.rentalNet'), lit(0)), max(R('fed.rentalNet'), neg(R('fed.rentalLossAllowance'))), R('fed.rentalNet')) });
+  q({ id: 'fed.suspendedRentalLoss', label: 'Suspended Passive Loss', unit: 'usd', category: 'adjustments',
+    expr: sub(R('fed.rentalAllowed'), R('fed.rentalNet')) });
+
+  // ---------- Social Security benefits worksheet ----------
+  q({ id: 'fed.provisionalIncome', label: 'Provisional Income', unit: 'usd', category: 'wages',
+    expr: atLeast0(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'),
+      R('fed.taxExemptInterest'), mul(R('fed.ssaGross'), rate(0.5))), R('fed.adjustments'))) });
+  q({ id: 'fed.taxableSS', label: 'Taxable Social Security', unit: 'usd', form: 'Form 1040 Line 6b', category: 'wages', optional: true,
+    expr: when(gt(R('fed.provisionalIncome'), P('fed.ssBase2')),
+      round(min(mul(R('fed.ssaGross'), rate(0.85)),
+        add(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(P('fed.ssBase2'), P('fed.ssBase1')), rate(0.5))),
+          mul(sub(R('fed.provisionalIncome'), P('fed.ssBase2')), rate(0.85))))),
+      when(gt(R('fed.provisionalIncome'), P('fed.ssBase1')),
+        round(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(R('fed.provisionalIncome'), P('fed.ssBase1')), rate(0.5)))),
+        lit(0))) });
+
+  // ---------- Total income & AGI ----------
+  q({ id: 'fed.feie', label: 'Foreign Earned Income Exclusion', unit: 'usd', display: 'inline', optional: true, expr: min(R('in.feie'), P('fed.feieLimit')) });
+  q({ id: 'fed.totalIncome', label: 'Total Income', unit: 'usd', form: 'Form 1040 Line 9', category: 'wages',
+    expr: round(atLeast0(sub(add(R('fed.wages'), R('fed.interestTotal'), R('fed.dividends'), R('fed.businessProfit'), R('fed.k1Income'),
+      R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableSS'), R('fed.capAllowed'), R('fed.rentalAllowed'),
+      R('in.alimonyReceived'), R('in.tips')), R('fed.feie')))) });
+  q({ id: 'fed.agi', label: 'Adjusted Gross Income', unit: 'usd', form: 'Form 1040 Line 11', category: 'wages',
+    expr: round(atLeast0(sub(R('fed.totalIncome'), R('fed.adjustments')))) });
+
+  // ---------- Deductions ----------
+  q({ id: 'fed.stdDeduction', label: 'Standard Deduction', unit: 'usd', category: 'status',
+    expr: add(P('fed.stdBase'), mul(R('in.age65Blind'), P('fed.addlStdPerBox'))) });
+  q({ id: 'fed.medicalFloor', label: 'Medical 7.5% AGI Floor', unit: 'usd', category: 'itemized', expr: mul(R('fed.agi'), rate(0.075)) });
+  q({ id: 'fed.medicalDeduction', label: 'Deductible Medical Expenses', unit: 'usd', form: 'Schedule A Line 4', category: 'itemized', optional: true,
+    expr: atLeast0(sub(R('in.medical'), R('fed.medicalFloor'))) });
+  q({ id: 'fed.salt', label: 'SALT Deduction', unit: 'usd', form: 'Schedule A Line 5e', category: 'itemized', optional: true,
+    expr: min(P('fed.saltCap'), add(R('in.realEstateTax'), R('fed.stateWithheld'), R('fed.localWithheld'))) });
+  q({ id: 'fed.gamblingLossDeduction', label: 'Deductible Gambling Losses', unit: 'usd', form: 'Schedule A Line 16', category: 'itemized', optional: true,
+    expr: min(R('fed.gambling'), R('in.gamblingLosses')) });
+  q({ id: 'fed.investmentInterestDeduction', label: 'Deductible Investment Interest', unit: 'usd', form: 'Schedule A Line 9', category: 'itemized', optional: true,
+    expr: min(atLeast0(add(R('in.interest'), R('fed.interest1099'), atLeast0(R('fed.capAllowed')))), R('in.investmentInterest')) });
+  q({ id: 'fed.itemized', label: 'Itemized Deductions', unit: 'usd', form: 'Schedule A Line 17', category: 'itemized',
+    expr: add(R('fed.medicalDeduction'), R('fed.salt'), R('in.mortgage'), R('in.charity'), R('fed.gamblingLossDeduction'),
+      R('fed.investmentInterestDeduction'), R('in.casualty')) });
+  const forceItemized = flag('fed.forceItemized', 'you chose to itemize', 'you did not force itemizing', 'select-deduction-method');
+  const forceStandard = flag('fed.forceStandard', 'you chose the standard deduction', 'you did not force the standard deduction', 'select-deduction-method');
+  q({ id: 'fed.deduction', label: 'Deduction', unit: 'usd', form: 'Form 1040 Line 12', category: 'status',
+    expr: when(forceItemized, R('fed.itemized'), when(forceStandard, R('fed.stdDeduction'), max(R('fed.stdDeduction'), R('fed.itemized')))) });
+  q({ id: 'fed.itemizing', label: 'Itemizing', unit: 'count', display: 'inline',
+    expr: when(forceItemized, num(1), when(forceStandard, num(0), when(gt(R('fed.itemized'), R('fed.stdDeduction')), num(1), num(0)))) });
+
+  // ---------- QBI (Form 8995) ----------
+  q({ id: 'fed.netLtcg', label: 'Net Long-Term Capital Gain', unit: 'usd', category: 'capital', optional: true,
+    expr: when(and(gt(R('fed.capAllowed'), lit(0)), gt(R('in.ltGain'), lit(0))), min(R('fed.capAllowed'), R('in.ltGain')), lit(0)) });
+  q({ id: 'fed.qbiIncome', label: 'Qualified Business Income', unit: 'usd', category: 'adjustments',
+    expr: add(atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'), R('in.seRetirement'), R('in.seHealth'))), atLeast0(R('fed.k1Income'))) });
+  q({ id: 'fed.qbiIncomeLimit', label: 'QBI Taxable Income Limit Base', unit: 'usd', category: 'adjustments',
+    expr: atLeast0(sub(atLeast0(sub(R('fed.agi'), R('fed.deduction'))), add(R('fed.qualifiedDividends'), R('fed.netLtcg')))) });
+  q({ id: 'fed.qbi', label: 'QBI Deduction', unit: 'usd', form: 'Form 1040 Line 13', category: 'adjustments', optional: true,
+    expr: round(min(mul(R('fed.qbiIncome'), rate(0.2)), mul(R('fed.qbiIncomeLimit'), rate(0.2)))) });
+
+  q({ id: 'fed.taxableIncome', label: 'Taxable Income', unit: 'usd', form: 'Form 1040 Line 15', category: 'tax',
+    expr: round(atLeast0(sub(R('fed.agi'), R('fed.deduction'), R('fed.qbi')))) });
+
+  // ---------- Tax (brackets + Qualified Dividends & Capital Gain worksheet) ----------
+  q({ id: 'fed.specialGains', label: '25%/28% Rate Gains', unit: 'usd', display: 'inline',
+    expr: min(R('fed.netLtcg'), add(R('in.collectibles'), R('in.unrecap1250'))) });
+  q({ id: 'fed.standardLtcg', label: '0/15/20% Rate Gains', unit: 'usd', display: 'inline', expr: atLeast0(sub(R('fed.netLtcg'), R('fed.specialGains'))) });
+  q({ id: 'fed.preferentialIncome', label: 'Preferential-Rate Income', unit: 'usd', category: 'capital', optional: true,
+    expr: min(R('fed.taxableIncome'), add(R('fed.qualifiedDividends'), R('fed.standardLtcg'), R('fed.specialGains'))) });
+  q({ id: 'fed.ordinaryTaxable', label: 'Ordinary Taxable Income', unit: 'usd', category: 'tax',
+    expr: atLeast0(sub(R('fed.taxableIncome'), R('fed.preferentialIncome'))) });
+  q({ id: 'fed.ordinaryTax', label: 'Tax on Ordinary Income', unit: 'usd', category: 'tax', expr: brackets(R('fed.ordinaryTaxable'), 'fed.brackets') });
+  q({ id: 'fed.standardPrefIncome', label: 'Qualified Dividends & 0/15/20% Gains', unit: 'usd', display: 'inline',
+    expr: min(R('fed.preferentialIncome'), add(R('fed.qualifiedDividends'), R('fed.standardLtcg'))) });
+  q({ id: 'fed.standardPrefTax', label: 'Qualified Dividends & Capital Gains Tax', unit: 'usd', category: 'capital', optional: true,
+    expr: brackets(R('fed.standardPrefIncome'), 'fed.ltcgBrackets', R('fed.ordinaryTaxable')) });
+  q({ id: 'fed.remainingSpecial', label: 'Remaining 25%/28% Gains', unit: 'usd', display: 'inline',
+    expr: atLeast0(sub(R('fed.preferentialIncome'), R('fed.standardPrefIncome'))) });
+  q({ id: 'fed.applied1250', label: 'Unrecaptured §1250 Gain Taxed', unit: 'usd', display: 'inline', expr: min(R('fed.remainingSpecial'), R('in.unrecap1250')) });
+  q({ id: 'fed.unrecap1250Tax', label: '§1250 Gain Tax (25%)', unit: 'usd', category: 'capital', optional: true, expr: mul(R('fed.applied1250'), rate(0.25)) });
+  q({ id: 'fed.collectiblesTax', label: 'Collectibles Gain Tax (28%)', unit: 'usd', category: 'capital', optional: true,
+    expr: mul(atLeast0(sub(R('fed.remainingSpecial'), R('fed.applied1250'))), rate(0.28)) });
+  q({ id: 'fed.preferentialTax', label: 'Preferential-Rate Tax', unit: 'usd', display: 'inline',
+    expr: add(R('fed.standardPrefTax'), R('fed.unrecap1250Tax'), R('fed.collectiblesTax')) });
+  q({ id: 'fed.tax', label: 'Income Tax', unit: 'usd', form: 'Form 1040 Line 16', category: 'tax',
+    expr: round(add(R('fed.ordinaryTax'), R('fed.preferentialTax'))) });
+
+  // ---------- Credits ----------
+  q({ id: 'fed.ctcMax', label: 'Child Tax Credit Before Phaseout', unit: 'usd', display: 'inline', expr: mul(R('in.children'), P('fed.ctcPerChild')) });
+  q({ id: 'fed.odcMax', label: 'Other Dependent Credit Before Phaseout', unit: 'usd', display: 'inline', expr: mul(R('in.otherDependents'), P('fed.odcPerDependent')) });
+  q({ id: 'fed.ctcPhaseout', label: 'Child Credit Phaseout', unit: 'usd', category: 'credits', optional: true,
+    expr: when(gt(R('fed.agi'), P('fed.ctcPhaseStart')), mul(ceil(div(sub(R('fed.agi'), P('fed.ctcPhaseStart')), lit(1000))), lit(50)), lit(0)) });
+  q({ id: 'fed.childCreditsAfterPhaseout', label: 'Child & Dependent Credits After Phaseout', unit: 'usd', category: 'credits', optional: true,
+    expr: atLeast0(sub(add(R('fed.ctcMax'), R('fed.odcMax')), R('fed.ctcPhaseout'))) });
+  q({ id: 'fed.ctcAfterPhaseout', label: 'Child Tax Credit', unit: 'usd', category: 'credits', optional: true,
+    expr: min(R('fed.ctcMax'), R('fed.childCreditsAfterPhaseout')) });
+  q({ id: 'fed.odcAfterPhaseout', label: 'Credit for Other Dependents', unit: 'usd', category: 'credits', optional: true,
+    expr: atLeast0(sub(R('fed.childCreditsAfterPhaseout'), R('fed.ctcAfterPhaseout'))) });
+
+  q({ id: 'fed.careRate', label: 'Child Care Credit Rate', unit: 'rate', display: 'inline',
+    expr: when(lte(R('fed.agi'), lit(15000)), rate(0.35),
+      max(rate(0.2), sub(rate(0.35), mul(ceil(div(sub(R('fed.agi'), lit(15000)), lit(2000))), rate(0.01))))) });
+  q({ id: 'fed.careExpenseCap', label: 'Child Care Expense Cap', unit: 'usd', display: 'inline',
+    expr: when(gte(max(num(1), add(R('in.children'), R('in.otherDependents'))), num(2)), lit(6000), lit(3000)) });
+  q({ id: 'fed.childCareCredit', label: 'Child & Dependent Care Credit', unit: 'usd', form: 'Form 2441', category: 'credits', optional: true,
+    expr: when(statusIs('married_separate'), lit(0), round(mul(min(R('fed.careExpenseCap'), R('in.childCare')), R('fed.careRate')))) });
+
+  q({ id: 'fed.eduPhaseFactor', label: 'Education Credit Phase Factor', unit: 'rate', display: 'inline',
+    expr: when(statusIs('married_separate'), rate(0),
+      max(rate(0), min(rate(1), sub(rate(1), div(atLeast0(sub(R('fed.agi'), P('fed.eduPhaseStart'))), P('fed.eduPhaseSpan')))))) });
+  q({ id: 'fed.aotcTotal', label: 'American Opportunity Credit', unit: 'usd', category: 'credits', optional: true,
+    expr: mul(add(min(lit(2000), R('in.aotc')), mul(atLeast0(sub(min(lit(4000), R('in.aotc')), lit(2000))), rate(0.25))), R('fed.eduPhaseFactor')) });
+  q({ id: 'fed.aotcRefundable', label: 'Refundable AOTC (40%)', unit: 'usd', form: 'Form 1040 Line 29', category: 'credits', optional: true,
+    expr: round(mul(R('fed.aotcTotal'), rate(0.4))) });
+  q({ id: 'fed.aotcNonrefundable', label: 'Nonrefundable AOTC (60%)', unit: 'usd', display: 'inline', optional: true, expr: round(mul(R('fed.aotcTotal'), rate(0.6))) });
+  q({ id: 'fed.llc', label: 'Lifetime Learning Credit', unit: 'usd', display: 'inline', optional: true,
+    expr: round(mul(mul(min(lit(10000), R('in.llc')), rate(0.2)), R('fed.eduPhaseFactor'))) });
+  q({ id: 'fed.educationNonrefundable', label: 'Nonrefundable Education Credits', unit: 'usd', form: 'Form 8863 Line 19', category: 'credits', optional: true,
+    expr: add(R('fed.aotcNonrefundable'), R('fed.llc')) });
+
+  q({ id: 'fed.saversRate', label: "Saver's Credit Rate", unit: 'rate', display: 'inline',
+    expr: when(lte(R('fed.agi'), P('fed.saversT50')), rate(0.5), when(lte(R('fed.agi'), P('fed.saversT20')), rate(0.2), when(lte(R('fed.agi'), P('fed.saversT10')), rate(0.1), rate(0)))) });
+  q({ id: 'fed.saversCredit', label: "Saver's Credit", unit: 'usd', form: 'Form 8880', category: 'credits', optional: true,
+    expr: round(mul(min(P('fed.saversMax'), R('in.ira')), R('fed.saversRate'))) });
+  q({ id: 'fed.adoptionCredit', label: 'Adoption Credit', unit: 'usd', display: 'inline', optional: true, expr: min(P('fed.adoptionCap'), R('in.adoption')) });
+
+  q({ id: 'fed.nonrefundableBeforeLimit', label: 'Nonrefundable Credits Before Tax Limit', unit: 'usd', category: 'credits', optional: true,
+    expr: add(R('fed.ctcAfterPhaseout'), R('fed.odcAfterPhaseout'), R('fed.childCareCredit'), R('fed.educationNonrefundable'), R('fed.saversCredit'),
+      R('in.foreignTaxCredit'), R('in.cleanEnergy'), R('fed.adoptionCredit'), R('in.elderly')) });
+  q({ id: 'fed.nonrefundableCredits', label: 'Nonrefundable Credits', unit: 'usd', form: 'Form 1040 Line 21', category: 'credits', optional: true,
+    expr: round(min(R('fed.tax'), R('fed.nonrefundableBeforeLimit'))) });
+  q({ id: 'fed.ctcAllowed', label: 'Child Tax Credit Allowed', unit: 'usd', display: 'inline', expr: min(R('fed.tax'), R('fed.ctcAfterPhaseout')) });
+  q({ id: 'fed.odcAllowed', label: 'Other Dependent Credit Allowed', unit: 'usd', display: 'inline',
+    expr: min(atLeast0(sub(R('fed.tax'), R('fed.ctcAllowed'))), R('fed.odcAfterPhaseout')) });
+
+  q({ id: 'fed.earnedIncome', label: 'Earned Income', unit: 'usd', category: 'wages', expr: add(R('fed.wages'), atLeast0(R('fed.businessProfit'))) });
+  q({ id: 'fed.actc', label: 'Additional Child Tax Credit', unit: 'usd', form: 'Form 1040 Line 28', category: 'credits', optional: true,
+    expr: round(min(atLeast0(sub(R('fed.ctcAfterPhaseout'), R('fed.ctcAllowed'))), mul(R('in.children'), P('fed.actcMaxPerChild')),
+      atLeast0(mul(sub(R('fed.earnedIncome'), lit(2500)), rate(0.15))))) });
+
+  q({ id: 'fed.eitcInvestmentIncome', label: 'EITC Investment Income', unit: 'usd', display: 'inline',
+    expr: add(R('in.interest'), R('fed.interest1099'), R('fed.taxExemptInterest'), R('fed.dividends'), atLeast0(R('fed.capAllowed')), atLeast0(R('fed.rentalAllowed'))) });
+  q({ id: 'fed.eitcKids', label: 'EITC Qualifying Children', unit: 'count', display: 'inline', expr: min(num(3), R('in.children')) });
+  q({ id: 'fed.eitcIncome', label: 'EITC Income (greater of earned income or AGI)', unit: 'usd', display: 'inline', expr: max(R('fed.earnedIncome'), R('fed.agi')) });
+  q({ id: 'fed.eitcPhaseIn', label: 'EITC Phase-In Amount', unit: 'usd', display: 'inline',
+    expr: min(lookup('fed.eitcMax', R('fed.eitcKids')), mul(R('fed.earnedIncome'), lookup('fed.eitcPhaseInRate', R('fed.eitcKids')))) });
+  q({ id: 'fed.eitcReduction', label: 'EITC Phase-Out Reduction', unit: 'usd', display: 'inline',
+    expr: atLeast0(mul(sub(R('fed.eitcIncome'), sub(lookup('fed.eitcIncomeLimit', R('fed.eitcKids')),
+      div(lookup('fed.eitcMax', R('fed.eitcKids')), lookup('fed.eitcPhaseOutRate', R('fed.eitcKids'))))), lookup('fed.eitcPhaseOutRate', R('fed.eitcKids')))) });
+  q({ id: 'fed.eitc', label: 'Earned Income Credit', unit: 'usd', form: 'Form 1040 Line 27', category: 'credits', optional: true,
+    expr: when(and(not(statusIs('married_separate')), gt(R('fed.earnedIncome'), lit(0)), lte(R('fed.eitcInvestmentIncome'), P('fed.eitcInvCap')),
+      lt(R('fed.eitcIncome'), lookup('fed.eitcIncomeLimit', R('fed.eitcKids')))),
+      round(atLeast0(min(R('fed.eitcPhaseIn'), sub(lookup('fed.eitcMax', R('fed.eitcKids')), R('fed.eitcReduction'))))),
+      lit(0)) });
+  q({ id: 'fed.refundableCredits', label: 'Refundable Credits', unit: 'usd', form: 'Form 1040 Lines 27–31', category: 'credits', optional: true,
+    expr: round(add(R('fed.actc'), R('fed.eitc'), R('fed.aotcRefundable'), R('in.ptc'))) });
+
+  // ---------- Other taxes (Schedule 2) & excess Social Security ----------
+  q({ id: 'fed.ssMaxTax', label: 'Max Social Security Tax per Year', unit: 'usd', display: 'inline', expr: round(mul(P('fed.ssWageBase'), P('fed.ssRate'))) });
+  q({ id: 'fed.excessSS', label: 'Excess Social Security Tax Credit', unit: 'usd', form: 'Schedule 3 Line 11', category: 'withholding', optional: true,
+    expr: when(and(gt(count('w2'), num(1)), gt(R('fed.ssTaxWithheld'), R('fed.ssMaxTax'))), round(sub(R('fed.ssTaxWithheld'), R('fed.ssMaxTax'))), lit(0)) });
+  q({ id: 'fed.medicareAndSeWages', label: 'Medicare Wages + SE Earnings', unit: 'usd', display: 'inline', expr: add(R('fed.medWages'), R('fed.seEarnings')) });
+  q({ id: 'fed.excessMedicareWages', label: 'Wages Over Additional Medicare Threshold', unit: 'usd', category: 'medicare',
+    expr: atLeast0(sub(R('fed.medicareAndSeWages'), P('fed.addlMedThreshold'))) });
+  q({ id: 'fed.additionalMedicareTax', label: 'Additional Medicare Tax', unit: 'usd', form: 'Form 8959', category: 'medicare', optional: true,
+    expr: round(mul(R('fed.excessMedicareWages'), P('fed.addlMedRate'))) });
+  q({ id: 'fed.netInvestmentIncome', label: 'Net Investment Income', unit: 'usd', category: 'capital',
+    expr: atLeast0(add(R('in.interest'), R('fed.interest1099'), R('fed.dividends'), atLeast0(R('fed.capAllowed')), atLeast0(R('fed.rentalAllowed')))) });
+  q({ id: 'fed.niitBase', label: 'NIIT Taxable Base', unit: 'usd', category: 'capital',
+    expr: min(R('fed.netInvestmentIncome'), atLeast0(sub(R('fed.agi'), P('fed.niitThreshold')))) });
+  q({ id: 'fed.niit', label: 'Net Investment Income Tax', unit: 'usd', form: 'Form 8960', category: 'tax', optional: true,
+    expr: round(mul(R('fed.niitBase'), P('fed.niitRate'))) });
+
+  q({ id: 'fed.amti', label: 'Alternative Minimum Taxable Income', unit: 'usd', form: 'Form 6251 Line 4', category: 'tax',
+    expr: atLeast0(sub(R('fed.agi'), add(R('fed.medicalDeduction'), R('in.mortgage'), R('in.charity'), R('fed.gamblingLossDeduction')), R('fed.qbi'))) });
+  q({ id: 'fed.amtExemptionAllowed', label: 'AMT Exemption After Phaseout', unit: 'usd', category: 'tax',
+    expr: atLeast0(sub(P('fed.amtExemption'), mul(atLeast0(sub(R('fed.amti'), P('fed.amtPhaseStart'))), rate(0.25)))) });
+  q({ id: 'fed.amtOrdinaryBase', label: 'AMT Base Excluding Preferential Income', unit: 'usd', display: 'inline',
+    expr: atLeast0(sub(atLeast0(sub(R('fed.amti'), R('fed.amtExemptionAllowed'))), R('fed.preferentialIncome'))) });
+  q({ id: 'fed.tentativeMinimumTax', label: 'Tentative Minimum Tax', unit: 'usd', form: 'Form 6251 Line 9', category: 'tax',
+    expr: round(add(when(lte(R('fed.amtOrdinaryBase'), P('fed.amt28Breakpoint')), mul(R('fed.amtOrdinaryBase'), rate(0.26)),
+      add(mul(P('fed.amt28Breakpoint'), rate(0.26)), mul(sub(R('fed.amtOrdinaryBase'), P('fed.amt28Breakpoint')), rate(0.28)))), R('fed.preferentialTax'))) });
+  q({ id: 'fed.amt', label: 'Alternative Minimum Tax', unit: 'usd', form: 'Form 6251 Line 11', category: 'tax', optional: true,
+    expr: when(gt(R('fed.amti'), P('fed.amtExemption')), atLeast0(round(sub(R('fed.tentativeMinimumTax'), R('fed.tax')))), lit(0)) });
+
+  q({ id: 'fed.earlyDistributionPenalty', label: 'Early Distribution Penalty', unit: 'usd', form: 'Form 5329', category: 'tax', optional: true,
+    expr: round(mul(R('fed.earlyDistributions'), rate(0.1))) });
+  q({ id: 'fed.tipsFica', label: 'Unreported Tips FICA', unit: 'usd', form: 'Form 4137', category: 'tax', optional: true,
+    expr: round(mul(R('in.tips'), rate(0.0765))) });
+  q({ id: 'fed.otherTaxes', label: 'Other Taxes', unit: 'usd', form: 'Form 1040 Line 23', category: 'tax', optional: true,
+    expr: round(add(R('fed.seTax'), R('fed.additionalMedicareTax'), R('fed.niit'), R('fed.amt'), R('fed.earlyDistributionPenalty'),
+      R('fed.tipsFica'), R('in.householdTax'))) });
+
+  // ---------- Bottom line ----------
+  q({ id: 'fed.totalTax', label: 'Total Tax', unit: 'usd', form: 'Form 1040 Line 24', category: 'tax',
+    expr: round(add(atLeast0(sub(R('fed.tax'), R('fed.nonrefundableCredits'))), R('fed.otherTaxes'))) });
+  q({ id: 'fed.payments', label: 'Total Payments', unit: 'usd', form: 'Form 1040 Line 33', category: 'withholding',
+    expr: round(add(R('fed.w2Withholding'), R('fed.extraWithholding'), R('in.estimatedPayments'), R('fed.refundableCredits'), R('fed.excessSS'))) });
+  q({ id: 'fed.netResult', label: 'Payments Minus Tax', unit: 'usd', display: 'inline', expr: round(sub(R('fed.payments'), R('fed.totalTax'))) });
+  q({ id: 'fed.refund', label: 'Refund', unit: 'usd', form: 'Form 1040 Line 34', category: 'refund',
+    appliesWhen: gte(R('fed.netResult'), lit(0)), expr: round(sub(R('fed.payments'), R('fed.totalTax'))) });
+  q({ id: 'fed.owed', label: 'Amount You Owe', unit: 'usd', form: 'Form 1040 Line 37', category: 'owed',
+    appliesWhen: lt(R('fed.netResult'), lit(0)), expr: round(sub(R('fed.totalTax'), R('fed.payments'))) });
+  q({ id: 'fed.effectiveRate', label: 'Effective Tax Rate', unit: 'rate', category: 'tax',
+    expr: when(gt(R('fed.totalIncome'), lit(0)), div(R('fed.totalTax'), R('fed.totalIncome')), rate(0)) });
+}
+
+let cached: FormulaGraph | null = null;
+
+/** The federal graph (definitions are static, so it is built once). */
+export function federalGraph(): FormulaGraph {
+  if (!cached) {
+    const g = new FormulaGraph();
+    defineInputs(g);
+    defineParams(g);
+    defineQuantities(g);
+    cached = g;
+  }
+  return cached;
+}
+
+/** Map the app's saved state onto graph inputs. Pure data copying — no tax logic. */
+export function federalContext(state: TaxAppState): GraphContext {
+  const w2s = state.w2s || [];
+  const sources = state.otherIncome?.sources || [];
+  const n = (v: unknown) => Number(v) || 0;
+  const collections: GraphContext['collections'] = {
+    w2: w2s.map(w => ({ id: w.id, name: w.employer, values: { box1: n(w.box1), box2: n(w.box2), box3: n(w.box3), box4: n(w.box4), box5: n(w.box5), box6: n(w.box6) } })),
+    w2State: w2s.flatMap(w => (w.states || []).map(s => ({
+      id: w.id * 1000 + s.id,
+      name: (s.state || '').toUpperCase(),
+      values: { stateWages: n(s.stateWages), withheld: n(s.stateTaxWithheld), localWithheld: n(s.localTaxWithheld) }
+    })))
+  };
+  SOURCE_COLLECTIONS.forEach(c => {
+    collections[c.id] = sources.filter(s => c.type.includes(s.type)).map(s => ({
+      id: s.id,
+      name: s.payer,
+      values: {
+        amount: n(s.amount),
+        accrued: n(s.accruedInterestPaid),
+        taxExempt: n(s.taxExemptInterest),
+        qdiv: n(s.qualifiedDividends),
+        fedWithheld: n(s.federalTaxWithheld),
+        penalty: s.earlyDistributionPenalty ? 1 : 0
+      }
+    }));
+  });
+  const o = state.otherIncome || ({} as TaxAppState['otherIncome']);
+  const a = state.adjustments || ({} as TaxAppState['adjustments']);
+  const i = state.itemizedDeductions || ({} as NonNullable<TaxAppState['itemizedDeductions']>);
+  const d = state.dependents || ({} as TaxAppState['dependents']);
+  const int = (v: unknown) => parseInt(String(v), 10) || 0;
+  return {
+    year: state.year || 2024,
+    status: normalizeFilingStatus(state.filingStatus || 'single') as CoreStatus,
+    flags: {
+      'fed.forceItemized': state.deductionMethod === 'itemized',
+      'fed.forceStandard': state.deductionMethod === 'standard'
+    },
+    collections,
+    inputs: {
+      'in.interest': n(o.interest),
+      'in.schedCExpenses': n(o.scheduleCExpenses),
+      'in.stGain': n(o.capitalGains?.shortTerm),
+      'in.ltGain': n(o.capitalGains?.longTerm),
+      'in.capCarryover': n(o.capitalGains?.carryoverLoss),
+      'in.collectibles': n(o.capitalGains?.collectiblesGain),
+      'in.unrecap1250': n(o.capitalGains?.unrecaptured1250Gain),
+      'in.rents': n(o.scheduleERental?.grossRents),
+      'in.rentalExpenses': n(o.scheduleERental?.expenses),
+      'in.rentalDepreciation': n(o.scheduleERental?.depreciation),
+      'in.alimonyReceived': n(o.alimonyReceived),
+      'in.feie': n(o.foreignEarnedIncomeExclusion),
+      'in.tips': n(o.unreportedTips),
+      'in.studentLoan': n(a.studentLoan),
+      'in.ira': n(a.ira),
+      'in.hsa': n(a.hsa),
+      'in.educator': n(a.educatorExpenses),
+      'in.seRetirement': n(a.seRetirement),
+      'in.seHealth': n(a.seHealthInsurance),
+      'in.alimonyPaid': n(a.alimonyPaid),
+      'in.militaryMoving': n(a.militaryMoving),
+      'in.earlyWithdrawal': n(a.earlyWithdrawalPenalty),
+      'in.juryDuty': n(a.juryDutyPay),
+      'in.medical': n(i.medicalExpenses),
+      'in.realEstateTax': n(i.realEstateTax),
+      'in.mortgage': n(i.mortgageInterest),
+      'in.charity': n(i.charity),
+      'in.gamblingLosses': n(i.gamblingLosses),
+      'in.investmentInterest': n(i.investmentInterest),
+      'in.casualty': n(i.casualtyLoss),
+      'in.children': int(d.childrenCount),
+      'in.otherDependents': int(d.otherDependentsCount),
+      'in.age65Blind': int(d.age65OrBlindCount),
+      'in.childCare': n(d.childCareExpenses),
+      'in.aotc': n(d.educationExpensesAotc),
+      'in.llc': n(d.educationExpensesLlc),
+      'in.foreignTaxCredit': n(d.foreignTaxCredit),
+      'in.cleanEnergy': n(d.cleanEnergyCredit),
+      'in.adoption': n(d.adoptionCredit),
+      'in.elderly': n(d.elderlyDisabledCredit),
+      'in.ptc': n(d.premiumTaxCredit),
+      'in.householdTax': n(d.householdEmploymentTax),
+      'in.estimatedPayments': n(d.estimatedTaxPayments)
+    }
+  };
+}
+
+/** How federal quantities are grouped into calculation cards. Presentation only — no math. */
+export const FEDERAL_BLOCKS: BlockSpec[] = [
+  { id: 'calc-total-w2-wages', stepLabel: 'Step 1 • Wage & Payroll Aggregation', title: 'W-2 Wages, Withholding & FICA',
+    quantities: [{ id: 'fed.wages', show: 'always' }, 'fed.w2Withholding', 'fed.ssTaxWithheld', 'fed.medTaxWithheld', 'fed.ficaWithheld'] },
+  { id: 'calc-capital-gains', stepLabel: 'Step 2a • Schedule D / Form 8949', title: 'Capital Gains & Loss Limitation',
+    quantities: ['fed.capNet', 'fed.capAllowed'] },
+  { id: 'calc-schedule-e', stepLabel: 'Step 2b • Schedule E / Form 8582', title: 'Rental Real Estate & K-1 Income',
+    quantities: ['fed.rentalNet', 'fed.suspendedRentalLoss', 'fed.rentalAllowed', 'fed.k1Income'] },
+  { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',
+    quantities: ['fed.interestTotal', 'fed.taxExemptInterest', 'fed.dividends', 'fed.qualifiedDividends', 'fed.businessProfit', 'fed.retirement',
+      'fed.gambling', 'fed.otherSourceIncome', 'fed.ssaGross', 'fed.provisionalIncome', 'fed.taxableSS',
+      { id: 'fed.totalIncome', show: 'always' }, { id: 'fed.adjustments', show: 'always' }, { id: 'fed.agi', show: 'always' }] },
+  { id: 'calc-itemized-deductions', stepLabel: 'Step 4a • Schedule A Itemized Deductions', title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',
+    quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.salt', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
+  { id: 'calc-taxable-income', stepLabel: 'Step 4 • Deductions & Taxable Income', title: 'Deduction & Taxable Income',
+    quantities: [{ id: 'fed.stdDeduction', show: 'always' }, { id: 'fed.deduction', show: 'always' }, 'fed.qbiIncome', 'fed.qbiIncomeLimit', 'fed.qbi',
+      { id: 'fed.taxableIncome', show: 'always' }] },
+  { id: 'calc-tax-before-credits', stepLabel: 'Step 5 • Tax Brackets', title: 'Federal Income Tax (Before Credits)',
+    quantities: ['fed.netLtcg', 'fed.preferentialIncome', 'fed.ordinaryTaxable', 'fed.ordinaryTax', 'fed.standardPrefTax', 'fed.unrecap1250Tax',
+      'fed.collectiblesTax', { id: 'fed.tax', show: 'always' }] },
+  { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
+    quantities: ['fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.childCareCredit', 'fed.aotcTotal',
+      'fed.educationNonrefundable', 'fed.saversCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
+      'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
+  { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',
+    quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',
+      'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.tipsFica', 'fed.otherTaxes', 'fed.excessSS'] },
+  { id: 'calc-final-verdict', stepLabel: 'Step 8 • Federal Bottom Line', title: 'Total Tax, Payments & Federal Refund / Owed', isOutput: true,
+    quantities: [{ id: 'fed.totalTax', show: 'always' }, { id: 'fed.payments', show: 'always' }, { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
+];

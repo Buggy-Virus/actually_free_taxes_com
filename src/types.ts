@@ -440,6 +440,8 @@ export interface TaxCalculationSummary {
   stateReturnsCalc: StateReturnCalculation[];
   unifiedSummaryCalc: UnifiedTaxSummary;
   effectiveRateCalc: EffectiveRateCalculation;
+  /** The evaluated federal formula graph this summary was read from (drives blocks & arrows). */
+  federalEval?: import('./graph/graph.js').Evaluation;
 }
 
 export type ArrowColorCategory =
