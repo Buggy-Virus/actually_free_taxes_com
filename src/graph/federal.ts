@@ -55,6 +55,7 @@ function defineInputs(g: FormulaGraph): void {
       box4: w2Field('box4', 'Box 4 Social Security Tax'),
       box5: w2Field('box5', 'Box 5 Medicare Wages'),
       box6: w2Field('box6', 'Box 6 Medicare Tax'),
+      box10: { label: 'Box 10 Dependent Care Benefits', unit: 'usd', optional: true, domId: (it: CollectionItem) => `w2-${it.id}-box10` },
       employerHsa: { label: 'Box 12 W Employer HSA Contributions', unit: 'usd', optional: true, domId: (it: CollectionItem) => `w2-${it.id}-box12-container` },
       deferrals: { label: 'Box 12 Elective Deferrals (D/E/G/S/AA/BB/EE)', unit: 'usd', optional: true, domId: (it: CollectionItem) => `w2-${it.id}-box12-container` },
       retirementPlanTaxpayer: { label: "Box 13 Retirement Plan (taxpayer's W-2)", unit: 'count', domId: (it: CollectionItem) => `w2-${it.id}-box1-container` },
@@ -92,6 +93,7 @@ function defineInputs(g: FormulaGraph): void {
         capGainDist: f(`${c.label} Capital Gain Distributions (Box 2a)`, false, true),
         taxable: f(`${c.label} Taxable Amount (Box 2a)`),
         nonRollover: f(`${c.label} Not Rolled Over`),
+        penaltyException: f(`${c.label} Amount Excepted From 10% Tax`, false, true),
         fedWithheld: f(`${c.label} Federal Tax Withheld`, false, true),
         penalty: f(`${c.label} Early Distribution (Code 1)`)
       }
@@ -191,7 +193,7 @@ function defineParams(g: FormulaGraph): void {
   p('fed.odcPerDependent', 'Credit per Other Dependent', 'usd', () => 500, 'Schedule 8812', []);
   p('fed.capLossFloor', 'Capital Loss Limit', 'usd', c => (c.status === 'married_separate' ? -1500 : -3000), 'IRC §1211(b)', ['select-filing-status']);
   p('fed.studentLoanCap', 'Student Loan Interest Cap', 'usd', () => 2500, 'IRC §221(b)(1)', []);
-  p('fed.educatorCap', 'Educator Expense Cap', 'usd', c => (c.status === 'married_joint' ? 600 : 300), 'IRC §62(a)(2)(D)', ['select-filing-status']);
+  p('fed.educatorCap', 'Educator Expense Cap (per educator)', 'usd', () => 300, 'IRC §62(a)(2)(D)', []);
   p('fed.saltCapBase', 'SALT Cap', 'usd', c => (c.year >= 2025 ? 40000 : 10000) / (c.status === 'married_separate' ? 2 : 1), 'IRC §164(b)(6) as amended by P.L. 119-21', YEAR_STATUS);
   p('fed.saltPhaseStart', 'SALT Cap Phase-Down Threshold (MAGI)', 'usd', c => (c.status === 'married_separate' ? 250000 : 500000), 'IRC §164(b)(7)', ['select-filing-status']);
   p('fed.saltFloor', 'SALT Cap Minimum', 'usd', c => (c.status === 'married_separate' ? 5000 : 10000), 'IRC §164(b)(7)', ['select-filing-status']);
@@ -200,6 +202,8 @@ function defineParams(g: FormulaGraph): void {
   p('fed.slPhaseRange', 'Student Loan Interest Phase-Out Range', 'usd', c => (c.status === 'married_joint' ? 30000 : 15000), 'Pub. 970 ch. 4', ['select-filing-status']);
   p('fed.medicareRate', 'Medicare Employee Rate', 'rate', c => rules(c.year).medicareRate, 'IRC §3101(b)(1)', []);
   p('fed.taxYear', 'Tax Year', 'count', c => c.year, 'Form 1040', ['select-tax-year']);
+  p('fed.electiveDeferralLimit', 'Elective Deferral Limit', 'usd', c => (c.year >= 2025 ? 23500 : 23000), 'IRC §402(g)', ['select-tax-year']);
+  p('fed.annualAdditionsCap', 'Annual Additions Limit', 'usd', c => (c.year >= 2025 ? 70000 : 69000), 'IRC §415(c)', ['select-tax-year']);
   p('fed.dependentStdMin', 'Dependent Standard Deduction Minimum', 'usd', c => (c.year >= 2025 ? 1350 : 1300), 'IRC §63(c)(5)', ['select-tax-year']);
   g.param({ id: 'fed.hsaLimitSelf', label: 'HSA Limit (Self-Only)', unit: 'usd', source: 'Rev. Proc. 2023-23 / 2024-25', domSources: ['select-tax-year'], resolve: c => (c.year >= 2025 ? 4300 : 4150) });
   g.param({ id: 'fed.hsaLimitFamily', label: 'HSA Limit (Family)', unit: 'usd', source: 'Rev. Proc. 2023-23 / 2024-25', domSources: ['select-tax-year'], resolve: c => (c.year >= 2025 ? 8550 : 8300) });
@@ -326,7 +330,9 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   q({ id: 'fed.k1Income', label: 'Schedule K-1 Income', unit: 'usd', form: 'Schedule E Part II', category: 'wages', optional: true, expr: each('src.k1', 'amount') });
   q({ id: 'fed.retirement', label: 'Taxable Retirement Distributions', unit: 'usd', form: 'Form 1040 Lines 4b/5b', category: 'wages', optional: true,
     expr: each('src.r', 'taxable', 'nonRollover') });
-  q({ id: 'fed.earlyDistributions', label: 'Early Distributions (Code 1)', unit: 'usd', display: 'inline', expr: each('src.r', 'taxable', 'penalty') });
+  // Form 5329 Part I: early distributions minus amounts that meet an exception (age 55 separation, disability, first home, etc.).
+  q({ id: 'fed.earlyDistributions', label: 'Early Distributions Subject to 10% Tax', unit: 'usd', display: 'inline',
+    expr: atLeast0(sub(each('src.r', 'taxable', 'penalty'), each('src.r', 'penaltyException', 'penalty'))) });
   q({ id: 'fed.gambling', label: 'Gambling Winnings', unit: 'usd', form: 'Schedule 1 Line 8b', category: 'wages', optional: true, expr: each('src.w2g', 'amount') });
   q({ id: 'fed.otherSourceIncome', label: 'Other 1099 Income', unit: 'usd', form: 'Schedule 1 Line 8z', category: 'wages', optional: true,
     expr: add(each('src.misc', 'amount'), each('src.g', 'amount'), each('src.other', 'amount')) });
@@ -352,10 +358,20 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: round(mul(R('fed.seTax'), rate(0.5))) });
 
   // ---------- Adjustments (Schedule 1 Part II) ----------
+  // Self-employed retirement: at most 20% of (net profit − ½ SE tax) plus the elective deferral limit (solo 401(k) maximum),
+  // within the annual additions cap. SE health insurance (Form 7206) is limited to net profit − ½ SE tax − SE retirement.
+  q({ id: 'fed.seRetirementLimit', label: 'Self-Employed Retirement Contribution Limit', unit: 'usd', category: 'adjustments',
+    appliesWhen: gt(R('in.seRetirement'), lit(0)),
+    expr: min(P('fed.annualAdditionsCap'), add(P('fed.electiveDeferralLimit'), mul(atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'))), rate(0.2)))) });
+  q({ id: 'fed.seRetirementDeduction', label: 'SEP / SIMPLE / Solo 401(k) Deduction', unit: 'usd', form: 'Schedule 1 Line 16', category: 'adjustments', optional: true,
+    presentIf: gt(R('in.seRetirement'), lit(0)), expr: min(R('in.seRetirement'), R('fed.seRetirementLimit')) });
+  q({ id: 'fed.seHealthDeduction', label: 'Self-Employed Health Insurance Deduction', unit: 'usd', form: 'Schedule 1 Line 17', category: 'adjustments', optional: true,
+    presentIf: gt(R('in.seHealth'), lit(0)),
+    expr: min(R('in.seHealth'), atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'), R('fed.seRetirementDeduction')))) });
   q({ id: 'fed.studentLoanInterestCapped', label: 'Student Loan Interest (up to cap)', unit: 'usd', display: 'inline', optional: true,
     expr: min(R('in.studentLoan'), P('fed.studentLoanCap')) });
   q({ id: 'fed.educatorDeduction', label: 'Educator Expense Deduction', unit: 'usd', display: 'inline', optional: true,
-    expr: min(R('in.educator'), P('fed.educatorCap')) });
+    expr: min(R('in.educator'), mul(P('fed.educatorCap'), when(flag('fed.bothEducators', 'both spouses are educators', 'one educator', 'check-both-educators'), num(2), num(1)))) });
   // Form 8889: contribution limit by coverage (+$1,000 at 55+), reduced by employer contributions (W-2 box 12 W).
   const familyHsa = flag('fed.hsaFamily', 'family HDHP coverage', 'self-only HDHP coverage', 'select-hsa-coverage');
   const hsaCatch = or(and(hasAges, gte(R('fed.taxpayerAge'), num(55))), and(not(hasAges), flag('fed.hsaCatchUp', 'age 55+ (checked)', 'under 55', 'check-hsa-catchup')));
@@ -365,7 +381,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     presentIf: gt(R('in.hsa'), lit(0)), expr: min(R('in.hsa'), R('fed.hsaLimit')) });
   q({ id: 'fed.hsaExcess', label: 'Excess HSA Contributions', unit: 'usd', category: 'adjustments', optional: true, expr: atLeast0(sub(R('in.hsa'), R('fed.hsaLimit'))) });
   q({ id: 'fed.adjustmentsExIraSli', label: 'Adjustments Other Than IRA & Student Loan Interest', unit: 'usd', display: 'inline',
-    expr: add(R('fed.hsaDeduction'), R('fed.educatorDeduction'), R('in.seRetirement'), R('in.seHealth'),
+    expr: add(R('fed.hsaDeduction'), R('fed.educatorDeduction'), R('fed.seRetirementDeduction'), R('fed.seHealthDeduction'),
       R('in.alimonyPaid'), R('in.militaryMoving'), R('in.earlyWithdrawal'), R('in.juryDuty'), R('fed.halfSeTax')) });
   // ---- IRA deduction (Pub. 590-A): phase-out when the taxpayer (or spouse) is covered by a workplace plan ----
   // Appendix B: MAGI uses taxable Social Security figured *before* the IRA deduction, which avoids circularity.
@@ -445,7 +461,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   // ---------- Total income & AGI ----------
   q({ id: 'fed.feie', label: 'Foreign Earned Income Exclusion', unit: 'usd', display: 'inline', optional: true, expr: min(R('in.feie'), P('fed.feieLimit')) });
   q({ id: 'fed.totalIncome', label: 'Total Income', unit: 'usd', form: 'Form 1040 Line 9', category: 'wages',
-    expr: round(atLeast0(sub(add(R('fed.wages'), R('fed.interestTotal'), R('fed.dividends'), R('fed.businessProfit'), R('fed.k1Income'),
+    expr: round(atLeast0(sub(add(R('fed.wages'), R('fed.depCareTaxable'), R('fed.interestTotal'), R('fed.dividends'), R('fed.businessProfit'), R('fed.k1Income'),
       R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableSS'), R('fed.capAllowed'), R('fed.rentalAllowed'),
       R('in.alimonyReceived'), R('in.tips')), R('fed.feie')))) });
   q({ id: 'fed.agi', label: 'Adjusted Gross Income', unit: 'usd', form: 'Form 1040 Line 11', category: 'wages',
@@ -471,21 +487,26 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: min(R('fed.gambling'), R('in.gamblingLosses')) });
   q({ id: 'fed.investmentInterestDeduction', label: 'Deductible Investment Interest', unit: 'usd', form: 'Schedule A Line 9', category: 'itemized', optional: true,
     expr: min(atLeast0(add(R('in.interest'), R('fed.interest1099'), atLeast0(R('fed.capAllowed')))), R('in.investmentInterest')) });
+  // Form 4684: personal casualty loss (federally declared disaster) less $100 per event and 10% of AGI.
+  q({ id: 'fed.casualtyDeduction', label: 'Deductible Casualty Loss', unit: 'usd', form: 'Schedule A Line 15', category: 'itemized', optional: true,
+    presentIf: gt(R('in.casualty'), lit(0)), expr: atLeast0(sub(R('in.casualty'), lit(100), mul(R('fed.agi'), rate(0.1)))) });
   q({ id: 'fed.itemized', label: 'Itemized Deductions', unit: 'usd', form: 'Schedule A Line 17', category: 'itemized',
     expr: add(R('fed.medicalDeduction'), R('fed.salt'), R('in.mortgage'), R('in.charity'), R('fed.gamblingLossDeduction'),
-      R('fed.investmentInterestDeduction'), R('in.casualty')) });
+      R('fed.investmentInterestDeduction'), R('fed.casualtyDeduction')) });
   const forceItemized = flag('fed.forceItemized', 'you chose to itemize', 'you did not force itemizing', 'select-deduction-method');
   const forceStandard = flag('fed.forceStandard', 'you chose the standard deduction', 'you did not force the standard deduction', 'select-deduction-method');
+  // MFS: if your spouse itemizes, you must itemize too (standard deduction is $0).
+  const spouseItemizes = flag('fed.spouseItemizes', 'your spouse itemizes (MFS)', 'your spouse does not itemize', 'check-spouse-itemizes');
   q({ id: 'fed.deduction', label: 'Deduction', unit: 'usd', form: 'Form 1040 Line 12', category: 'status',
-    expr: when(forceItemized, R('fed.itemized'), when(forceStandard, R('fed.stdDeduction'), max(R('fed.stdDeduction'), R('fed.itemized')))) });
+    expr: when(or(forceItemized, spouseItemizes), R('fed.itemized'), when(forceStandard, R('fed.stdDeduction'), max(R('fed.stdDeduction'), R('fed.itemized')))) });
   q({ id: 'fed.itemizing', label: 'Itemizing', unit: 'count', display: 'inline',
-    expr: when(forceItemized, num(1), when(forceStandard, num(0), when(gt(R('fed.itemized'), R('fed.stdDeduction')), num(1), num(0)))) });
+    expr: when(or(forceItemized, spouseItemizes), num(1), when(forceStandard, num(0), when(gt(R('fed.itemized'), R('fed.stdDeduction')), num(1), num(0)))) });
 
   // ---------- QBI (Form 8995) ----------
   q({ id: 'fed.netLtcg', label: 'Net Long-Term Capital Gain', unit: 'usd', category: 'capital', optional: true,
     expr: when(and(gt(R('fed.capAllowed'), lit(0)), gt(R('fed.longTermGain'), lit(0))), min(R('fed.capAllowed'), R('fed.longTermGain')), lit(0)) });
   q({ id: 'fed.qbiIncome', label: 'Qualified Business Income', unit: 'usd', category: 'adjustments',
-    expr: add(atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'), R('in.seRetirement'), R('in.seHealth'))), atLeast0(R('fed.k1Income'))) });
+    expr: add(atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'), R('fed.seRetirementDeduction'), R('fed.seHealthDeduction'))), atLeast0(R('fed.k1Income'))) });
   q({ id: 'fed.qbiIncomeLimit', label: 'QBI Taxable Income Limit Base', unit: 'usd', category: 'adjustments',
     expr: atLeast0(sub(atLeast0(sub(R('fed.agi'), R('fed.deduction'))), add(R('fed.qualifiedDividends'), R('fed.netLtcg')))) });
   q({ id: 'fed.qbi', label: 'QBI Deduction', unit: 'usd', form: 'Form 1040 Line 13', category: 'adjustments', optional: true,
@@ -571,7 +592,14 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: when(lte(R('fed.agi'), lit(15000)), rate(0.35),
       max(rate(0.2), sub(rate(0.35), mul(ceil(div(sub(R('fed.agi'), lit(15000)), lit(2000))), rate(0.01))))) });
   q({ id: 'fed.careExpenseCap', label: 'Child Care Expense Cap', unit: 'usd', display: 'inline',
-    expr: when(gte(R('fed.careQualifyingPersons'), num(2)), lit(6000), lit(3000)) });
+    expr: atLeast0(sub(when(gte(R('fed.careQualifyingPersons'), num(2)), lit(6000), lit(3000)), R('fed.depCareExcluded'))) });
+  // Form 2441 Part III: employer dependent care benefits (W-2 box 10) are excluded up to $5,000 ($2,500 MFS)
+  // and the amount spent; the rest is taxable wages (Form 1040 line 1e). Excluded benefits reduce the credit's expense limit.
+  q({ id: 'fed.depCareBenefits', label: 'Dependent Care Benefits (W-2 Box 10)', unit: 'usd', display: 'inline', optional: true, expr: each('w2', 'box10') });
+  q({ id: 'fed.depCareExcluded', label: 'Excluded Dependent Care Benefits', unit: 'usd', form: 'Form 2441 Line 25', category: 'credits', optional: true,
+    expr: min(R('fed.depCareBenefits'), when(statusIs('married_separate'), lit(2500), lit(5000)), R('in.childCare')) });
+  q({ id: 'fed.depCareTaxable', label: 'Taxable Dependent Care Benefits', unit: 'usd', form: 'Form 1040 Line 1e', category: 'wages', optional: true,
+    expr: sub(R('fed.depCareBenefits'), R('fed.depCareExcluded')) });
   // Form 2441 lines 4–6: expenses are limited to earned income (the lower-earning spouse's on a joint return).
   q({ id: 'fed.taxpayerEarnedIncome', label: "Taxpayer's Earned Income", unit: 'usd', display: 'inline', expr: add(each('w2', 'box1', 'isTaxpayer'), atLeast0(R('fed.businessProfit'))) });
   q({ id: 'fed.spouseEarnedIncome', label: "Spouse's Earned Income", unit: 'usd', display: 'inline', expr: each('w2', 'box1', 'isSpouse') });
@@ -758,7 +786,7 @@ export function federalContext(state: TaxAppState): GraphContext {
       }));
       const byCodes = (codes: string[]) => box12.filter(b => codes.includes(b.code)).reduce((sum, b) => sum + b.amount, 0);
       return { id: w.id, name: w.employer, values: { box1: n(w.box1), box2: n(w.box2), box3: n(w.box3), box4: n(w.box4), box5: n(w.box5), box6: n(w.box6),
-        employerHsa: byCodes(['W']), deferrals: byCodes(['D', 'E', 'F', 'G', 'H', 'S', 'AA', 'BB', 'EE']),
+        box10: n(w.box10), employerHsa: byCodes(['W']), deferrals: byCodes(['D', 'E', 'F', 'G', 'H', 'S', 'AA', 'BB', 'EE']),
         retirementPlanTaxpayer: w.box13Retirement && !spouse ? 1 : 0, retirementPlanSpouse: w.box13Retirement && spouse ? 1 : 0,
         isTaxpayer: spouse ? 0 : 1, isSpouse: spouse ? 1 : 0 } };
     }),
@@ -787,6 +815,7 @@ export function federalContext(state: TaxAppState): GraphContext {
         // 1099-R: box 2a taxable amount (box 1 gross if not determined); rollovers are not taxable.
         taxable: s.taxableAmount !== undefined && s.taxableAmount !== null && String(s.taxableAmount) !== '' ? n(s.taxableAmount) : n(s.amount),
         nonRollover: s.rollover ? 0 : 1,
+        penaltyException: n(s.penaltyExceptionAmount),
         fedWithheld: n(s.federalTaxWithheld),
         penalty: s.earlyDistributionPenalty && !s.rollover ? 1 : 0
       }
@@ -811,6 +840,8 @@ export function federalContext(state: TaxAppState): GraphContext {
       'fed.iraCatchUp': Boolean(state.adjustments?.iraCatchUp),
       'fed.livedApart': Boolean(state.livedApartFromSpouse) && state.filingStatus === 'married_separate',
       'fed.taxpayerBlind': Boolean(state.taxpayer?.blind),
+      'fed.bothEducators': Boolean(state.adjustments?.bothEducators) && state.filingStatus === 'married_joint',
+      'fed.spouseItemizes': Boolean(state.spouseItemizes) && state.filingStatus === 'married_separate',
       'fed.spouseBlind': Boolean(state.spouse?.blind)
     },
     collections,
@@ -881,11 +912,11 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
   { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',
     quantities: ['fed.interestTotal', 'fed.taxExemptInterest', 'fed.dividends', 'fed.qualifiedDividends', 'fed.businessProfit', 'fed.retirement',
       'fed.gambling', 'fed.otherSourceIncome', 'fed.ssaGross', 'fed.provisionalIncome', 'fed.taxableSS',
-      { id: 'fed.totalIncome', show: 'always' }, 'fed.hsaLimit', 'fed.hsaDeduction', 'fed.iraMagi', 'fed.iraDeductibleLimit', 'fed.iraDeduction',
+      'fed.depCareTaxable', { id: 'fed.totalIncome', show: 'always' }, 'fed.seRetirementLimit', 'fed.seRetirementDeduction', 'fed.seHealthDeduction', 'fed.hsaLimit', 'fed.hsaDeduction', 'fed.iraMagi', 'fed.iraDeductibleLimit', 'fed.iraDeduction',
       'fed.studentLoanMagi', 'fed.studentLoanDeduction', { id: 'fed.adjustments', show: 'always' },
       { id: 'fed.agi', show: 'always' }] },
   { id: 'calc-itemized-deductions', stepLabel: 'Step 4a • Schedule A Itemized Deductions', title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',
-    quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
+    quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.casualtyDeduction', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
   { id: 'calc-taxable-income', stepLabel: 'Step 4 • Deductions & Taxable Income', title: 'Deduction & Taxable Income',
     quantities: ['fed.taxpayerAge', 'fed.spouseAge', 'fed.age65BlindBoxes', { id: 'fed.stdDeduction', show: 'always' }, { id: 'fed.deduction', show: 'always' }, 'fed.qbiIncome', 'fed.qbiIncomeLimit', 'fed.qbi',
       'fed.tipsDeduction', 'fed.overtimeDeduction', 'fed.carLoanDeduction', 'fed.seniorDeduction', 'fed.sched1a',
@@ -894,7 +925,7 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
     quantities: ['fed.netLtcg', 'fed.preferentialIncome', 'fed.ordinaryTaxable', 'fed.ordinaryTaxRow', 'fed.ordinaryTax', 'fed.standardPrefTax', 'fed.unrecap1250Tax',
       'fed.collectiblesTax', 'fed.regularTaxRow', 'fed.regularTax', { id: 'fed.tax', show: 'always' }] },
   { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
-    quantities: ['fed.ctcChildren', 'fed.odcDependents', 'fed.eitcChildren', 'fed.careQualifyingPersons', 'fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.careEarnedIncomeLimit', 'fed.childCareCredit', 'fed.aotcTotal',
+    quantities: ['fed.ctcChildren', 'fed.odcDependents', 'fed.eitcChildren', 'fed.careQualifyingPersons', 'fed.depCareExcluded', 'fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.careEarnedIncomeLimit', 'fed.childCareCredit', 'fed.aotcTotal',
       'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
       'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
   { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',

@@ -407,6 +407,54 @@ const CASES = [
         state: ret({ w2s: [w2(100000, { fedWithheld: 5000 })], priorYearTax: 10000, priorYearAgi: 90000 }),
         expect: [['required annual payment', fed('fed.requiredAnnualPayment'), 10000], ['shortfall', fed('fed.estimatedTaxShortfall'), 5000]]
     },
+    {
+        name: 'W-2 box 10 dependent care benefits over $5,000 are taxable and reduce the Form 2441 limit',
+        source: 'Form 2441 Part III: $6,000 benefits, $7,000 expenses → $5,000 excluded, $1,000 taxable (line 1e); $3,000 − $5,000 → no credit',
+        state: ret({ filingStatus: 'head_of_household', w2s: [{ ...w2(60000), box10: 6000 }], dependents: { childrenCount: 1, childCareExpenses: 7000 } }),
+        expect: [['taxable benefits', fed('fed.depCareTaxable'), 1000], ['total income', fed('fed.totalIncome'), 61000], ['child care credit', fed('fed.childCareCredit'), 0]]
+    },
+    {
+        name: 'Form 5329 exception reduces the 10% early-distribution tax',
+        source: 'Form 5329 lines 1–4: $20,000 early distribution − $8,000 meeting an exception → 10% × $12,000 = $1,200',
+        state: ret({ w2s: [w2(40000)], otherIncome: { interest: 0, sources: [src(1, '1099-R', 20000, { earlyDistributionPenalty: true, penaltyExceptionAmount: 8000 })] } }),
+        expect: [['early distribution tax', fed('fed.earlyDistributionPenalty'), 1200]]
+    },
+    {
+        name: 'Casualty loss reduced by $100 and 10% of AGI',
+        source: 'Form 4684: $12,000 − $100 − 10% × $50,000 = $6,900',
+        state: ret({ w2s: [w2(50000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 0, casualtyLoss: 12000 } }),
+        expect: [['casualty deduction', fed('fed.casualtyDeduction'), 6900]]
+    },
+    {
+        name: 'Educator expenses — $300 unless both spouses are educators',
+        source: 'IRC §62(a)(2)(D): $300 per eligible educator',
+        state: ret({ filingStatus: 'married_joint', w2s: [w2(80000)], adjustments: { studentLoan: 0, ira: 0, hsa: 0, educatorExpenses: 600 } }),
+        expect: [['educator deduction', fed('fed.educatorDeduction'), 300]]
+    },
+    {
+        name: 'Educator expenses — both spouses educators',
+        source: 'IRC §62(a)(2)(D): 2 × $300',
+        state: ret({ filingStatus: 'married_joint', w2s: [w2(80000)], adjustments: { studentLoan: 0, ira: 0, hsa: 0, educatorExpenses: 600, bothEducators: true } }),
+        expect: [['educator deduction', fed('fed.educatorDeduction'), 600]]
+    },
+    {
+        name: 'Self-employed retirement contribution limit',
+        source: 'Pub. 560: $23,000 deferral + 20% × ($50,000 − $3,532.39 ½ SE tax) = $32,293.52',
+        state: ret({ otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 50000)] }, adjustments: { studentLoan: 0, ira: 0, hsa: 0, seRetirement: 40000 } }),
+        expect: [['SE retirement deduction', fed('fed.seRetirementDeduction'), 32293.52]]
+    },
+    {
+        name: 'Self-employed health insurance limited to net profit',
+        source: 'Form 7206: $10,000 profit − $706.48 ½ SE tax = $9,293.52 limit',
+        state: ret({ otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 10000)] }, adjustments: { studentLoan: 0, ira: 0, hsa: 0, seHealthInsurance: 12000 } }),
+        expect: [['SE health deduction', fed('fed.seHealthDeduction'), 9293.52]]
+    },
+    {
+        name: 'MFS, spouse itemizes — standard deduction not allowed',
+        source: 'IRC §63(c)(6)(A): must itemize when the spouse itemizes ($3,000 mortgage interest)',
+        state: ret({ filingStatus: 'married_separate', spouseItemizes: true, w2s: [w2(60000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 3000, charity: 0 } }),
+        expect: [['deduction', fed('fed.deduction'), 3000]]
+    },
     // ---------------- Federal: adjustment limits ----------------
     {
         name: 'Student loan interest phaseout, single MAGI $87,500',
@@ -535,6 +583,13 @@ const CASES = [
         source: 'IT-201 line 69: $63 for single filers with income of $250,000 or less (refundable)',
         state: ret({ residentState: 'NY', w2s: [w2(60000, { state: 'NY', localWithheld: 2000, locality: 'NYC' })] }),
         expect: [['NYC school tax credit', st('NY', 'nycSchoolTaxCredit'), 63]]
+    },
+    {
+        name: 'State estimated payments count as payments',
+        source: 'Form 540 line 72 (estimated tax payments): $3,000 withheld + $1,000 estimated',
+        state: ret({ residentState: 'CA', w2s: [w2(60000, { state: 'CA', stateWithheld: 3000 })],
+            statePanels: [{ id: 9, state: 'CA', section: 'credits', itemKey: 'state-estimated-payments', amount: 1000 }] }),
+        expect: [['CA payments', st('CA', 'totalWithholding'), 4000]]
     },
     {
         name: 'Texas resident — no state income tax',

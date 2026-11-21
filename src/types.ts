@@ -89,6 +89,7 @@ export interface IncomeSource {
   taxableAmount?: number; // 1099-R Box 2a taxable amount (defaults to Box 1 gross when blank)
   rollover?: boolean; // 1099-R distribution code G/H direct rollover (not taxable)
   capitalGainDistributions?: number; // 1099-DIV Box 2a total capital gain distributions (long-term)
+  penaltyExceptionAmount?: number; // 1099-R: part of an early distribution that meets a Form 5329 exception
   state?: string;
 }
 
@@ -140,6 +141,7 @@ export interface Adjustments {
   earlyWithdrawalPenalty?: number; // Schedule 1 Line 18 (1099-INT Box 2)
   juryDutyPay?: number; // Schedule 1 Line 24a (Jury duty pay given to employer)
   hsaCoverage?: 'self' | 'family'; // Form 8889 line 1 (HDHP coverage type)
+  bothEducators?: boolean; // MFJ: both spouses are eligible educators ($300 each)
   hsaCatchUp?: boolean; // Form 8889: age 55+ additional $1,000
   iraCatchUp?: boolean; // IRA: age 50+ additional $1,000
   qualifiedTips?: number; // 2025-2028 Schedule 1-A: qualified tips (P.L. 119-21)
@@ -217,6 +219,8 @@ export interface TaxAppState {
   spouse?: PersonInfo;
   /** Married filing separately and lived apart from spouse all year (SS benefits base amounts). */
   livedApartFromSpouse?: boolean;
+  /** MFS: spouse itemizes, so this return must itemize (standard deduction $0). */
+  spouseItemizes?: boolean;
   /** Prior-year total tax and AGI (Form 2210 safe harbor). */
   priorYearTax?: number;
   priorYearAgi?: number;

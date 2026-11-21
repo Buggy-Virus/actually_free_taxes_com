@@ -934,6 +934,7 @@ class TaxApp {
             taxableAmount: src?.taxableAmount === undefined || src?.taxableAmount === null || src?.taxableAmount === '' ? undefined : Number(src.taxableAmount) || 0,
             rollover: Boolean(src?.rollover),
             capitalGainDistributions: Number(src?.capitalGainDistributions) || 0,
+            penaltyExceptionAmount: Number(src?.penaltyExceptionAmount) || 0,
             state: src?.state ? String(src.state).toUpperCase().trim() : ''
         }));
         return {
@@ -967,6 +968,7 @@ class TaxApp {
                 hsaCoverage: parsed.adjustments?.hsaCoverage === 'family' ? 'family' : 'self',
                 hsaCatchUp: Boolean(parsed.adjustments?.hsaCatchUp),
                 iraCatchUp: Boolean(parsed.adjustments?.iraCatchUp),
+                bothEducators: Boolean(parsed.adjustments?.bothEducators),
                 studentLoan: Number(parsed.adjustments?.studentLoan) || 0,
                 ira: Number(parsed.adjustments?.ira) || 0,
                 hsa: Number(parsed.adjustments?.hsa) || 0,
@@ -1007,6 +1009,7 @@ class TaxApp {
             taxpayer: { birthYear: Number(parsed.taxpayer?.birthYear) || undefined, blind: Boolean(parsed.taxpayer?.blind) },
             spouse: { birthYear: Number(parsed.spouse?.birthYear) || undefined, blind: Boolean(parsed.spouse?.blind) },
             livedApartFromSpouse: Boolean(parsed.livedApartFromSpouse),
+            spouseItemizes: Boolean(parsed.spouseItemizes),
             priorYearTax: Number(parsed.priorYearTax) || 0,
             priorYearAgi: Number(parsed.priorYearAgi) || 0,
             statePanels: Array.isArray(parsed.statePanels)
@@ -1506,6 +1509,11 @@ class TaxApp {
         personInput('check-taxpayer-blind', 'taxpayer', 'blind');
         personInput('input-spouse-birth-year', 'spouse', 'birthYear');
         personInput('check-spouse-blind', 'spouse', 'blind');
+        const spouseItemCheck = document.getElementById('check-spouse-itemizes');
+        if (spouseItemCheck) {
+            spouseItemCheck.checked = Boolean(this.state.spouseItemizes);
+            spouseItemCheck.addEventListener('change', () => { this.state.spouseItemizes = spouseItemCheck.checked; this.recalculateAndRender(); });
+        }
         const apartCheck = document.getElementById('check-lived-apart');
         if (apartCheck) {
             apartCheck.checked = Boolean(this.state.livedApartFromSpouse);
@@ -4114,6 +4122,7 @@ class TaxApp {
                 ? money('Taxable Amount (Box 2a)', 'taxableAmount', src.taxableAmount, 'Same as Box 1')
                     + check('Rollover (Code G / H)', 'rollover', src.rollover, 'Rolled over — not taxable')
                     + check('Early Withdrawal (10% Penalty)', 'earlyDistributionPenalty', src.earlyDistributionPenalty, 'Code 1 Early Distribution')
+                    + money('Amount Meeting a 10% Exception (Form 5329)', 'penaltyExceptionAmount', src.penaltyExceptionAmount || 0)
                 : src.type === '1099-INT'
                     ? money('US Treasury Interest (Box 3)', 'usTreasuryInterest', src.usTreasuryInterest || 0)
                         + money('Tax-Exempt Interest (Box 8)', 'taxExemptInterest', src.taxExemptInterest || 0)
@@ -4271,6 +4280,12 @@ class TaxApp {
         <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-hsa-catchup" ${this.state.adjustments?.hsaCatchUp ? 'checked' : ''}> Age 55+ catch-up</label>
       </div>`;
         }
+        else if (entry.key === 'adj-educator') {
+            inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-adj-educator', 'Unreimbursed Classroom Expenses')}
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-both-educators" ${this.state.adjustments?.bothEducators ? 'checked' : ''}> Both spouses are educators (joint return)</label>
+      </div>`;
+        }
         else if (entry.key === 'adj-ira') {
             inputsHtml = `<div class="panel-multi-inputs">
         ${numBox('input-adj-ira', 'Traditional IRA Contributions')}
@@ -4349,6 +4364,9 @@ class TaxApp {
         bindNum('input-adj-military-moving', v => this.state.adjustments.militaryMoving = v);
         bindNum('input-adj-early-withdrawal', v => this.state.adjustments.earlyWithdrawalPenalty = v);
         bindNum('input-adj-jury-duty', v => this.state.adjustments.juryDutyPay = v);
+        const bothEd = document.getElementById('check-both-educators');
+        if (bothEd)
+            bothEd.addEventListener('change', () => { this.state.adjustments.bothEducators = bothEd.checked; this.recalculateAndRender(); });
         const hsaCov = document.getElementById('select-hsa-coverage');
         if (hsaCov)
             hsaCov.addEventListener('change', () => { this.state.adjustments.hsaCoverage = hsaCov.value === 'family' ? 'family' : 'self'; this.recalculateAndRender(); });

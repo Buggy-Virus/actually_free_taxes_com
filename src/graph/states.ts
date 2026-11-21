@@ -117,7 +117,10 @@ export function returnContext(state: TaxAppState, plan: ReturnPlan): GraphContex
     const srcs = (state.otherIncome?.sources || []).filter(s => (s.state || plan.resident).toUpperCase().trim() === code);
     ctx.collections[`st.${lc}.srcInt`] = srcs.filter(s => s.type === '1099-INT').map(s => ({ id: s.id, name: s.payer, values: { amount: n(s.amount), accrued: n(s.accruedInterestPaid) } }));
     ctx.collections[`st.${lc}.srcOther`] = srcs.filter(s => s.type !== '1099-INT').map(s => ({ id: s.id, name: `${s.type} (${s.payer || 'Payer'})`, values: { amount: n(s.amount) } }));
-    const panels = (state.statePanels || []).filter(p => p.state.toUpperCase() === code);
+    const allPanels = (state.statePanels || []).filter(p => p.state.toUpperCase() === code);
+    // Estimated / extension payments are payments, not credits.
+    ctx.collections[`st.${lc}.estpay`] = allPanels.filter(p => p.itemKey === 'state-estimated-payments').map(p => ({ id: p.id, name: 'Estimated payments', values: { amount: n(p.amount) } }));
+    const panels = allPanels.filter(p => p.itemKey !== 'state-estimated-payments');
     PANEL_SECTIONS.forEach(section => {
       const inSection = panels.filter(p => p.section === section);
       if (code === plan.resident) {
@@ -143,7 +146,7 @@ export function returnContext(state: TaxAppState, plan: ReturnPlan): GraphContex
 
 /** Panel item keys available to a state (items are capped by key, whatever section they sit in). */
 function residentPanelKeys(code: string): string[] {
-  const keys = STATE_PANEL_CATALOG.filter(e => e.states === '*' || e.states.includes(code)).map(e => e.key);
+  const keys = STATE_PANEL_CATALOG.filter(e => (e.states === '*' || e.states.includes(code)) && e.key !== 'state-estimated-payments').map(e => e.key);
   return [...Array.from(new Set(keys)), 'misc'];
 }
 
@@ -181,6 +184,10 @@ function defineStateDocuments(g: FormulaGraph, plan: ReturnPlan, code: string): 
   g.collection({ id: `st.${lc}.srcOther`, itemLabel: (_i, it) => it.name || 'Income',
     fields: { amount: { label: 'Amount', unit: 'usd', domId: srcDom, allowNegative: true } } });
 
+  g.collection({ id: `st.${lc}.estpay`, itemLabel: () => `${code} estimated payments`,
+    fields: { amount: { label: 'Amount', unit: 'usd', domId: it => `input-state-panel-${it.id}`, panelKey: 'state-estimated-payments', panelSection: 'credits' } } });
+  g.quantity({ id: S('estimatedPayments'), label: `${code} Estimated & Extension Payments`, unit: 'usd', category: 'withholding', optional: true,
+    expr: each(`st.${lc}.estpay`, 'amount') });
   g.quantity({ id: S('w2Wages'), label: `${code} W-2 Wages (Box 16)`, unit: 'usd', category: 'state', expr: each(`st.${lc}.w2`, 'stateWages') });
   g.quantity({ id: S('w2Withheld'), label: `${code} Tax Withheld (Box 17)`, unit: 'usd', category: 'withholding', expr: each(`st.${lc}.w2`, 'withheld') });
   g.quantity({ id: S('localWages'), label: `${code} Local Wages`, unit: 'usd', display: 'inline', expr: each(`st.${lc}.w2`, 'localWages') });
@@ -321,7 +328,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   defineStateDocuments(g, plan, code);
   definePanels(g, code, true);
 
-  q('withholding', { label: `${code} Tax Withheld`, unit: 'usd', category: 'withholding', expr: R(S('w2Withheld')) });
+  q('withholding', { label: `${code} Tax Withheld & Paid`, unit: 'usd', category: 'withholding', expr: add(R(S('w2Withheld')), R(S('estimatedPayments'))) });
 
   // ---------- states without a wage income tax ----------
   if (!rule.hasIncomeTax || (code === 'NH')) {
@@ -601,7 +608,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
     expr: atLeast0(round(sub(R(S('tentativeTax')), R(S('nonrefundableCredits'))))) });
   q('totalTax', { label: `${code} Total Tax`, unit: 'usd', category: 'state', expr: round(add(R(S('netStateTax')), R(S('localTax')))) });
   q('totalWithholding', { label: `${code} Total Withholding`, unit: 'usd', category: 'withholding',
-    expr: when(gt(R(S('localTax')), lit(0)), add(R(S('w2Withheld')), R(S('localWithheld'))), R(S('w2Withheld'))) });
+    expr: add(when(gt(R(S('localTax')), lit(0)), add(R(S('w2Withheld')), R(S('localWithheld'))), R(S('w2Withheld'))), R(S('estimatedPayments'))) });
   q('net', { label: `${code} Refund / (Owed)`, unit: 'usd', category: 'state',
     expr: round(sub(add(R(S('totalWithholding')), R(S('refundableCredits'))), R(S('totalTax')))) });
 }
@@ -616,7 +623,7 @@ function defineNonresident(g: FormulaGraph, plan: ReturnPlan, code: string): voi
   defineStateDocuments(g, plan, code);
   definePanels(g, code, false);
 
-  q('withholding', { label: `${code} Tax Withheld`, unit: 'usd', category: 'withholding', expr: R(S('w2Withheld')) });
+  q('withholding', { label: `${code} Tax Withheld & Paid`, unit: 'usd', category: 'withholding', expr: add(R(S('w2Withheld')), R(S('estimatedPayments'))) });
   q('income', { label: `${code}-Source Income`, unit: 'usd', category: 'state',
     expr: add(R(S('w2Wages')), R(S('documentIncome')), atLeast0(R(S('rentalNet')))) });
 

@@ -33,8 +33,8 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B2 | P0 | EITC eligibility: qualifying-child age/residency/relationship; age 25–64 with no child | Only filing status, investment income, dependent flag | From A1/A2 | ✅ Qualifying-child age/student/disabled/residency + no-child age 25–64 (golden tests) |
 | B3 | P0 | Form 2441 qualifying person under 13 (or disabled) | All children counted | From A2 | ✅ Under 13 or disabled (golden test) |
 | B4 | P1 | Filing status eligibility checks (HOH qualifying person, QSS timing) | No validation | Warnings from A2 | ⬜ |
-| B5 | P1 | Form 1040 line 1e: W-2 box 10 dependent care benefits over $5,000 taxable; reduce Form 2441 limit | Ignored | Box 10 already entered | ⬜ |
-| B6 | P1 | Form 5329 exceptions to the 10% early-distribution tax | 10% on all code-1 distributions | Exception amount input on 1099-R | ⬜ |
+| B5 | P1 | Form 1040 line 1e: W-2 box 10 dependent care benefits over $5,000 taxable; reduce Form 2441 limit | Ignored | Box 10 already entered | ✅ `fed.depCareExcluded`, `fed.depCareTaxable` |
+| B6 | P1 | Form 5329 exceptions to the 10% early-distribution tax | 10% on all code-1 distributions | Exception amount input on 1099-R | ✅ 1099-R exception amount |
 | B7 | P1 | 1099-R distribution codes beyond G/H and 1 (2, 3, 4, 7, J, Q, T, B) | Rollover + code 1 checkbox | Code select per 1099-R | ⬜ |
 | B8 | P1 | State/local refund (1099-G box 2) tax-benefit rule | Pooled into taxable other income | Box 2 field + prior-year itemized flag | ⬜ |
 | B9 | P1 | 2026: charitable deduction for non-itemizers ($1,000 / $2,000) | — | Needs A3 | ⬜ |
@@ -45,9 +45,9 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B14 | P1 | Charitable AGI limits (60% cash / 30% property) and carryover | Uncapped | Cash vs property inputs | ⬜ |
 | B15 | P1 | Mortgage interest debt limit ($750k / $1M grandfathered) | Uncapped | Loan balance + origination date | ⬜ |
 | B16 | P1 | SALT: estimated state payments, prior-year balance paid, sales-tax option, personal property tax | W-2 boxes 17/19 + real estate | Extra SALT inputs | ⬜ |
-| B17 | P1 | Casualty loss $100 + 10% AGI floor | Entered amount | Form 4684 math | ⬜ |
-| B18 | P1 | Educator expense cap $600 only if both spouses educators | $600 for any MFJ | "Both educators" checkbox | ⬜ |
-| B19 | P1 | SEP / SIMPLE / solo 401(k) limits; SE health insurance limited to net profit | Entered amounts | Limits from net SE earnings | ⬜ |
+| B17 | P1 | Casualty loss $100 + 10% AGI floor | Entered amount | Form 4684 math | ✅ `fed.casualtyDeduction` |
+| B18 | P1 | Educator expense cap $600 only if both spouses educators | $600 for any MFJ | "Both educators" checkbox | ✅ "Both educators" checkbox |
+| B19 | P1 | SEP / SIMPLE / solo 401(k) limits; SE health insurance limited to net profit | Entered amounts | Limits from net SE earnings | ✅ `fed.seRetirementLimit` (solo 401(k) max), `fed.seHealthDeduction` |
 | B20 | P1 | Multiple Schedule C businesses, expense categories, home office, vehicle mileage | One pooled business, one expense number | Business records | ⬜ |
 | B21 | P1 | Form 8949 transaction entry (categories A–F, wash sales, adjustments) | Net ST/LT totals | Transactions list → Schedule D totals | ⬜ |
 | B22 | P1 | Premium Tax Credit reconciliation (Form 8962 from 1095-A) | Net PTC entered | 1095-A inputs, FPL table, applicable %; 2026 caps removed | ⬜ |
@@ -67,7 +67,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B36 | P2 | Schedule H household employment taxes computed | Entered amount | Cash wages paid | ⬜ |
 | B37 | P2 | AMT preferences (ISO spread, PAB interest), Form 8801 credit | Basic AMT | | ⬜ |
 | B38 | P2 | NIIT on passive K-1 and royalties | | From B23 | ⬜ |
-| B39 | P2 | MFS: spouse itemizes → standard deduction $0 | | Checkbox | ⬜ |
+| B39 | P2 | MFS: spouse itemizes → standard deduction $0 | | Checkbox | ✅ "MFS: spouse itemizes" checkbox |
 | B40 | P2 | Filing requirement check ("Do I need to file?") | | Gross income vs thresholds | ⬜ |
 | B41 | P2 | Form 2210 penalty amount (quarterly), annualized method | Required payment + shortfall only | | ⬜ |
 | B42 | P2 | Extension payment (Form 4868), refund applied to next year, split refunds | | | ⬜ |
@@ -81,7 +81,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | C1 | P0 | **Part-year residency** (move dates, income by period, prorated deductions) | Full-year resident only | Residency periods per state; reuse nonresident ratio machinery | ⬜ |
 | C2 | P0 | Year-keyed rate tables for all states (2024, 2025, 2026) and correct HOH/MFJ brackets (29 states use synthesized "1.4 × single" HOH) | Overrides for 6 states | Verify every state from DOR instructions | ⬜ |
 | C3 | P0 | Resident state required (no silent default to CA) | Defaults to CA | Validation + prompt | ⬜ |
-| C4 | P1 | State estimated / extension payments and prior-year overpayment | W-2 withholding only | Per-state payments input | ⬜ |
+| C4 | P1 | State estimated / extension payments and prior-year overpayment | W-2 withholding only | Per-state payments input | ✅ "State Estimated & Extension Payments" panel in every state |
 | C5 | P1 | Partial Social Security taxation in CO, CT, MN, MT, NM, RI, UT, VT, WV | Taxed in full | Per-state rules (+ A1 ages) | ⬜ |
 | C6 | P1 | Age-based retirement exclusions (NY $20k, NJ, GA, CO, MI, SC, etc.) | IL/MS/PA only | Needs A1 | ⬜ |
 | C7 | P1 | Out-of-state municipal bond interest addition | Not added back | "In-state portion" of 1099-INT box 8 | ⬜ |

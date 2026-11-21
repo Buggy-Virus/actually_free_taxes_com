@@ -211,6 +211,16 @@ export const STATE_PANEL_CATALOG: StatePanelCatalogEntry[] = [
 
   // ===================== GENERAL (ANY STATE) =====================
   {
+    key: 'state-estimated-payments',
+    states: '*',
+    section: 'credits',
+    title: 'State Estimated & Extension Payments',
+    officialTitle: 'State Return • Estimated Tax Payments / Prior-Year Overpayment Applied',
+    shortExplanation: 'Quarterly estimated payments, extension payments and last year\'s overpayment applied to this state. Counted as payments, like withholding.',
+    ratingKey: 'cred-estimated-payments',
+    size: 'sm'
+  },
+  {
     key: 'state-other-income-general',
     states: '*',
     section: 'other-income',
