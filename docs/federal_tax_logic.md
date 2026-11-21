@@ -4,6 +4,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 
 - **Companion doc:** [state_local_tax_logic.md](./state_local_tax_logic.md) covers state and local returns.
 - **How rules are implemented:** every rule is a quantity in the formula graph ([`src/graph/federal.ts`](../src/graph/federal.ts)). The `fed.*` ids below are those quantities, so each row maps to the code that computes and displays it.
+- **Work queue:** [remaining_gaps.md](./remaining_gaps.md) lists every open item by priority.
 - **Tests:** [`src/tests/test-golden.ts`](../src/tests/test-golden.ts) holds hand-computed IRS worked examples; rules marked ❌ or ⚠️ there are tracked as *known gaps*.
 
 **Status legend**
@@ -131,7 +132,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | At-risk rules (Form 6198), hobby income (no deductions) | ❌ | |
 | 1099-K personal-item sales / duplicates of 1099-NEC; reporting threshold restored to $20,000 / 200 transactions | ❌ | |
 | Schedule F farm income | ⚠️ | Pooled with Schedule C |
-| SE tax: 92.35% × 15.3% with SS portion limited by W-2 SS wages | ⚠️ | ✅ math (golden test); ❌ per-person wage base (uses both spouses' W-2s), ❌ church employee income, ❌ optional methods, ❌ Form 8919 wages |
+| SE tax: 92.35% × 15.3% with SS portion limited by W-2 SS wages | ⚠️ | ✅ math and per-person wage base (golden tests); ❌ church employee income, ❌ optional methods, ❌ Form 8919 wages |
 | ½ SE tax deduction | ✅ | `fed.halfSeTax` |
 
 ### 2.6 Rental, royalty, pass-through (Schedule E, Form 8582) — `fed.rentalNet`, `fed.rentalAllowed`, `fed.k1Income`
@@ -295,14 +296,14 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Rule | Status | Notes / graph ids |
 | :-- | :--: | :-- |
 | W-2 withholding (25a), 1099 / W-2G / SSA-1099 withholding (25b) | ✅ | `fed.w2Withholding`, `fed.extraWithholding` |
-| Additional Medicare withheld (25c) | ❌ | |
+| Additional Medicare withheld (25c) | ✅ | `fed.addlMedicareWithheld` |
 | Estimated payments + prior-year overpayment applied (Line 26) | ⚠️ | Single amount |
 | Extension payment (Form 4868), amount paid with extension | ❌ | |
 | Earned Income Credit (Line 27): year-indexed tables (2024 and 2025 differ); EIC Table $50 bands; investment income limit; age 25–64 when no qualifying child; qualifying child age/residency/relationship; MFS separated-spouse rule; SSN requirements; disallowance periods | ⚠️ | `fed.eitc`: ✅ 2024 and 2025 parameters; ✅ EIC Table $50 bands; ❌ age and qualifying-child tests |
 | Additional Child Tax Credit (Line 28): 15% of earned income over $2,500, $1,700 per child (2024 and 2025) | ✅ | `fed.actc` |
 | Refundable AOTC (Line 29) | ✅ | `fed.aotcRefundable` |
 | Net Premium Tax Credit (Form 8962): 1095-A reconciliation, SLCSP, household income as % of FPL, applicable percentage (enhanced subsidies expired after 2025 → 400% FPL cliff returns for 2026), shared policy allocation, excess APTC repayment | ⚠️ | Net amount accepted as entered |
-| Excess Social Security tax credit (Schedule 3 line 11) — **per person**, only when 2+ employers | ⚠️ | `fed.excessSS`; combines spouses (known gap) |
+| Excess Social Security tax credit (Schedule 3 line 11) — **per person**, only when 2+ employers | ✅ | `fed.excessSS` per W-2 owner; golden tests |
 | Credit for tax on undistributed capital gain (Form 2439), fuel tax credit (Form 4136), other refundable credits | ❌ | |
 | Refundable adoption credit (2025+, up to $5,000) | ❌ | |
 | Total payments (Line 33) | ✅ | `fed.payments` |
@@ -333,7 +334,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | AMT credit (Form 8801) | ❌ |
 | Foreign tax credit carryover | ❌ |
 | §179 carryover, QBI loss carryforward | ❌ |
-| Prior-year AGI (e-file signature) and prior-year tax (2210 safe harbor) | ❌ |
+| Prior-year AGI (e-file signature) and prior-year tax (2210 safe harbor) | ⚠️ (inputs exist for Form 2210; not used for e-file) |
 
 ---
 

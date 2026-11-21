@@ -4,6 +4,7 @@ Every state and local rule the app must support to prepare complete state and lo
 
 - **Companion doc:** [federal_tax_logic.md](./federal_tax_logic.md).
 - **Implementation:** state returns are formula-graph modules in [`src/graph/states.ts`](../src/graph/states.ts); quantity ids are `st.<code>.<slot>` (e.g. `st.ny.taxable`). Rate tables live in [`src/state-rules.ts`](../src/state-rules.ts).
+- **Work queue:** [remaining_gaps.md](./remaining_gaps.md).
 - **Detailed per-state notes** (official URLs, part-year formulas, itemized rules, retirement exclusions, PFML/SDI rates) remain in [tax_law_and_locality_coverage_gaps.md](./tax_law_and_locality_coverage_gaps.md); this document is the requirements list and status tracker.
 
 Status legend: ✅ implemented · ⚠️ simplified · ❌ missing · 🚫 out of scope (detect and refer).
@@ -23,7 +24,7 @@ Every income-tax state is modeled with the same slots, so every state's return r
 | `baseStdDeduction` / `itemized` / `deduction` | State standard or itemized deduction | Rule-table amount | ⚠️ |
 | `exemptions` (`personalExemption`, `dependentExemption`) | Exemption amounts | Table | ⚠️ |
 | `taxable` | Taxable income | | ✅ |
-| `bracketTax` / `tentativeTax` | Rates; surtaxes; built-in credits | Rule table | ⚠️ not keyed by year |
+| `bracketTax` / `tentativeTax` | Rates; surtaxes; built-in credits | Rule table + year overrides | ⚠️ year overrides for 6 states only |
 | `localTax` | Local income tax for residents | Box 19 passthrough in some states | ⚠️ |
 | `ostc.<xx>` / `otherStateCredit` | Credit for tax paid to other states | Ratio method | ⚠️ |
 | `stateEitc` | State EITC | % of federal | ⚠️ |
@@ -40,7 +41,7 @@ Required template additions:
 | `useTax` slot (most income-tax states put use tax on the income tax return) | ❌ |
 | `stateAmt` slot (CA, CO, CT, MN) | ❌ |
 | `penalty` slot (state underpayment penalties) | ❌ |
-| Year-keyed rate tables and parameters (`state-rules.ts` has one table used for 2024 and 2025) | ❌ |
+| Year-keyed rate tables and parameters | ⚠️ (`STATE_YEAR_OVERRIDES` for CO, GA, IN, ID, UT, MS) |
 | Correct head-of-household brackets (29 states currently get synthesized "1.4 × single" HOH brackets) | ❌ |
 
 ---
