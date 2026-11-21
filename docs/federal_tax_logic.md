@@ -39,7 +39,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Dependent records (name, relationship, age, months lived with you, student/disabled, SSN vs ITIN) | ❌ | Today only `childrenCount` / `otherDependentsCount` |
 | Qualifying child tests (relationship, age < 19 / < 24 student / any age disabled, residency > ½ year, support, joint return) and tie-breaker rules | ❌ | Drives CTC (under 17), EITC (under 19/24), dependent care (under 13), HOH |
 | Qualifying relative tests (gross income < $5,050 for 2024, support > ½, member of household) | ❌ | Drives ODC and HOH |
-| Taxpayer can be claimed as a dependent → limited std deduction (greater of $1,300 or earned income + $450, 2024) and no EITC | ❌ | |
+| Taxpayer can be claimed as a dependent → limited std deduction (greater of $1,300 or earned income + $450, 2024) and no EITC | ✅ | Checkbox + `fed.stdDeduction`; golden tests |
 | MFS: if one spouse itemizes, the other's std deduction is $0 | ❌ | |
 | Nonresident alien / dual-status (1040-NR) | 🚫 | Detect and refer |
 | Deceased taxpayer, final return | ❌ | Filing status and signature handling |
@@ -196,7 +196,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | :-- | :--: | :-- |
 | Base amount by status and year | ✅ | 2025 per P.L. 119-21; ❌ 2026 |
 | Additional amount per 65+/blind box | ✅ | Golden test |
-| Dependent limitation, MFS-spouse-itemizes rule | ❌ | See §1 |
+| Dependent limitation, MFS-spouse-itemizes rule | ⚠️ | ✅ dependent limitation; ❌ MFS-spouse-itemizes |
 | **2025–2028 senior deduction** $6,000 per individual 65+ (phase-out 6% of MAGI over $75k / $150k MFJ; SSN; MFJ if married), available whether or not itemizing | ✅ | `fed.seniorDeduction`; golden test |
 | **2025–2028 car loan interest** on new US-assembled personal vehicles, ≤ $10,000, phase-out $200 per $1,000 MAGI over $100k / $200k | ✅ | `fed.carLoanDeduction`; golden test |
 | **2026+ charitable deduction for non-itemizers** $1,000 / $2,000 MFJ (cash) | ❌ | |
@@ -244,7 +244,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Kiddie tax (Form 8615) and parent's election (Form 8814) | ❌ | |
 | Foreign Earned Income Tax Worksheet (stacking) | ❌ | |
 | Lump-sum distributions (Form 4972) | 🚫 | |
-| Alternative Minimum Tax (Form 6251) — basic AMTI, exemption, 26/28% | ⚠️ | ✅ basic; ❌ adds back std deduction correctly only for itemizers (AMTI subtracts itemized amounts even when the standard deduction was taken); ❌ ISO spread (Form 3921), PAB interest, depreciation, AMT NOL, AMT FTC; ❌ year-keyed 28% breakpoint; ❌ 2026 exemption phase-out at 50% from $500k/$1M |
+| Alternative Minimum Tax (Form 6251) — basic AMTI, exemption, 26/28% | ⚠️ | ✅ basic, standard-deduction filers, year-keyed breakpoint; ❌ ISO spread (Form 3921), PAB interest, depreciation, AMT NOL, AMT FTC; ❌ 2026 exemption phase-out at 50% from $500k/$1M |
 | Credit for prior-year minimum tax (Form 8801) | ❌ | |
 | Excess advance PTC repayment (Form 8962) | ❌ | See §8 |
 
@@ -256,7 +256,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | :-- | :--: | :-- |
 | Child Tax Credit $2,000 (2024) / **$2,200 (2025)**; under 17; SSN for child (and, from 2025, for at least one parent); $50 per $1,000 over $200k / $400k | ⚠️ | `fed.ctcAfterPhaseout`; ✅ amounts; ❌ SSN and age tests |
 | Credit for Other Dependents $500 | ✅ | `fed.odcAfterPhaseout` |
-| Child & dependent care (Form 2441): 35%→20% rate, $3,000 / $6,000; **qualifying person under 13**; limited to the lower earner's earned income (student/disabled spouse deemed $250/$500 per month); reduced by employer benefits (box 10); MFS generally ineligible | ⚠️ | `fed.childCareCredit`; counts all dependents, no earned-income limit, no box 10 |
+| Child & dependent care (Form 2441): 35%→20% rate, $3,000 / $6,000; **qualifying person under 13**; limited to the lower earner's earned income (student/disabled spouse deemed $250/$500 per month); reduced by employer benefits (box 10); MFS generally ineligible | ⚠️ | `fed.childCareCredit`; ✅ earned-income limit (lower-earning spouse); ❌ under-13 test, deemed income, box 10 |
 | **2026+ dependent care rate up to 50%** (P.L. 119-21) | ❌ | |
 | Education credits (Form 8863): AOTC per student ($2,500, 40% refundable, first 4 years, half-time, no felony drug conviction; refundability limited for some under-24 students); LLC 20% of $10,000 per return; MAGI phase-out $80k–$90k / $160k–$180k | ⚠️ | `fed.aotcTotal`, `fed.llc`; one student only; no per-student or 4-year tracking |
 | Saver's Credit (Form 8880): includes elective deferrals (W-2 box 12 D/E/G/S, Roth), minus distributions; not for full-time students or dependents; thresholds by year | ⚠️ | IRA contributions only; ✅ thresholds by year |
@@ -325,7 +325,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 
 | Carryover | Status |
 | :-- | :--: |
-| Capital loss (ST and LT separately) | ⚠️ (input only, one number) |
+| Capital loss (ST and LT separately) | ⚠️ (`fed.capLossCarryforward` computed as one number; ST/LT split missing) |
 | Passive activity losses (Form 8582) | ❌ |
 | Charitable contribution carryover (5 years) | ❌ |
 | Investment interest carryforward | ❌ |

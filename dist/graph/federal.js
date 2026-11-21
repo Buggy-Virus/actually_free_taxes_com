@@ -155,6 +155,7 @@ function defineParams(g) {
     p('fed.slPhaseStart', 'Student Loan Interest Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? (c.year >= 2025 ? 170000 : 165000) : (c.year >= 2025 ? 85000 : 80000)), 'Pub. 970 ch. 4', YEAR_STATUS);
     p('fed.slPhaseRange', 'Student Loan Interest Phase-Out Range', 'usd', c => (c.status === 'married_joint' ? 30000 : 15000), 'Pub. 970 ch. 4', ['select-filing-status']);
     p('fed.medicareRate', 'Medicare Employee Rate', 'rate', c => rules(c.year).medicareRate, 'IRC §3101(b)(1)', []);
+    p('fed.dependentStdMin', 'Dependent Standard Deduction Minimum', 'usd', c => (c.year >= 2025 ? 1350 : 1300), 'IRC §63(c)(5)', ['select-tax-year']);
     p('fed.tipsOvertimePhaseStart', 'Tips/Overtime Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? 300000 : 150000), 'IRC §224, §225', ['select-filing-status']);
     p('fed.overtimeCap', 'Overtime Deduction Cap', 'usd', c => (c.status === 'married_joint' ? 25000 : 12500), 'IRC §225', ['select-filing-status']);
     p('fed.carLoanPhaseStart', 'Car Loan Interest Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? 200000 : 100000), 'IRC §163(h)(4)', ['select-filing-status']);
@@ -208,6 +209,8 @@ function defineQuantities(g, year) {
         expr: sub(add(R('in.stGain'), R('fed.longTermGain')), R('in.capCarryover')) });
     q({ id: 'fed.capAllowed', label: 'Capital Gain/Loss on Return', unit: 'usd', form: 'Form 1040 Line 7', category: 'capital', optional: true,
         expr: max(R('fed.capNet'), P('fed.capLossFloor')) });
+    q({ id: 'fed.capLossCarryforward', label: 'Capital Loss Carried to Next Year', unit: 'usd', form: 'Capital Loss Carryover Worksheet', category: 'capital', optional: true,
+        expr: atLeast0(sub(R('fed.capAllowed'), R('fed.capNet'))) });
     // ---------- Business income (Schedule C) ----------
     q({ id: 'fed.businessGross', label: 'Gross Business Receipts', unit: 'usd', display: 'inline',
         expr: add(each('src.nec', 'amount'), each('src.k', 'amount'), each('src.f', 'amount')) });
@@ -294,8 +297,10 @@ function defineQuantities(g, year) {
     q({ id: 'fed.agi', label: 'Adjusted Gross Income', unit: 'usd', form: 'Form 1040 Line 11', category: 'wages',
         expr: round(atLeast0(sub(R('fed.totalIncome'), R('fed.adjustments')))) });
     // ---------- Deductions ----------
+    const claimedAsDependent = flag('fed.claimedAsDependent', 'someone can claim you as a dependent', 'no one can claim you as a dependent', 'check-claimed-as-dependent');
+    // IRC §63(c)(5): a dependent's basic standard deduction is the greater of $1,300 ($1,350 in 2025) or earned income + $450, capped at the normal amount.
     q({ id: 'fed.stdDeduction', label: 'Standard Deduction', unit: 'usd', category: 'status',
-        expr: add(P('fed.stdBase'), mul(R('in.age65Blind'), P('fed.addlStdPerBox'))) });
+        expr: add(when(claimedAsDependent, min(P('fed.stdBase'), max(P('fed.dependentStdMin'), add(R('fed.earnedIncome'), lit(450)))), P('fed.stdBase')), mul(R('in.age65Blind'), P('fed.addlStdPerBox'))) });
     q({ id: 'fed.medicalFloor', label: 'Medical 7.5% AGI Floor', unit: 'usd', category: 'itemized', expr: mul(R('fed.agi'), rate(0.075)) });
     q({ id: 'fed.medicalDeduction', label: 'Deductible Medical Expenses', unit: 'usd', form: 'Schedule A Line 4', category: 'itemized', optional: true,
         expr: atLeast0(sub(R('in.medical'), R('fed.medicalFloor'))) });
@@ -402,9 +407,15 @@ function defineQuantities(g, year) {
         expr: when(lte(R('fed.agi'), lit(15000)), rate(0.35), max(rate(0.2), sub(rate(0.35), mul(ceil(div(sub(R('fed.agi'), lit(15000)), lit(2000))), rate(0.01))))) });
     q({ id: 'fed.careExpenseCap', label: 'Child Care Expense Cap', unit: 'usd', display: 'inline',
         expr: when(gte(max(num(1), add(R('in.children'), R('in.otherDependents'))), num(2)), lit(6000), lit(3000)) });
+    // Form 2441 lines 4–6: expenses are limited to earned income (the lower-earning spouse's on a joint return).
+    q({ id: 'fed.taxpayerEarnedIncome', label: "Taxpayer's Earned Income", unit: 'usd', display: 'inline', expr: add(each('w2', 'box1', 'isTaxpayer'), atLeast0(R('fed.businessProfit'))) });
+    q({ id: 'fed.spouseEarnedIncome', label: "Spouse's Earned Income", unit: 'usd', display: 'inline', expr: each('w2', 'box1', 'isSpouse') });
+    q({ id: 'fed.careEarnedIncomeLimit', label: 'Earned Income Limit for Care Expenses', unit: 'usd', category: 'credits', optional: true,
+        appliesWhen: gt(R('in.childCare'), lit(0)),
+        expr: when(flag('fed.jointReturn', 'married filing jointly', 'not a joint return'), min(R('fed.taxpayerEarnedIncome'), R('fed.spouseEarnedIncome')), R('fed.taxpayerEarnedIncome')) });
     q({ id: 'fed.childCareCredit', label: 'Child & Dependent Care Credit', unit: 'usd', form: 'Form 2441', category: 'credits', optional: true,
         presentIf: gt(R('in.childCare'), lit(0)),
-        expr: when(statusIs('married_separate'), lit(0), round(mul(min(R('fed.careExpenseCap'), R('in.childCare')), R('fed.careRate')))) });
+        expr: when(statusIs('married_separate'), lit(0), round(mul(min(R('fed.careExpenseCap'), R('in.childCare'), R('fed.careEarnedIncomeLimit')), R('fed.careRate')))) });
     q({ id: 'fed.eduPhaseFactor', label: 'Education Credit Phase Factor', unit: 'rate', display: 'inline',
         expr: when(statusIs('married_separate'), rate(0), max(rate(0), min(rate(1), sub(rate(1), div(atLeast0(sub(R('fed.agi'), P('fed.eduPhaseStart'))), P('fed.eduPhaseSpan')))))) });
     q({ id: 'fed.aotcTotal', label: 'American Opportunity Credit', unit: 'usd', category: 'credits', optional: true,
@@ -448,7 +459,7 @@ function defineQuantities(g, year) {
     q({ id: 'fed.eitcReduction', label: 'EITC Phase-Out Reduction', unit: 'usd', display: 'inline',
         expr: atLeast0(mul(sub(R('fed.eitcIncomeRow'), sub(lookup('fed.eitcIncomeLimit', R('fed.eitcKids')), div(lookup('fed.eitcMax', R('fed.eitcKids')), lookup('fed.eitcPhaseOutRate', R('fed.eitcKids'))))), lookup('fed.eitcPhaseOutRate', R('fed.eitcKids')))) });
     q({ id: 'fed.eitc', label: 'Earned Income Credit', unit: 'usd', form: 'Form 1040 Line 27', category: 'credits', optional: true,
-        expr: when(and(not(statusIs('married_separate')), gt(R('fed.earnedIncome'), lit(0)), lte(R('fed.eitcInvestmentIncome'), P('fed.eitcInvCap')), lt(R('fed.eitcIncome'), lookup('fed.eitcIncomeLimit', R('fed.eitcKids')))), round(atLeast0(min(R('fed.eitcPhaseIn'), sub(lookup('fed.eitcMax', R('fed.eitcKids')), R('fed.eitcReduction')))), 'dollar'), lit(0)) });
+        expr: when(and(not(statusIs('married_separate')), not(flag('fed.claimedAsDependent', 'someone can claim you as a dependent', 'no one can claim you as a dependent', 'check-claimed-as-dependent')), gt(R('fed.earnedIncome'), lit(0)), lte(R('fed.eitcInvestmentIncome'), P('fed.eitcInvCap')), lt(R('fed.eitcIncome'), lookup('fed.eitcIncomeLimit', R('fed.eitcKids')))), round(atLeast0(min(R('fed.eitcPhaseIn'), sub(lookup('fed.eitcMax', R('fed.eitcKids')), R('fed.eitcReduction')))), 'dollar'), lit(0)) });
     q({ id: 'fed.refundableCredits', label: 'Refundable Credits', unit: 'usd', form: 'Form 1040 Lines 27–31', category: 'credits', optional: true,
         expr: round(add(R('fed.actc'), R('fed.eitc'), R('fed.aotcRefundable'), R('in.ptc'))) });
     // ---------- Other taxes (Schedule 2) & excess Social Security ----------
@@ -477,7 +488,8 @@ function defineQuantities(g, year) {
     q({ id: 'fed.niit', label: 'Net Investment Income Tax', unit: 'usd', form: 'Form 8960', category: 'tax', optional: true,
         expr: round(mul(R('fed.niitBase'), P('fed.niitRate'))) });
     q({ id: 'fed.amti', label: 'Alternative Minimum Taxable Income', unit: 'usd', form: 'Form 6251 Line 4', category: 'tax',
-        expr: atLeast0(sub(R('fed.agi'), add(R('fed.medicalDeduction'), R('in.mortgage'), R('in.charity'), R('fed.gamblingLossDeduction')), R('fed.qbi'))) });
+        // Form 6251: standard-deduction filers get no deduction against AMTI; itemizers keep everything except SALT.
+        expr: atLeast0(sub(R('fed.agi'), when(gt(R('fed.itemizing'), num(0)), add(R('fed.medicalDeduction'), R('in.mortgage'), R('in.charity'), R('fed.gamblingLossDeduction')), lit(0)), R('fed.qbi'))) });
     q({ id: 'fed.amtExemptionAllowed', label: 'AMT Exemption After Phaseout', unit: 'usd', category: 'tax',
         expr: atLeast0(sub(P('fed.amtExemption'), mul(atLeast0(sub(R('fed.amti'), P('fed.amtPhaseStart'))), rate(0.25)))) });
     q({ id: 'fed.amtOrdinaryBase', label: 'AMT Base Excluding Preferential Income', unit: 'usd', display: 'inline',
@@ -569,7 +581,10 @@ export function federalContext(state) {
         status: normalizeFilingStatus(state.filingStatus || 'single'),
         flags: {
             'fed.forceItemized': state.deductionMethod === 'itemized',
-            'fed.forceStandard': state.deductionMethod === 'standard'
+            'fed.forceStandard': state.deductionMethod === 'standard',
+            'fed.claimedAsDependent': Boolean(state.claimedAsDependent),
+            // QSS uses joint brackets but is not a joint return (no spouse on the return).
+            'fed.jointReturn': state.filingStatus === 'married_joint'
         },
         collections,
         inputs: {
@@ -628,7 +643,7 @@ export const FEDERAL_BLOCKS = [
     { id: 'calc-total-w2-wages', stepLabel: 'Step 1 • Wage & Payroll Aggregation', title: 'W-2 Wages, Withholding & FICA',
         quantities: [{ id: 'fed.wages', show: 'always' }, 'fed.w2Withholding', 'fed.ssTaxWithheld', 'fed.medTaxWithheld', 'fed.ficaWithheld'] },
     { id: 'calc-capital-gains', stepLabel: 'Step 2a • Schedule D / Form 8949', title: 'Capital Gains & Loss Limitation',
-        quantities: ['fed.capGainDistributions', 'fed.capNet', 'fed.capAllowed'] },
+        quantities: ['fed.capGainDistributions', 'fed.capNet', 'fed.capAllowed', 'fed.capLossCarryforward'] },
     { id: 'calc-schedule-e', stepLabel: 'Step 2b • Schedule E / Form 8582', title: 'Rental Real Estate & K-1 Income',
         quantities: ['fed.rentalNet', 'fed.suspendedRentalLoss', 'fed.rentalAllowed', 'fed.k1Income'] },
     { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',
@@ -646,7 +661,7 @@ export const FEDERAL_BLOCKS = [
         quantities: ['fed.netLtcg', 'fed.preferentialIncome', 'fed.ordinaryTaxable', 'fed.ordinaryTaxRow', 'fed.ordinaryTax', 'fed.standardPrefTax', 'fed.unrecap1250Tax',
             'fed.collectiblesTax', 'fed.regularTaxRow', 'fed.regularTax', { id: 'fed.tax', show: 'always' }] },
     { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
-        quantities: ['fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.childCareCredit', 'fed.aotcTotal',
+        quantities: ['fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.careEarnedIncomeLimit', 'fed.childCareCredit', 'fed.aotcTotal',
             'fed.educationNonrefundable', 'fed.saversCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
             'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
     { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',

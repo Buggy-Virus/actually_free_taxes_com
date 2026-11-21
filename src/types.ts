@@ -188,6 +188,8 @@ export interface TaxAppState {
   dependents: Dependents;
   itemizedDeductions?: ItemizedDeductionsInput;
   deductionMethod?: DeductionMethod;
+  /** Taxpayer can be claimed as a dependent on someone else's return (limited standard deduction, no EITC). */
+  claimedAsDependent?: boolean;
   stateSpecific?: Record<string, StateSpecificInputs>;
   statePanels?: StatePanelItem[];
   showAllArrows: boolean;

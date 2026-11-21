@@ -399,6 +399,9 @@
       <div class="section-header-bar">
         <h2>Federal: Itemized Deductions</h2>
         <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; font-weight: 600;" title="If someone else can claim you as a dependent, your standard deduction is limited and you cannot claim the EITC.">
+            <input type="checkbox" id="check-claimed-as-dependent"> Someone can claim me as a dependent
+          </label>
           <select id="select-deduction-method" class="w2-input" style="width: auto; padding: 0.25rem 0.6rem; font-size: 0.85rem;">
             <option value="auto">Auto (Highest Deduction)</option>
             <option value="standard">Force Standard Deduction</option>

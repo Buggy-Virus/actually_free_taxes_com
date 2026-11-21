@@ -261,6 +261,14 @@ function getOfficialIrsMailingAddress(stateCode: string, isRefund: boolean): Irs
   }
 }
 
+/** Copy every numeric (or numeric-string) property of an imported object, coercing to numbers. */
+function numericFields(obj: unknown): Record<string, number> {
+  if (!obj || typeof obj !== 'object') return {};
+  return Object.fromEntries(Object.entries(obj as Record<string, unknown>)
+    .filter(([, v]) => typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v))))
+    .map(([k, v]) => [k, Number(v)]));
+}
+
 class TaxApp {
   private state: TaxAppState = getDefaultTaxAppState();
 
@@ -940,6 +948,12 @@ class TaxApp {
     const normalizedW2s: W2Data[] = rawW2s.map((w: any, wIdx: number) => {
       const statesRaw = Array.isArray(w?.states) ? w.states : [];
       return {
+        ...numericFields(w),
+        box12aCode: w?.box12aCode, box12bCode: w?.box12bCode, box12cCode: w?.box12cCode, box12dCode: w?.box12dCode,
+        box13Statutory: Boolean(w?.box13Statutory), box13Retirement: Boolean(w?.box13Retirement), box13ThirdPartySick: Boolean(w?.box13ThirdPartySick),
+        employeeName: w?.employeeName, employeeSsn: w?.employeeSsn, controlNumber: w?.controlNumber, employeeAddress: w?.employeeAddress,
+        box14: w?.box14, box14bLeft: w?.box14bLeft, box14bRight: w?.box14bRight,
+        owner: w?.owner === 'spouse' ? 'spouse' : 'taxpayer',
         id: typeof w?.id === 'number' ? w.id : wIdx,
         employer: String(w?.employer ?? `Employer ${wIdx + 1}`),
         ein: String(w?.ein ?? ''),
@@ -974,6 +988,10 @@ class TaxApp {
       qbiEligible: Boolean(src?.qbiEligible),
       earlyDistributionPenalty: Boolean(src?.earlyDistributionPenalty),
       federalTaxWithheld: Number(src?.federalTaxWithheld) || 0,
+      usTreasuryInterest: Number(src?.usTreasuryInterest) || 0,
+      taxableAmount: src?.taxableAmount === undefined || src?.taxableAmount === null || src?.taxableAmount === '' ? undefined : Number(src.taxableAmount) || 0,
+      rollover: Boolean(src?.rollover),
+      capitalGainDistributions: Number(src?.capitalGainDistributions) || 0,
       state: src?.state ? String(src.state).toUpperCase().trim() : ''
     }));
 
@@ -985,7 +1003,11 @@ class TaxApp {
       otherIncome: {
         interest: Number(parsed.otherIncome?.interest) || 0,
         sources: normalizedSources,
+        alimonyReceived: Number(parsed.otherIncome?.alimonyReceived) || 0,
+        foreignEarnedIncomeExclusion: Number(parsed.otherIncome?.foreignEarnedIncomeExclusion) || 0,
+        unreportedTips: Number(parsed.otherIncome?.unreportedTips) || 0,
         capitalGains: {
+          carryoverLoss: Number(parsed.otherIncome?.capitalGains?.carryoverLoss) || 0,
           shortTerm: Number(parsed.otherIncome?.capitalGains?.shortTerm) || 0,
           longTerm: Number(parsed.otherIncome?.capitalGains?.longTerm) || 0,
           collectiblesGain: Number(parsed.otherIncome?.capitalGains?.collectiblesGain) || 0,
@@ -1000,6 +1022,7 @@ class TaxApp {
         }
       },
       adjustments: {
+        ...numericFields(parsed.adjustments),
         studentLoan: Number(parsed.adjustments?.studentLoan) || 0,
         ira: Number(parsed.adjustments?.ira) || 0,
         hsa: Number(parsed.adjustments?.hsa) || 0,
@@ -1009,6 +1032,7 @@ class TaxApp {
         alimonyPaid: Number(parsed.adjustments?.alimonyPaid) || 0
       },
       dependents: {
+        ...numericFields(parsed.dependents),
         childrenCount: Number(parsed.dependents?.childrenCount) || 0,
         otherDependentsCount: Number(parsed.dependents?.otherDependentsCount) || 0,
         age65OrBlindCount: Number(parsed.dependents?.age65OrBlindCount) || 0,
@@ -1020,6 +1044,7 @@ class TaxApp {
         estimatedTaxPayments: Number(parsed.dependents?.estimatedTaxPayments) || 0
       },
       itemizedDeductions: {
+        ...numericFields(parsed.itemizedDeductions),
         medicalExpenses: Number(parsed.itemizedDeductions?.medicalExpenses) || 0,
         realEstateTax: Number(parsed.itemizedDeductions?.realEstateTax) || 0,
         mortgageInterest: Number(parsed.itemizedDeductions?.mortgageInterest) || 0,
@@ -1027,6 +1052,14 @@ class TaxApp {
         gamblingLosses: Number(parsed.itemizedDeductions?.gamblingLosses) || 0
       },
       deductionMethod: parsed.deductionMethod === 'standard' || parsed.deductionMethod === 'itemized' ? parsed.deductionMethod : 'auto',
+      claimedAsDependent: Boolean(parsed.claimedAsDependent),
+      statePanels: Array.isArray(parsed.statePanels)
+        ? parsed.statePanels.filter((p: any) => p && typeof p.state === 'string' && typeof p.itemKey === 'string')
+            .map((p: any, i: number) => ({ id: typeof p.id === 'number' ? p.id : i + 1, state: String(p.state).toUpperCase(), section: p.section, itemKey: String(p.itemKey), amount: Number(p.amount) || 0 }))
+        : [],
+      stateSpecific: parsed.stateSpecific && typeof parsed.stateSpecific === 'object'
+        ? Object.fromEntries(Object.entries(parsed.stateSpecific).map(([k, v]) => [k.toUpperCase(), numericFields(v)]))
+        : undefined,
       showAllArrows: typeof parsed.showAllArrows === 'boolean' ? parsed.showAllArrows : this.state.showAllArrows
     };
   }
@@ -1504,6 +1537,15 @@ class TaxApp {
     bindInput('input-itemized-gambling', val => getItemized().gamblingLosses = val);
 
     this.bindCollapseControls();
+
+    const depCheck = document.getElementById('check-claimed-as-dependent') as HTMLInputElement | null;
+    if (depCheck) {
+      depCheck.checked = Boolean(this.state.claimedAsDependent);
+      depCheck.addEventListener('change', () => {
+        this.state.claimedAsDependent = depCheck.checked;
+        this.recalculateAndRender();
+      });
+    }
 
     const dedMethodSelect = document.getElementById('select-deduction-method') as HTMLSelectElement | null;
     if (dedMethodSelect) {

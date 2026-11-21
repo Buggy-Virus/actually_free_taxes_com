@@ -88,6 +88,38 @@ const CASES: Golden[] = [
     expect: [['standard deduction', fed('fed.stdDeduction'), 16550]]
   },
 
+  // ---------------- Federal: dependents of others, AMT, carryovers ----------------
+  {
+    name: 'Teen with a $5,000 summer job, claimed as a dependent',
+    source: 'IRC §63(c)(5): standard deduction = greater of $1,300 or earned income + $450 = $5,450; no EITC',
+    state: ret({ w2s: [w2(5000)], claimedAsDependent: true }),
+    expect: [['standard deduction', fed('fed.stdDeduction'), 5450], ['EITC', fed('fed.eitc'), 0]]
+  },
+  {
+    name: 'Dependent with $20,000 wages — limited deduction capped at the normal amount',
+    source: 'IRC §63(c)(5): min($14,600, $20,000 + $450)',
+    state: ret({ w2s: [w2(20000)], claimedAsDependent: true }),
+    expect: [['standard deduction', fed('fed.stdDeduction'), 14600]]
+  },
+  {
+    name: 'Standard-deduction filer with mortgage and charity entered — no AMT deduction',
+    source: 'Form 6251 line 1: taxable income + standard deduction → AMTI equals AGI when not itemizing',
+    state: ret({ w2s: [w2(80000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 4000, charity: 2000 } }),
+    expect: [['AMTI', fed('fed.amti'), 80000]]
+  },
+  {
+    name: 'Capital loss carryforward',
+    source: 'Capital Loss Carryover Worksheet: $10,000 net loss − $3,000 allowed = $7,000 to next year',
+    state: ret({ w2s: [w2(60000)], otherIncome: { interest: 0, sources: [], capitalGains: { shortTerm: -10000, longTerm: 0 } } }),
+    expect: [['carryforward', fed('fed.capLossCarryforward'), 7000]]
+  },
+  {
+    name: 'MFJ child care credit limited to the lower-earning spouse',
+    source: 'Form 2441 lines 4–6: spouse earned $2,000 → eligible expenses $2,000 × 20% = $400',
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(90000), { ...w2(2000), owner: 'spouse' }], dependents: { childrenCount: 1, childCareExpenses: 3000 } }),
+    expect: [['earned income limit', fed('fed.careEarnedIncomeLimit'), 2000], ['child care credit', fed('fed.childCareCredit'), 400]]
+  },
+
   // ---------------- Federal: refundable credits ----------------
   {
     name: 'HOH, $20,000 wages, 1 child — EITC plateau + refundable ACTC',
