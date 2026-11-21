@@ -76,6 +76,8 @@ export interface CollectionFieldDef extends PanelLink {
   unit: Unit;
   domId: (item: CollectionItem) => string;
   allowNegative?: boolean;
+  /** A sum of this field is left out of formulas when every item's value is 0 (e.g. rarely-used boxes). */
+  optional?: boolean;
 }
 
 export interface CollectionDef {
@@ -441,7 +443,11 @@ export class Evaluation {
   /** A term that contributes nothing because the user has no such input at all. */
   private isAbsent(n: EvalNode): boolean {
     const e = n.expr;
-    if (e.k === 'sum_over') return (n.items || []).length === 0;
+    if (e.k === 'sum_over') {
+      if ((n.items || []).length === 0) return true;
+      const f = e.body.k === 'field' ? this.graph.collections.get(e.collection)!.fields[e.body.name] : undefined;
+      return Boolean(f?.optional) && n.value === 0;
+    }
     if (e.k === 'ref') {
       const input = this.graph.inputs.get(e.id);
       if (input) return Boolean(input.optional) && n.value === 0;

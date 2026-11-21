@@ -4210,11 +4210,21 @@ class TaxApp {
   }
 
   private createSourcePanelElement(entry: PanelCatalogEntry, src: IncomeSource): HTMLElement {
+    const money = (label: string, field: keyof IncomeSource, value: unknown, placeholder = '0') =>
+      `<div><label class="panel-input-label">${label}</label><div class="w2-input-wrapper"><span class="currency-symbol">$</span><input type="number" step="any" class="w2-input" data-src-id="${src.id}" data-src-field="${String(field)}" value="${value ?? ''}" placeholder="${placeholder}"></div></div>`;
+    const check = (label: string, field: keyof IncomeSource, checked: boolean | undefined, text: string) =>
+      `<div><label class="panel-input-label">${label}</label><label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;margin-top:0.35rem;"><input type="checkbox" data-src-id="${src.id}" data-src-field="${String(field)}" ${checked ? 'checked' : ''}><span>${text}</span></label></div>`;
     const extraInputs = src.type === '1099-DIV'
-      ? `<div><label class="panel-input-label">Qualified Dividends (Box 1b)</label><div class="w2-input-wrapper"><span class="currency-symbol">$</span><input type="number" step="any" class="w2-input" data-src-id="${src.id}" data-src-field="qualifiedDividends" value="${src.qualifiedDividends || 0}" placeholder="0"></div></div>`
+      ? money('Qualified Dividends (Box 1b)', 'qualifiedDividends', src.qualifiedDividends || 0)
+        + money('Capital Gain Distributions (Box 2a)', 'capitalGainDistributions', src.capitalGainDistributions || 0)
       : src.type === '1099-R'
-        ? `<div><label class="panel-input-label">Early Withdrawal (10% Penalty)</label><label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;margin-top:0.35rem;"><input type="checkbox" data-src-id="${src.id}" data-src-field="earlyDistributionPenalty" ${src.earlyDistributionPenalty ? 'checked' : ''}><span>Code 1 Early Distribution</span></label></div>`
-        : '';
+        ? money('Taxable Amount (Box 2a)', 'taxableAmount', src.taxableAmount, 'Same as Box 1')
+          + check('Rollover (Code G / H)', 'rollover', src.rollover, 'Rolled over — not taxable')
+          + check('Early Withdrawal (10% Penalty)', 'earlyDistributionPenalty', src.earlyDistributionPenalty, 'Code 1 Early Distribution')
+        : src.type === '1099-INT'
+          ? money('US Treasury Interest (Box 3)', 'usTreasuryInterest', src.usTreasuryInterest || 0)
+            + money('Tax-Exempt Interest (Box 8)', 'taxExemptInterest', src.taxExemptInterest || 0)
+          : '';
 
     const inputsHtml = `
       <div class="panel-multi-inputs">
@@ -4442,7 +4452,7 @@ class TaxApp {
         if (el.type === 'checkbox') {
           (src as any)[field] = el.checked;
         } else if (el.type === 'number') {
-          (src as any)[field] = Number(el.value) || 0;
+          (src as any)[field] = el.value === '' && field === 'taxableAmount' ? undefined : (Number(el.value) || 0);
         } else {
           (src as any)[field] = el.value;
         }

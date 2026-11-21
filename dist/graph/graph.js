@@ -332,8 +332,12 @@ export class Evaluation {
     /** A term that contributes nothing because the user has no such input at all. */
     isAbsent(n) {
         const e = n.expr;
-        if (e.k === 'sum_over')
-            return (n.items || []).length === 0;
+        if (e.k === 'sum_over') {
+            if ((n.items || []).length === 0)
+                return true;
+            const f = e.body.k === 'field' ? this.graph.collections.get(e.collection).fields[e.body.name] : undefined;
+            return Boolean(f?.optional) && n.value === 0;
+        }
         if (e.k === 'ref') {
             const input = this.graph.inputs.get(e.id);
             if (input)

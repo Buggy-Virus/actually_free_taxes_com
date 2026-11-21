@@ -72,8 +72,8 @@ function defineInputs(g: FormulaGraph): void {
 
   // 1099s and other income documents
   SOURCE_COLLECTIONS.forEach(c => {
-    const f = (label: string, allowNegative = false) => ({
-      label, unit: 'usd' as const, allowNegative, panelKey: c.panelKey, panelSection: 'other-income' as const,
+    const f = (label: string, allowNegative = false, optional = false) => ({
+      label, unit: 'usd' as const, allowNegative, optional, panelKey: c.panelKey, panelSection: 'other-income' as const,
       domId: (it: CollectionItem) => `input-source-${it.id}-amount`
     });
     g.collection({
@@ -81,10 +81,14 @@ function defineInputs(g: FormulaGraph): void {
       itemLabel: (_i, it) => `${it.name || 'Payer'}:`,
       fields: {
         amount: f(`${c.label} Amount`, c.allowNegative),
-        accrued: f(`${c.label} Accrued Interest Paid`),
-        taxExempt: f(`${c.label} Tax-Exempt Interest`),
+        accrued: f(`${c.label} Accrued Interest Paid`, false, true),
+        taxExempt: f(`${c.label} Tax-Exempt Interest`, false, true),
+        treasury: f(`${c.label} US Treasury Interest (Box 3)`, false, true),
         qdiv: f(`${c.label} Qualified Dividends`),
-        fedWithheld: f(`${c.label} Federal Tax Withheld`),
+        capGainDist: f(`${c.label} Capital Gain Distributions (Box 2a)`, false, true),
+        taxable: f(`${c.label} Taxable Amount (Box 2a)`),
+        nonRollover: f(`${c.label} Not Rolled Over`),
+        fedWithheld: f(`${c.label} Federal Tax Withheld`, false, true),
         penalty: f(`${c.label} Early Distribution (Code 1)`)
       }
     });
@@ -227,8 +231,11 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   q({ id: 'fed.localWithheld', label: 'Local Income Tax Withheld', unit: 'usd', display: 'inline', optional: true, expr: each('w2State', 'localWithheld') });
 
   // ---------- Capital gains (Schedule D) ----------
+  q({ id: 'fed.capGainDistributions', label: 'Capital Gain Distributions', unit: 'usd', form: 'Schedule D Line 13', category: 'capital', optional: true,
+    expr: each('src.div', 'capGainDist') });
+  q({ id: 'fed.longTermGain', label: 'Net Long-Term Gain/Loss', unit: 'usd', display: 'inline', expr: add(R('in.ltGain'), R('fed.capGainDistributions')) });
   q({ id: 'fed.capNet', label: 'Net Capital Gain/Loss', unit: 'usd', form: 'Schedule D Line 16', category: 'capital',
-    expr: sub(add(R('in.stGain'), R('in.ltGain')), R('in.capCarryover')) });
+    expr: sub(add(R('in.stGain'), R('fed.longTermGain')), R('in.capCarryover')) });
   q({ id: 'fed.capAllowed', label: 'Capital Gain/Loss on Return', unit: 'usd', form: 'Form 1040 Line 7', category: 'capital', optional: true,
     expr: max(R('fed.capNet'), P('fed.capLossFloor')) });
 
@@ -240,8 +247,10 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: sub(R('fed.businessGross'), R('in.schedCExpenses')) });
 
   // ---------- Interest, dividends, other documents ----------
+  // Schedule B: total 1099-INT interest (box 1 + box 3) minus accrued interest paid on bonds bought between payment dates.
+  q({ id: 'fed.treasuryInterest', label: 'US Treasury Interest', unit: 'usd', display: 'inline', optional: true, expr: each('src.int', 'treasury') });
   q({ id: 'fed.interest1099', label: '1099-INT Interest', unit: 'usd', display: 'inline', optional: true,
-    expr: sumOver('src.int', atLeast0(sub(field('amount'), field('accrued')))) });
+    expr: add(sub(each('src.int', 'amount'), each('src.int', 'accrued')), R('fed.treasuryInterest')) });
   q({ id: 'fed.interestTotal', label: 'Taxable Interest', unit: 'usd', form: 'Form 1040 Line 2b', category: 'wages', optional: true,
     expr: add(R('in.interest'), R('fed.interest1099')) });
   q({ id: 'fed.taxExemptInterest', label: 'Tax-Exempt Interest', unit: 'usd', form: 'Form 1040 Line 2a', optional: true, expr: each('src.int', 'taxExempt') });
@@ -249,8 +258,9 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   q({ id: 'fed.qualifiedDividends', label: 'Qualified Dividends', unit: 'usd', form: 'Form 1040 Line 3a', category: 'capital', optional: true,
     expr: sumOver('src.div', min(field('amount'), field('qdiv'))) });
   q({ id: 'fed.k1Income', label: 'Schedule K-1 Income', unit: 'usd', form: 'Schedule E Part II', category: 'wages', optional: true, expr: each('src.k1', 'amount') });
-  q({ id: 'fed.retirement', label: 'Retirement Distributions', unit: 'usd', form: 'Form 1040 Line 5b', category: 'wages', optional: true, expr: each('src.r', 'amount') });
-  q({ id: 'fed.earlyDistributions', label: 'Early Distributions (Code 1)', unit: 'usd', display: 'inline', expr: each('src.r', 'amount', 'penalty') });
+  q({ id: 'fed.retirement', label: 'Taxable Retirement Distributions', unit: 'usd', form: 'Form 1040 Lines 4b/5b', category: 'wages', optional: true,
+    expr: each('src.r', 'taxable', 'nonRollover') });
+  q({ id: 'fed.earlyDistributions', label: 'Early Distributions (Code 1)', unit: 'usd', display: 'inline', expr: each('src.r', 'taxable', 'penalty') });
   q({ id: 'fed.gambling', label: 'Gambling Winnings', unit: 'usd', form: 'Schedule 1 Line 8b', category: 'wages', optional: true, expr: each('src.w2g', 'amount') });
   q({ id: 'fed.otherSourceIncome', label: 'Other 1099 Income', unit: 'usd', form: 'Schedule 1 Line 8z', category: 'wages', optional: true,
     expr: add(each('src.misc', 'amount'), each('src.g', 'amount'), each('src.other', 'amount')) });
@@ -361,7 +371,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
 
   // ---------- QBI (Form 8995) ----------
   q({ id: 'fed.netLtcg', label: 'Net Long-Term Capital Gain', unit: 'usd', category: 'capital', optional: true,
-    expr: when(and(gt(R('fed.capAllowed'), lit(0)), gt(R('in.ltGain'), lit(0))), min(R('fed.capAllowed'), R('in.ltGain')), lit(0)) });
+    expr: when(and(gt(R('fed.capAllowed'), lit(0)), gt(R('fed.longTermGain'), lit(0))), min(R('fed.capAllowed'), R('fed.longTermGain')), lit(0)) });
   q({ id: 'fed.qbiIncome', label: 'Qualified Business Income', unit: 'usd', category: 'adjustments',
     expr: add(atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'), R('in.seRetirement'), R('in.seHealth'))), atLeast0(R('fed.k1Income'))) });
   q({ id: 'fed.qbiIncomeLimit', label: 'QBI Taxable Income Limit Base', unit: 'usd', category: 'adjustments',
@@ -618,9 +628,14 @@ export function federalContext(state: TaxAppState): GraphContext {
         amount: n(s.amount),
         accrued: n(s.accruedInterestPaid),
         taxExempt: n(s.taxExemptInterest),
+        treasury: n(s.usTreasuryInterest),
         qdiv: n(s.qualifiedDividends),
+        capGainDist: n(s.capitalGainDistributions),
+        // 1099-R: box 2a taxable amount (box 1 gross if not determined); rollovers are not taxable.
+        taxable: s.taxableAmount !== undefined && s.taxableAmount !== null && String(s.taxableAmount) !== '' ? n(s.taxableAmount) : n(s.amount),
+        nonRollover: s.rollover ? 0 : 1,
         fedWithheld: n(s.federalTaxWithheld),
-        penalty: s.earlyDistributionPenalty ? 1 : 0
+        penalty: s.earlyDistributionPenalty && !s.rollover ? 1 : 0
       }
     }));
   });
@@ -694,7 +709,7 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
   { id: 'calc-total-w2-wages', stepLabel: 'Step 1 • Wage & Payroll Aggregation', title: 'W-2 Wages, Withholding & FICA',
     quantities: [{ id: 'fed.wages', show: 'always' }, 'fed.w2Withholding', 'fed.ssTaxWithheld', 'fed.medTaxWithheld', 'fed.ficaWithheld'] },
   { id: 'calc-capital-gains', stepLabel: 'Step 2a • Schedule D / Form 8949', title: 'Capital Gains & Loss Limitation',
-    quantities: ['fed.capNet', 'fed.capAllowed'] },
+    quantities: ['fed.capGainDistributions', 'fed.capNet', 'fed.capAllowed'] },
   { id: 'calc-schedule-e', stepLabel: 'Step 2b • Schedule E / Form 8582', title: 'Rental Real Estate & K-1 Income',
     quantities: ['fed.rentalNet', 'fed.suspendedRentalLoss', 'fed.rentalAllowed', 'fed.k1Income'] },
   { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',

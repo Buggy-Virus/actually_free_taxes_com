@@ -52,7 +52,7 @@ Required template additions:
 | Resident state selection; no state selected | ⚠️ | Defaults silently to **CA**. Should require a choice |
 | Federal starting point per state (AGI vs taxable income vs own gross income) | ✅ | See §1 |
 | IRC conformity date (rolling vs static, e.g. CA conforms to 2015 IRC) and decoupling from bonus depreciation, §179, QBI (no state allows QBI except a few), HSA (CA, NJ), student loan forgiveness, FEIE | ⚠️ | HSA add-back for CA/NJ only |
-| **US Treasury / federal obligation interest is exempt in every income-tax state** (subtraction) | ❌ | Not in old docs |
+| **US Treasury / federal obligation interest is exempt in every income-tax state** (subtraction) | ✅ | `st.<code>.treasurySubtraction` from 1099-INT box 3; golden test |
 | **Out-of-state municipal bond interest is taxable in most states** (addition); in-state munis exempt | ❌ | Not in old docs |
 | State income tax refunds subtraction (federally taxable 1099-G box 2 is not taxable by the state) | ❌ | |
 | Social Security: exempt in most states; taxed with phase-outs in CO, CT, MN, MT, NM, RI, UT, VT, WV (2025 status varies) | ❌ | Engine taxes SS where federal does |

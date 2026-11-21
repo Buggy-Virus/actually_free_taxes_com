@@ -136,7 +136,7 @@ function defineShared(g) {
         resolve: c => (c.status === 'married_joint' ? 2 : 1) });
     g.quantity({ id: 'ret.dependents', label: 'Dependents', unit: 'count', display: 'inline', expr: add(R('in.children'), R('in.otherDependents')) });
     g.quantity({ id: 'ret.netLtcg', label: 'Net Long-Term Capital Gain (State)', unit: 'usd', category: 'capital',
-        expr: atLeast0(add(R('in.ltGain'), min(lit(0), R('in.stGain')))) });
+        expr: atLeast0(add(R('fed.longTermGain'), min(lit(0), R('in.stGain')))) });
     g.quantity({ id: 'ret.interestDividends', label: 'Interest & Dividends', unit: 'usd', category: 'wages',
         expr: add(R('in.interest'), R('fed.interest1099'), R('fed.dividends')) });
 }
@@ -339,7 +339,7 @@ function defineResident(g, plan) {
     }
     if (code === 'PA') {
         q('paAddBack', { label: 'PA Non-Conformity Add-Back (IRA/HSA/Student Loan/Capital Loss)', unit: 'usd', category: 'state', optional: true,
-            expr: add(R('in.ira'), R('in.hsa'), R('in.studentLoan'), when(lt(add(R('in.stGain'), R('in.ltGain')), lit(0)), neg(max(lit(-3000), add(R('in.stGain'), R('in.ltGain')))), lit(0))) });
+            expr: add(R('in.ira'), R('in.hsa'), R('in.studentLoan'), when(lt(add(R('in.stGain'), R('fed.longTermGain')), lit(0)), neg(max(lit(-3000), add(R('in.stGain'), R('fed.longTermGain')))), lit(0))) });
         additions.push(R(S('paAddBack')));
     }
     if (code === 'CO') {
@@ -353,6 +353,9 @@ function defineResident(g, plan) {
             expr: code === 'VT' ? min(lit(5000), base) : base });
         subtractions.push(R(S('ltcgExclusion')));
     }
+    // Interest on US obligations (Treasury bills/notes/bonds, savings bonds) is exempt from state income tax everywhere.
+    q('treasurySubtraction', { label: 'US Government Interest Subtraction', unit: 'usd', category: 'state', optional: true, expr: R('fed.treasuryInterest') });
+    subtractions.push(R(S('treasurySubtraction')));
     if (code === 'AL' || code === 'OR' || code === 'MO') {
         q('fedTaxDeduction', { label: `${code} Federal Income Tax Deduction`, unit: 'usd', category: 'state', optional: true,
             expr: code === 'AL' ? R('fed.totalTax')
@@ -643,7 +646,7 @@ export function stateBlocks(plan, code, g) {
         const blocks = [
             { id: `calc-state-${lc}-taxable`, stepLabel: `${name} • Step 1: Income, Deductions & Taxable Income`, title: `${code} Deductions & Taxable Income`,
                 quantities: [S('w2Wages'), S('documentIncome'), { id: S('startingPoint'), show: 'always' },
-                    ...pick('hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
+                    ...pick('hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
                     { id: S('agi'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'), { id: S('baseStdDeduction'), show: 'always' },
                     ...pick('itemized'), S('panelItem'), S('deduction'), ...pick('personalExemption', 'dependentExemption', 'childDeduction'), S('exemptions'),
                     { id: S('taxable'), show: 'always' }] },

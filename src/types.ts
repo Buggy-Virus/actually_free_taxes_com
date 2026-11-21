@@ -85,6 +85,10 @@ export interface IncomeSource {
   taxExemptInterest?: number; // 1099-INT Box 8 municipal bond tax-exempt interest (included in MAGI/SS provisional income)
   earlyDistributionPenalty?: boolean; // 1099-R Code 1 (Form 5329 10% early withdrawal penalty)
   federalTaxWithheld?: number; // Box 4 federal income tax withheld on 1099
+  usTreasuryInterest?: number; // 1099-INT Box 3 interest on US savings bonds & Treasury obligations (state-exempt)
+  taxableAmount?: number; // 1099-R Box 2a taxable amount (defaults to Box 1 gross when blank)
+  rollover?: boolean; // 1099-R distribution code G/H direct rollover (not taxable)
+  capitalGainDistributions?: number; // 1099-DIV Box 2a total capital gain distributions (long-term)
   state?: string;
 }
 

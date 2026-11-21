@@ -71,7 +71,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 
 | Rule | Status | Notes |
 | :-- | :--: | :-- |
-| Taxable interest (1099-INT box 1 + manual) | ✅ | `fed.interestTotal` |
+| Taxable interest (1099-INT box 1 + box 3 + manual) | ✅ | `fed.interestTotal`, `fed.treasuryInterest` |
 | Accrued interest paid on bond purchase (Schedule B adjustment) | ✅ | Per-item `max(0, amount − accrued)` |
 | Tax-exempt interest (Line 2a), used in SS provisional income and EITC | ✅ | `fed.taxExemptInterest` |
 | Private-activity bond interest (AMT preference) | ❌ | |
@@ -79,7 +79,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | OID (1099-OID), bond premium amortization, nominee interest | ❌ | |
 | Early withdrawal penalty (1099-INT box 2) → adjustment | ✅ | `in.earlyWithdrawal` |
 | Ordinary dividends (Line 3b) / qualified dividends (Line 3a) | ✅ | |
-| Capital gain distributions (1099-DIV box 2a) → Schedule D line 13 / Line 7 | ❌ | Currently would be entered as long-term gain manually |
+| Capital gain distributions (1099-DIV box 2a) → Schedule D line 13 / Line 7 | ✅ | `fed.capGainDistributions`; golden test |
 | Section 199A dividends (box 5) → QBI | ❌ | |
 | Foreign tax paid on 1099-DIV/INT → FTC | ⚠️ | Entered manually as a credit amount |
 | Schedule B Part III foreign account questions (FBAR/FinCEN 114 reminder) | ❌ | |
@@ -88,8 +88,8 @@ Every federal rule the app must support for a person to prepare and file a compl
 
 | Rule | Status | Notes |
 | :-- | :--: | :-- |
-| 1099-R gross distribution | ⚠️ | Whole box 1 is treated as taxable. Must use box 2a taxable amount |
-| Distribution codes: G/H rollovers (non-taxable), 7 normal, 1 early, 2 exception, 3 disability, 4 death, J/T Roth, Q qualified Roth, B designated Roth | ❌ | Only "Code 1" checkbox exists |
+| 1099-R taxable amount (box 2a; box 1 if not determined) | ✅ | `fed.retirement`; golden test |
+| Distribution codes: G/H rollovers (non-taxable), 7 normal, 1 early, 2 exception, 3 disability, 4 death, J/T Roth, Q qualified Roth, B designated Roth | ⚠️ | ✅ rollover (G/H) and code 1; ❌ other codes |
 | Form 8606: nondeductible IRA basis, pro-rata rule, Roth conversions, backdoor Roth | ❌ | |
 | Simplified Method for annuity basis | ❌ | |
 | Qualified charitable distributions (QCD) up to $105,000 (2024) excluded | ❌ | |

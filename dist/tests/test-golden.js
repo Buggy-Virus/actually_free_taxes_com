@@ -114,6 +114,31 @@ const CASES = [
         state: ret({ filingStatus: 'married_joint', otherIncome: { interest: 5000, sources: [src(1, 'SSA-1099', 24000), src(2, '1099-R', 30000)] } }),
         expect: [['provisional income', fed('fed.provisionalIncome'), 47000], ['taxable Social Security', fed('fed.taxableSS'), 8550]]
     },
+    // ---------------- Federal: income documents ----------------
+    {
+        name: '1099-R direct rollover (code G) is not taxable',
+        source: 'Form 1040 line 5a/5b instructions: rollovers are reported in 5a and excluded from 5b',
+        state: ret({ w2s: [w2(50000)], otherIncome: { interest: 0, sources: [src(1, '1099-R', 40000, { rollover: true, earlyDistributionPenalty: true })] } }),
+        expect: [['taxable retirement income', fed('fed.retirement'), 0], ['AGI', fed('fed.agi'), 50000], ['early distribution penalty', fed('fed.earlyDistributionPenalty'), 0]]
+    },
+    {
+        name: '1099-R uses the box 2a taxable amount',
+        source: '1099-R box 2a: $20,000 gross distribution with $15,000 basis recovered → $5,000 taxable',
+        state: ret({ w2s: [w2(50000)], otherIncome: { interest: 0, sources: [src(1, '1099-R', 20000, { taxableAmount: 5000 })] } }),
+        expect: [['taxable retirement income', fed('fed.retirement'), 5000], ['AGI', fed('fed.agi'), 55000]]
+    },
+    {
+        name: '1099-DIV capital gain distributions are long-term gains',
+        source: 'Schedule D line 13 / QDCG worksheet: $3,000 box 2a taxed at 0% for taxable income below $47,025',
+        state: ret({ w2s: [w2(30000)], otherIncome: { interest: 0, sources: [src(1, '1099-DIV', 2000, { qualifiedDividends: 2000, capitalGainDistributions: 3000 })] } }),
+        expect: [['net capital gain', fed('fed.capNet'), 3000], ['total income', fed('fed.totalIncome'), 35000], ['preferential-rate tax', fed('fed.standardPrefTax'), 0]]
+    },
+    {
+        name: 'US Treasury interest: federally taxable, state-exempt',
+        source: '1099-INT box 3 is included on Form 1040 line 2b; 31 U.S.C. §3124 exempts it from state tax (Schedule CA subtraction)',
+        state: ret({ residentState: 'CA', w2s: [w2(60000, { state: 'CA' })], otherIncome: { interest: 0, sources: [src(1, '1099-INT', 0, { usTreasuryInterest: 2000 })] } }),
+        expect: [['federal taxable interest', fed('fed.interestTotal'), 2000], ['AGI', fed('fed.agi'), 62000], ['CA income', st('CA', 'agi'), 60000]]
+    },
     // ---------------- Federal: capital gains ----------------
     {
         name: 'Single, $30,000 wages + $20,000 long-term gain — 0% capital gains rate',
