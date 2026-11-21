@@ -60,7 +60,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B28 | P2 | §121 home sale exclusion | — | Gain, ownership/use years | ✅ Home-sale panel: $250k / $500k (both spouses meet use test) exclusion, rest to long-term gain; partial exclusions (job move, health) and depreciation recapture not modeled |
 | B29 | P2 | Form 4797 business property sales, §1245/§1250 recapture | — | | ⬜ |
 | B30 | P2 | QBI above threshold (Form 8995-A: SSTB, W-2 wages / UBIA), REIT/PTP | Simple 20% | W-2 wages / UBIA per business | ⬜ |
-| B31 | P2 | Foreign tax credit limitation (Form 1116) and $300/$600 de minimis | Entered amount | Foreign income/tax inputs | ⬜ |
+| B31 | P2 | Foreign tax credit limitation (Form 1116) and $300/$600 de minimis | Entered amount | Foreign income/tax inputs | ✅ $300 / $600 de minimis; Form 1116 limit (tax × foreign income ÷ taxable income) once foreign income is entered; Review warns when it is missing. One category, no carryback/forward, no QDCG adjustment |
 | B32 | P2 | FEIE housing exclusion and stacking worksheet | Exclusion capped | Stacking worksheet in tax | ⬜ |
 | B33 | P2 | Adoption credit MAGI phase-out and refundable part (2025+) | Capped amount, nonrefundable | | ✅ Form 8839 MAGI phase-out ($252,150 / $259,190 + $40,000), 2025 refundable part up to $5,000; one child, no carryforward |
 | B34 | P2 | Schedule R elderly/disabled credit computed | Entered amount | From A1 | ✅ Schedule R from ages: $5,000 / $7,500 / $3,750 initial amounts, nontaxable SS and ½ AGI over $7,500 / $10,000 / $5,000; under-65 disability uses the entered amount |

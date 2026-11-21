@@ -312,7 +312,7 @@ export const PANEL_CATALOG: PanelCatalogEntry[] = [
     shortExplanation: 'Dollar-for-dollar credit for foreign income taxes paid on investments.',
     ratingKey: 'credits-foreign-tax',
     size: 'sm',
-    inputIds: ['input-foreign-tax-credit']
+    inputIds: ['input-foreign-tax-credit', 'input-foreign-source-income']
   },
   {
     key: 'cred-clean-energy',

@@ -197,7 +197,8 @@ export interface Dependents {
   childCareExpenses?: number; // Form 2441 qualifying child/dependent care expenses
   educationExpensesAotc?: number; // Form 8863 American Opportunity Tax Credit qualified tuition
   educationExpensesLlc?: number; // Form 8863 Lifetime Learning Credit qualified tuition
-  foreignTaxCredit?: number; // Form 1116 Foreign Tax Credit
+  foreignTaxCredit?: number; // Form 1116 Foreign Tax Credit (foreign taxes paid)
+  foreignSourceIncome?: number; // Form 1116 line 15: foreign-source taxable income (enables the limitation)
   cleanEnergyCredit?: number; // Form 5695 / Form 8936 Clean Energy & EV Credit
   adoptionCredit?: number; // Form 8839 Adoption Credit
   premiumTaxCredit?: number; // Form 8962 Net Premium Tax Credit (Refundable)

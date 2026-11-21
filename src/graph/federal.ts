@@ -177,7 +177,8 @@ function defineInputs(g: FormulaGraph): void {
   io('in.childCare', 'Child Care Expenses', 'input-child-care', 'cred-child-care', 'credits', { optional: true });
   io('in.aotc', 'AOTC Tuition', 'input-edu-aotc', 'cred-aotc', 'credits', { optional: true });
   io('in.llc', 'Lifetime Learning Tuition', 'input-edu-llc', 'cred-llc', 'credits', { optional: true });
-  io('in.foreignTaxCredit', 'Foreign Tax Credit', 'input-foreign-tax-credit', 'cred-foreign-tax', 'credits', { optional: true });
+  io('in.foreignTaxCredit', 'Foreign Taxes Paid', 'input-foreign-tax-credit', 'cred-foreign-tax', 'credits', { optional: true });
+  io('in.foreignIncome', 'Foreign-Source Taxable Income', 'input-foreign-source-income', 'cred-foreign-tax', 'credits', { optional: true });
   io('in.cleanEnergy', 'Clean Energy Credit', 'input-clean-energy-credit', 'cred-clean-energy', 'credits', { optional: true });
   io('in.adoption', 'Qualified Adoption Expenses', 'input-adoption-credit', 'cred-adoption', 'credits', { optional: true });
   io('in.elderly', 'Elderly / Disabled Credit', 'input-elderly-credit', 'cred-elderly-sched-r', 'credits', { optional: true });
@@ -732,9 +733,17 @@ function defineQuantities(g: FormulaGraph, year: number): void {
       round(mul(atLeast0(sub(R('fed.elderlyInitialAmount'), sub(R('fed.ssaGross'), R('fed.taxableSS')),
         mul(atLeast0(sub(R('fed.agi'), when(statusIs('married_joint'), lit(10000), when(statusIs('married_separate'), lit(5000), lit(7500))))), rate(0.5)))), rate(0.15))),
       R('in.elderly')) });
+  // Foreign tax credit: up to $300 ($600 joint) of passive foreign tax is allowed without Form 1116. Above that, Form 1116
+  // limits the credit to tax x foreign-source taxable income / taxable income (applied once foreign income is entered).
+  q({ id: 'fed.foreignTaxCreditAllowed', label: 'Foreign Tax Credit', unit: 'usd', form: 'Form 1116 / Schedule 3 Line 1', category: 'credits', optional: true,
+    presentIf: gt(R('in.foreignTaxCredit'), lit(0)),
+    expr: when(lte(R('in.foreignTaxCredit'), when(statusIs('married_joint'), lit(600), lit(300))), R('in.foreignTaxCredit'),
+      when(gt(R('in.foreignIncome'), lit(0)),
+        min(R('in.foreignTaxCredit'), round(mul(R('fed.tax'), min(rate(1), div(R('in.foreignIncome'), max(R('fed.taxableIncome'), lit(1))))))),
+        R('in.foreignTaxCredit'))) });
   q({ id: 'fed.nonrefundableBeforeLimit', label: 'Nonrefundable Credits Before Tax Limit', unit: 'usd', category: 'credits', optional: true,
     expr: add(R('fed.ctcAfterPhaseout'), R('fed.odcAfterPhaseout'), R('fed.childCareCredit'), R('fed.educationNonrefundable'), R('fed.saversCredit'),
-      R('in.foreignTaxCredit'), R('in.cleanEnergy'), R('fed.adoptionCredit'), R('fed.elderlyCredit')) });
+      R('fed.foreignTaxCreditAllowed'), R('in.cleanEnergy'), R('fed.adoptionCredit'), R('fed.elderlyCredit')) });
   q({ id: 'fed.nonrefundableCredits', label: 'Nonrefundable Credits', unit: 'usd', form: 'Form 1040 Line 21', category: 'credits', optional: true,
     expr: round(min(R('fed.tax'), R('fed.nonrefundableBeforeLimit'))) });
   q({ id: 'fed.ctcAllowed', label: 'Child Tax Credit Allowed', unit: 'usd', display: 'inline', expr: min(R('fed.tax'), R('fed.ctcAfterPhaseout')) });
@@ -1029,6 +1038,7 @@ export function federalContext(state: TaxAppState): GraphContext {
       'in.aotc': n(d.educationExpensesAotc),
       'in.llc': n(d.educationExpensesLlc),
       'in.foreignTaxCredit': n(d.foreignTaxCredit),
+      'in.foreignIncome': n(d.foreignSourceIncome),
       'in.cleanEnergy': n(d.cleanEnergyCredit),
       'in.adoption': n(d.adoptionCredit),
       'in.elderly': n(d.elderlyDisabledCredit),
@@ -1065,7 +1075,7 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
       'fed.collectiblesTax', 'fed.regularTaxRow', 'fed.regularTax', { id: 'fed.tax', show: 'always' }] },
   { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
     quantities: ['fed.ctcChildren', 'fed.odcDependents', 'fed.eitcChildren', 'fed.careQualifyingPersons', 'fed.depCareExcluded', 'fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.careEarnedIncomeLimit', 'fed.childCareCredit', 'fed.aotcTotal',
-      'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.adoptionAllowed', 'fed.adoptionRefundable', 'fed.elderlyCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
+      'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.foreignTaxCreditAllowed', 'fed.adoptionAllowed', 'fed.adoptionRefundable', 'fed.elderlyCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
       'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
   { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',
     quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',

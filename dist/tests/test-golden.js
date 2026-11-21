@@ -966,6 +966,19 @@ const CASES = [
         state: ret({ year: 2025, w2s: [w2(90000)], dependents: { childrenCount: 0, householdWages: 2750 } }),
         expect: [['household tax', fed('fed.householdTax'), 16.5]]
     },
+    // ---------------- Federal: foreign tax credit (B31) ----------------
+    {
+        name: 'Foreign tax credit: $250 of foreign tax is allowed in full without Form 1116',
+        source: 'Form 1116 instructions, "Exemption from filing Form 1116": $300 or less ($600 joint) of passive foreign taxes',
+        state: ret({ w2s: [w2(80000)], dependents: { childrenCount: 0, foreignTaxCredit: 250 } }),
+        expect: [['foreign tax credit', fed('fed.foreignTaxCreditAllowed'), 250]]
+    },
+    {
+        name: 'Foreign tax credit limited to tax x foreign income / taxable income',
+        source: 'Form 1116 Part III: $65,400 taxable, $6,540 foreign income (10%) -> Tax Table $9,447 x 10% = $944.70 (of $5,000 paid)',
+        state: ret({ w2s: [w2(80000)], dependents: { childrenCount: 0, foreignTaxCredit: 5000, foreignSourceIncome: 6540 } }),
+        expect: [['taxable income', fed('fed.taxableIncome'), 65400], ['income tax', fed('fed.tax'), 9447], ['foreign tax credit', fed('fed.foreignTaxCreditAllowed'), 944.7]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];

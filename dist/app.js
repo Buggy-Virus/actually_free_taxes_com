@@ -4231,6 +4231,7 @@ class TaxApp {
                 case 'input-edu-aotc': return Number(this.state.dependents?.educationExpensesAotc) || 0;
                 case 'input-edu-llc': return Number(this.state.dependents?.educationExpensesLlc) || 0;
                 case 'input-foreign-tax-credit': return Number(this.state.dependents?.foreignTaxCredit) || 0;
+                case 'input-foreign-source-income': return Number(this.state.dependents?.foreignSourceIncome) || 0;
                 case 'input-clean-energy-credit': return Number(this.state.dependents?.cleanEnergyCredit) || 0;
                 case 'input-estimated-payments': return Number(this.state.dependents?.estimatedTaxPayments) || 0;
                 case 'input-itemized-medical': return Number(this.state.itemizedDeductions?.medicalExpenses) || 0;
@@ -4374,6 +4375,12 @@ class TaxApp {
         ${this.state.filingStatus === 'married_joint' ? `<label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-home-sale-spouse" ${cap?.homeSaleSpouseQualifies ? 'checked' : ''}> Spouse also lived there 2 of 5 years</label>` : ''}
       </div>`;
         }
+        else if (entry.key === 'cred-foreign-tax') {
+            inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-foreign-tax-credit', 'Foreign Taxes Paid (1099-DIV box 7 / 1099-INT box 6)')}
+        ${numBox('input-foreign-source-income', 'Foreign-Source Income (needed above $300 / $600 joint)')}
+      </div>`;
+        }
         else if (entry.key === 'sched-h-household') {
             inputsHtml = `<div class="panel-multi-inputs">
         ${numBox('input-household-wages', 'Cash Wages Paid (Schedule H computes the tax)')}
@@ -4495,6 +4502,7 @@ class TaxApp {
         bindNum('input-edu-aotc', v => this.state.dependents.educationExpensesAotc = v);
         bindNum('input-edu-llc', v => this.state.dependents.educationExpensesLlc = v);
         bindNum('input-foreign-tax-credit', v => this.state.dependents.foreignTaxCredit = v);
+        bindNum('input-foreign-source-income', v => this.state.dependents.foreignSourceIncome = v);
         bindNum('input-clean-energy-credit', v => this.state.dependents.cleanEnergyCredit = v);
         bindNum('input-adoption-credit', v => this.state.dependents.adoptionCredit = v);
         bindNum('input-ptc-credit', v => this.state.dependents.premiumTaxCredit = v);
@@ -4669,6 +4677,7 @@ class TaxApp {
                 break;
             case 'cred-foreign-tax':
                 this.state.dependents.foreignTaxCredit = 0;
+                this.state.dependents.foreignSourceIncome = 0;
                 break;
             case 'cred-clean-energy':
                 this.state.dependents.cleanEnergyCredit = 0;

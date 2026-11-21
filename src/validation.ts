@@ -99,6 +99,14 @@ export function reviewReturn(state: TaxAppState, summary?: TaxCalculationSummary
     }
   }
 
+  // ── Foreign tax credit above the de minimis amount needs foreign income for the Form 1116 limit ──
+  const ftcLimit = state.filingStatus === 'married_joint' ? 600 : 300;
+  const ftc = Number(state.dependents?.foreignTaxCredit) || 0;
+  if (ftc > ftcLimit && !(Number(state.dependents?.foreignSourceIncome) > 0)) {
+    out.push({ severity: 'warning', targetId: 'input-foreign-source-income',
+      message: `Foreign taxes of ${money(ftc)} are over the ${money(ftcLimit)} allowed without Form 1116. Enter your foreign-source income so the credit can be limited correctly.` });
+  }
+
   // ── Filing requirement (Form 1040 instructions, Chart A) ──
   if (ev && !state.claimedAsDependent) {
     const status = state.filingStatus;
