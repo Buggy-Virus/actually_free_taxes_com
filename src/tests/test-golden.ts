@@ -190,6 +190,19 @@ const CASES: Golden[] = [
     expect: [['federal taxable interest', fed('fed.interestTotal'), 2000], ['AGI', fed('fed.agi'), 62000], ['CA income', st('CA', 'agi'), 60000]]
   },
 
+  {
+    name: 'MFS, lived apart all year — Social Security uses the $25,000 base',
+    source: 'Pub. 915: MFS who lived apart all year use $25,000/$34,000 → min($10,000, 50% × ($30,000 − $25,000)) = $2,500 (vs $17,000 if living together)',
+    state: ret({ filingStatus: 'married_separate', livedApartFromSpouse: true, otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000), src(2, '1099-R', 20000)] } }),
+    expect: [['taxable Social Security', fed('fed.taxableSS'), 2500]]
+  },
+  {
+    name: 'MFS, lived with spouse — $0 base amount',
+    source: 'Pub. 915: MFS living with spouse at any time: base $0 → 85% × $20,000 = $17,000',
+    state: ret({ filingStatus: 'married_separate', otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000), src(2, '1099-R', 20000)] } }),
+    expect: [['taxable Social Security', fed('fed.taxableSS'), 17000]]
+  },
+
   // ---------------- Federal: capital gains ----------------
   {
     name: 'Single, $30,000 wages + $20,000 long-term gain — 0% capital gains rate',
@@ -358,6 +371,13 @@ const CASES: Golden[] = [
     expect: [["Saver's contributions", fed('fed.saversContributions'), 2000], ["Saver's Credit", fed('fed.saversCredit'), 1000]]
   },
 
+  {
+    name: 'Estimated tax safe harbor (Form 2210)',
+    source: 'Form 2210 line 9: smaller of 90% of 2024 tax or 100% of 2023 tax ($10,000, prior AGI ≤ $150,000); $5,000 withheld → $5,000 short',
+    state: ret({ w2s: [w2(100000, { fedWithheld: 5000 })], priorYearTax: 10000, priorYearAgi: 90000 }),
+    expect: [['required annual payment', fed('fed.requiredAnnualPayment'), 10000], ['shortfall', fed('fed.estimatedTaxShortfall'), 5000]]
+  },
+
   // ---------------- Federal: adjustment limits ----------------
   {
     name: 'Student loan interest phaseout, single MAGI $87,500',
@@ -481,6 +501,12 @@ const CASES: Golden[] = [
     source: 'Form 140NR: standard deduction × (AZ income ÷ federal AGI); AZ wages $30,000 of $100,000 AGI → $14,600 × 30% = $4,380; ($30,000 − $4,380) × 2.5%',
     state: ret({ residentState: 'TX', w2s: [w2(30000, { state: 'AZ' }), w2(70000, { state: 'TX' })] }),
     expect: [['AZ prorated deduction', st('AZ', 'deduction'), 4380], ['AZ tax', st('AZ', 'totalTax'), 640.5]]
+  },
+  {
+    name: 'NYC resident — NYC school tax credit',
+    source: 'IT-201 line 69: $63 for single filers with income of $250,000 or less (refundable)',
+    state: ret({ residentState: 'NY', w2s: [w2(60000, { state: 'NY', localWithheld: 2000, locality: 'NYC' })] }),
+    expect: [['NYC school tax credit', st('NY', 'nycSchoolTaxCredit'), 63]]
   },
   {
     name: 'Texas resident — no state income tax',

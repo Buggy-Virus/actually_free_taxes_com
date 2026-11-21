@@ -997,6 +997,9 @@ class TaxApp {
             },
             deductionMethod: parsed.deductionMethod === 'standard' || parsed.deductionMethod === 'itemized' ? parsed.deductionMethod : 'auto',
             claimedAsDependent: Boolean(parsed.claimedAsDependent),
+            livedApartFromSpouse: Boolean(parsed.livedApartFromSpouse),
+            priorYearTax: Number(parsed.priorYearTax) || 0,
+            priorYearAgi: Number(parsed.priorYearAgi) || 0,
             statePanels: Array.isArray(parsed.statePanels)
                 ? parsed.statePanels.filter((p) => p && typeof p.state === 'string' && typeof p.itemKey === 'string')
                     .map((p, i) => ({ id: typeof p.id === 'number' ? p.id : i + 1, state: String(p.state).toUpperCase(), section: p.section, itemKey: String(p.itemKey), amount: Number(p.amount) || 0 }))
@@ -1475,6 +1478,11 @@ class TaxApp {
                 this.state.claimedAsDependent = depCheck.checked;
                 this.recalculateAndRender();
             });
+        }
+        const apartCheck = document.getElementById('check-lived-apart');
+        if (apartCheck) {
+            apartCheck.checked = Boolean(this.state.livedApartFromSpouse);
+            apartCheck.addEventListener('change', () => { this.state.livedApartFromSpouse = apartCheck.checked; this.recalculateAndRender(); });
         }
         const dedMethodSelect = document.getElementById('select-deduction-method');
         if (dedMethodSelect) {
@@ -4147,6 +4155,8 @@ class TaxApp {
                 case 'input-adj-military-moving': return Number(this.state.adjustments?.militaryMoving) || 0;
                 case 'input-adj-early-withdrawal': return Number(this.state.adjustments?.earlyWithdrawalPenalty) || 0;
                 case 'input-adj-jury-duty': return Number(this.state.adjustments?.juryDutyPay) || 0;
+                case 'input-prior-year-tax': return Number(this.state.priorYearTax) || 0;
+                case 'input-prior-year-agi': return Number(this.state.priorYearAgi) || 0;
                 case 'input-sched1a-tips': return Number(this.state.adjustments?.qualifiedTips) || 0;
                 case 'input-sched1a-overtime': return Number(this.state.adjustments?.qualifiedOvertime) || 0;
                 case 'input-sched1a-car-loan': return Number(this.state.adjustments?.carLoanInterest) || 0;
@@ -4188,6 +4198,12 @@ class TaxApp {
             ${this.renderStateOptions(propState)}
           </select>
         </div>
+      </div>`;
+        }
+        else if (entry.key === 'cred-prior-year-safe-harbor') {
+            inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-prior-year-tax', 'Last Year\'s Total Tax (Form 1040 Line 24)')}
+        ${numBox('input-prior-year-agi', 'Last Year\'s AGI (Line 11)')}
       </div>`;
         }
         else if (entry.key === 'adj-hsa') {
@@ -4291,6 +4307,8 @@ class TaxApp {
         const iraCatch = document.getElementById('check-ira-catchup');
         if (iraCatch)
             iraCatch.addEventListener('change', () => { this.state.adjustments.iraCatchUp = iraCatch.checked; this.recalculateAndRender(); });
+        bindNum('input-prior-year-tax', v => this.state.priorYearTax = v);
+        bindNum('input-prior-year-agi', v => this.state.priorYearAgi = v);
         bindNum('input-sched1a-tips', v => this.state.adjustments.qualifiedTips = v);
         bindNum('input-sched1a-overtime', v => this.state.adjustments.qualifiedOvertime = v);
         bindNum('input-sched1a-car-loan', v => this.state.adjustments.carLoanInterest = v);
@@ -4480,6 +4498,10 @@ class TaxApp {
                 break;
             case 'adj-jury-duty':
                 this.state.adjustments.juryDutyPay = 0;
+                break;
+            case 'cred-prior-year-safe-harbor':
+                this.state.priorYearTax = 0;
+                this.state.priorYearAgi = 0;
                 break;
             case 'sched1a-tips':
                 this.state.adjustments.qualifiedTips = 0;

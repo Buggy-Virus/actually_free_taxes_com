@@ -128,6 +128,8 @@ function defineInputs(g: FormulaGraph): void {
   io('in.qualifiedOvertime', 'Qualified Overtime Premium', 'input-sched1a-overtime', 'sched1a-overtime', 'adjustments', { optional: true });
   io('in.carLoanInterest', 'Car Loan Interest Paid', 'input-sched1a-car-loan', 'sched1a-car-loan', 'adjustments', { optional: true });
   io('in.seniors', 'Taxpayer/Spouse Age 65+', 'input-sched1a-seniors', 'sched1a-senior', 'adjustments', { unit: 'count', optional: true, max: 2 });
+  io('in.priorYearTax', "Last Year's Total Tax", 'input-prior-year-tax', 'cred-prior-year-safe-harbor', 'credits', { optional: true });
+  io('in.priorYearAgi', "Last Year's AGI", 'input-prior-year-agi', 'cred-prior-year-safe-harbor', 'credits', { optional: true });
 
   // Itemized deductions
   io('in.medical', 'Medical Expenses', 'input-itemized-medical', 'itemized-medical', 'itemized', { optional: true });
@@ -321,11 +323,11 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: atLeast0(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'),
       R('fed.taxExemptInterest'), mul(R('fed.ssaGross'), rate(0.5))), R('fed.adjustmentsExIraSli'))) });
   q({ id: 'fed.taxableSSBeforeIra', label: 'Taxable Social Security Before IRA Deduction', unit: 'usd', display: 'inline',
-    expr: when(gt(R('fed.provisionalIncomeBeforeIra'), P('fed.ssBase2')),
-      round(min(mul(R('fed.ssaGross'), rate(0.85)), add(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(P('fed.ssBase2'), P('fed.ssBase1')), rate(0.5))),
-        mul(sub(R('fed.provisionalIncomeBeforeIra'), P('fed.ssBase2')), rate(0.85))))),
-      when(gt(R('fed.provisionalIncomeBeforeIra'), P('fed.ssBase1')),
-        round(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(R('fed.provisionalIncomeBeforeIra'), P('fed.ssBase1')), rate(0.5)))), lit(0))) });
+    expr: when(gt(R('fed.provisionalIncomeBeforeIra'), R('fed.ssBase2Used')),
+      round(min(mul(R('fed.ssaGross'), rate(0.85)), add(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(R('fed.ssBase2Used'), R('fed.ssBase1Used')), rate(0.5))),
+        mul(sub(R('fed.provisionalIncomeBeforeIra'), R('fed.ssBase2Used')), rate(0.85))))),
+      when(gt(R('fed.provisionalIncomeBeforeIra'), R('fed.ssBase1Used')),
+        round(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(R('fed.provisionalIncomeBeforeIra'), R('fed.ssBase1Used')), rate(0.5)))), lit(0))) });
   q({ id: 'fed.iraMagi', label: 'MAGI for IRA Deduction', unit: 'usd', category: 'adjustments', appliesWhen: gt(R('in.ira'), lit(0)),
     expr: add(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'), R('fed.taxableSSBeforeIra'),
       R('in.alimonyReceived'), R('in.tips')), R('fed.adjustmentsExIraSli')), R('fed.feie')) });
@@ -373,17 +375,21 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: sub(R('fed.rentalAllowed'), R('fed.rentalNet')) });
 
   // ---------- Social Security benefits worksheet ----------
+  // MFS spouses who lived apart all year use the single base amounts ($25,000 / $34,000).
+  const apart = flag('fed.livedApart', 'you lived apart from your spouse all year', 'you did not live apart from your spouse all year', 'check-lived-apart');
+  q({ id: 'fed.ssBase1Used', label: 'Social Security Base Amount', unit: 'usd', display: 'inline', expr: when(apart, lit(25000), P('fed.ssBase1')) });
+  q({ id: 'fed.ssBase2Used', label: 'Social Security Adjusted Base', unit: 'usd', display: 'inline', expr: when(apart, lit(34000), P('fed.ssBase2')) });
   q({ id: 'fed.provisionalIncome', label: 'Provisional Income', unit: 'usd', category: 'wages',
     expr: atLeast0(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'),
       R('fed.taxExemptInterest'), mul(R('fed.ssaGross'), rate(0.5))), R('fed.otherAdjustments'))) });
   q({ id: 'fed.taxableSS', label: 'Taxable Social Security', unit: 'usd', form: 'Form 1040 Line 6b', category: 'wages', optional: true,
     presentIf: gt(R('fed.ssaGross'), lit(0)),
-    expr: when(gt(R('fed.provisionalIncome'), P('fed.ssBase2')),
+    expr: when(gt(R('fed.provisionalIncome'), R('fed.ssBase2Used')),
       round(min(mul(R('fed.ssaGross'), rate(0.85)),
-        add(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(P('fed.ssBase2'), P('fed.ssBase1')), rate(0.5))),
-          mul(sub(R('fed.provisionalIncome'), P('fed.ssBase2')), rate(0.85))))),
-      when(gt(R('fed.provisionalIncome'), P('fed.ssBase1')),
-        round(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(R('fed.provisionalIncome'), P('fed.ssBase1')), rate(0.5)))),
+        add(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(R('fed.ssBase2Used'), R('fed.ssBase1Used')), rate(0.5))),
+          mul(sub(R('fed.provisionalIncome'), R('fed.ssBase2Used')), rate(0.85))))),
+      when(gt(R('fed.provisionalIncome'), R('fed.ssBase1Used')),
+        round(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(R('fed.provisionalIncome'), R('fed.ssBase1Used')), rate(0.5)))),
         lit(0))) });
 
   // ---------- Total income & AGI ----------
@@ -649,6 +655,15 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     appliesWhen: gte(R('fed.netResult'), lit(0)), expr: round(sub(R('fed.payments'), R('fed.totalTax'))) });
   q({ id: 'fed.owed', label: 'Amount You Owe', unit: 'usd', form: 'Form 1040 Line 37', category: 'owed',
     appliesWhen: lt(R('fed.netResult'), lit(0)), expr: round(sub(R('fed.totalTax'), R('fed.payments'))) });
+  // ---------- Form 2210 safe harbor (informational; the IRS computes any penalty) ----------
+  q({ id: 'fed.priorYearSafeHarbor', label: "Prior-Year Safe Harbor (100%, or 110% if last year's AGI > $150,000)", unit: 'usd', display: 'inline',
+    expr: mul(R('in.priorYearTax'), when(gt(R('in.priorYearAgi'), when(statusIs('married_separate'), lit(75000), lit(150000))), rate(1.1), rate(1))) });
+  q({ id: 'fed.requiredAnnualPayment', label: 'Required Annual Payment', unit: 'usd', form: 'Form 2210 Line 9', category: 'withholding',
+    appliesWhen: gt(R('in.priorYearTax'), lit(0)),
+    expr: round(min(mul(sub(R('fed.totalTax'), R('fed.refundableCredits')), rate(0.9)), R('fed.priorYearSafeHarbor'))) });
+  q({ id: 'fed.estimatedTaxShortfall', label: 'Withholding & Estimates Short of Safe Harbor (penalty may apply)', unit: 'usd', category: 'owed', optional: true,
+    appliesWhen: and(gt(R('in.priorYearTax'), lit(0)), gte(sub(R('fed.totalTax'), R('fed.payments')), lit(1000))),
+    expr: atLeast0(round(sub(R('fed.requiredAnnualPayment'), add(R('fed.w2Withholding'), R('fed.extraWithholding'), R('fed.addlMedicareWithheld'), R('in.estimatedPayments'), R('fed.excessSS'))))) });
   q({ id: 'fed.effectiveRate', label: 'Effective Tax Rate', unit: 'rate', category: 'tax',
     expr: when(gt(R('fed.totalIncome'), lit(0)), div(R('fed.totalTax'), R('fed.totalIncome')), rate(0)) });
 }
@@ -734,7 +749,8 @@ export function federalContext(state: TaxAppState): GraphContext {
       'fed.jointReturn': state.filingStatus === 'married_joint',
       'fed.hsaFamily': state.adjustments?.hsaCoverage === 'family',
       'fed.hsaCatchUp': Boolean(state.adjustments?.hsaCatchUp),
-      'fed.iraCatchUp': Boolean(state.adjustments?.iraCatchUp)
+      'fed.iraCatchUp': Boolean(state.adjustments?.iraCatchUp),
+      'fed.livedApart': Boolean(state.livedApartFromSpouse) && state.filingStatus === 'married_separate'
     },
     collections,
     inputs: {
@@ -765,6 +781,8 @@ export function federalContext(state: TaxAppState): GraphContext {
       'in.qualifiedOvertime': n(a.qualifiedOvertime),
       'in.carLoanInterest': n(a.carLoanInterest),
       'in.seniors': int(d.seniorsCount),
+      'in.priorYearTax': n(state.priorYearTax),
+      'in.priorYearAgi': n(state.priorYearAgi),
       'in.medical': n(i.medicalExpenses),
       'in.realEstateTax': n(i.realEstateTax),
       'in.mortgage': n(i.mortgageInterest),
@@ -820,7 +838,7 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
     quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',
       'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.hsaExcise', 'fed.tipsFica', 'fed.otherTaxes', 'fed.excessSS'] },
   { id: 'calc-final-verdict', stepLabel: 'Step 8 • Federal Bottom Line', title: 'Total Tax, Payments & Federal Refund / Owed', isOutput: true,
-    quantities: [{ id: 'fed.totalTax', show: 'always' }, 'fed.addlMedicareWithheld', { id: 'fed.payments', show: 'always' }, { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
+    quantities: [{ id: 'fed.totalTax', show: 'always' }, 'fed.addlMedicareWithheld', { id: 'fed.payments', show: 'always' }, 'fed.requiredAnnualPayment', 'fed.estimatedTaxShortfall', { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
 ];
 
 /**

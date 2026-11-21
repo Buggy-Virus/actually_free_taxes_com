@@ -591,6 +591,11 @@ function defineResident(g, plan) {
             break;
     }
     q('exemptionCredit', { label: exLabel, unit: 'usd', category: 'state_credit', optional: true, expr: exCredit });
+    if (plan.residentLocality === 'nyc') {
+        // NYC school tax credit (fixed amount): $63, or $125 on joint returns, for income of $250,000 or less; refundable.
+        q('nycSchoolTaxCredit', { label: 'NYC School Tax Credit', unit: 'usd', form: 'IT-201 Line 69', category: 'state_credit', optional: true,
+            expr: when(lte(R(S('agi')), lit(250000)), when(MFJ, lit(125), lit(63)), lit(0)) });
+    }
     // Nonrefundable credits can only reduce tax to $0; refundable credits are paid out like withholding.
     const eitcRefundable = eitcRate > 0 && !NONREFUNDABLE_EITC.includes(code);
     const exRefundable = REFUNDABLE_EXEMPTION_CREDIT.includes(code);
@@ -598,6 +603,8 @@ function defineResident(g, plan) {
     const refundable = [];
     (eitcRefundable ? refundable : nonref).push(R(S('stateEitc')));
     (exRefundable ? refundable : nonref).push(R(S('exemptionCredit')));
+    if (plan.residentLocality === 'nyc')
+        refundable.push(R(S('nycSchoolTaxCredit')));
     q('nonrefundableCredits', { label: `${code} Nonrefundable Credits`, unit: 'usd', category: 'state_credit', optional: true, expr: add(...nonref) });
     q('refundableCredits', { label: `${code} Refundable Credits`, unit: 'usd', category: 'state_credit', optional: true, expr: refundable.length ? add(...refundable) : lit(0) });
     q('netStateTax', { label: `${code} Net State Tax`, unit: 'usd', category: 'state',
@@ -699,7 +706,7 @@ export function stateBlocks(plan, code, g) {
             quantities: [S('localTax')] });
         const ostc = plan.nonresidents.filter(nr => has(`ostc.${nr.toLowerCase()}`)).map(nr => S(`ostc.${nr.toLowerCase()}`));
         blocks.push({ id: `calc-state-${lc}-card`, stepLabel: `${name} • Credits, Total Tax & Net Outcome`, title: `${rule.formResident} • Bottom Line`, isOutput: true,
-            quantities: [...ostc, S('otherStateCredit'), S('stateEitc'), S('exemptionCredit'), S('panelCred'), S('nonrefundableCredits'), { id: S('netStateTax'), show: 'always' },
+            quantities: [...ostc, S('otherStateCredit'), S('stateEitc'), S('exemptionCredit'), ...pick('nycSchoolTaxCredit'), S('panelCred'), S('nonrefundableCredits'), { id: S('netStateTax'), show: 'always' },
                 { id: S('totalTax'), show: 'always' }, { id: S('totalWithholding'), show: 'always' }, S('refundableCredits'), { id: S('net'), show: 'always' }] });
         return blocks;
     }

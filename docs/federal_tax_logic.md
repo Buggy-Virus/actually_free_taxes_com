@@ -96,7 +96,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | RMD failure excise (Form 5329 Part IX) | ❌ | |
 | Public safety officer $3,000 insurance exclusion | ❌ | |
 | SS Benefits Worksheet (0/50/85%) | ✅ | `fed.provisionalIncome`, `fed.taxableSS`; golden test from Pub. 915 |
-| MFS who lived apart all year uses $25,000 base (not $0) | ❌ | Engine uses $0 for all MFS |
+| MFS who lived apart all year uses $25,000 base (not $0) | ✅ | Checkbox; golden test |
 | Lump-sum election for prior-year benefits (Pub. 915) | ❌ | |
 | Railroad retirement (RRB-1099, Tier 1 like SS) | ❌ | |
 
@@ -314,7 +314,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Rule | Status | Notes |
 | :-- | :--: | :-- |
 | Refund (Line 34) / amount owed (Line 37) | ✅ | `fed.refund`, `fed.owed` |
-| Underpayment of estimated tax penalty (Form 2210): safe harbors (90% current / 100% prior / 110% if prior AGI > $150k), $1,000 threshold, annualized income method, waivers | ❌ | Important for anyone with 1099 income |
+| Underpayment of estimated tax penalty (Form 2210): safe harbors (90% current / 100% prior / 110% if prior AGI > $150k), $1,000 threshold, annualized income method, waivers | ⚠️ | ✅ required annual payment and shortfall flag (`fed.requiredAnnualPayment`, `fed.estimatedTaxShortfall`); ❌ penalty amount (quarterly rates), annualized method |
 | Apply refund to next year's estimated tax (Line 36), split refunds (Form 8888), direct deposit details | ❌ | |
 | Late filing / late payment penalties and interest | 🚫 | Informational only |
 | Effective tax rate | ✅ | `fed.effectiveRate` |

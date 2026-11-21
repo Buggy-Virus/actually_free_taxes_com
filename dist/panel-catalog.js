@@ -439,6 +439,16 @@ export const PANEL_CATALOG = [
         inputIds: ['input-adj-early-withdrawal']
     },
     {
+        key: 'cred-prior-year-safe-harbor',
+        section: 'credits',
+        title: 'Last Year\'s Tax (Estimated Tax Safe Harbor)',
+        officialTitle: 'Form 2210 • Required Annual Payment',
+        shortExplanation: 'Enter last year\'s total tax and AGI to check whether your withholding and estimated payments avoid an underpayment penalty (100% of last year\'s tax, or 110% if AGI was over $150,000).',
+        ratingKey: 'cred-estimated-payments',
+        size: 'sm',
+        inputIds: ['input-prior-year-tax', 'input-prior-year-agi']
+    },
+    {
         key: 'sched1a-tips',
         section: 'adjustments',
         title: 'No Tax on Tips (2025–2028)',

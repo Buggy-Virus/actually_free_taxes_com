@@ -193,6 +193,11 @@ export interface TaxAppState {
   deductionMethod?: DeductionMethod;
   /** Taxpayer can be claimed as a dependent on someone else's return (limited standard deduction, no EITC). */
   claimedAsDependent?: boolean;
+  /** Married filing separately and lived apart from spouse all year (SS benefits base amounts). */
+  livedApartFromSpouse?: boolean;
+  /** Prior-year total tax and AGI (Form 2210 safe harbor). */
+  priorYearTax?: number;
+  priorYearAgi?: number;
   stateSpecific?: Record<string, StateSpecificInputs>;
   statePanels?: StatePanelItem[];
   showAllArrows: boolean;

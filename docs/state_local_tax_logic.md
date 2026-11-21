@@ -149,7 +149,7 @@ Every income-tax state also needs every item in §1–§2.
 
 | Locality | Requirement | Status |
 | :-- | :-- | :--: |
-| **New York City** (residents) | NYC brackets on NY taxable income ✅; NYC school tax credit; NYC household credit; NYC EITC; NYC UBT for self-employed | ⚠️ |
+| **New York City** (residents) | NYC brackets on NY taxable income ✅; NYC school tax credit (fixed amount) ✅; NYC rate-reduction amount; NYC household credit; NYC EITC; NYC UBT for self-employed | ⚠️ |
 | **Yonkers** | Resident surcharge 16.75% of NY tax ✅; nonresident 0.5% earnings tax | ⚠️ |
 | **NY MCTMT** | Self-employment earnings > $50k in the MCTD | ❌ |
 | **Maryland counties** | County rate by county of residence (23 counties + Baltimore City), applied to all residents | ⚠️ flat 3.2%, only when box 18/19 present |
