@@ -576,6 +576,8 @@ export interface AutoPanelItem {
   shortExplanation: string;
   sourceIds: string[];
   badgeLabel: string;
+  /** Graph quantity this panel shows (federal panels). */
+  quantityId?: string;
 }
 
 

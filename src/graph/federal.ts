@@ -76,20 +76,20 @@ function defineInputs(g: FormulaGraph): void {
     });
     g.collection({
       id: c.id,
-      itemLabel: (_i, it) => `${c.label} (${it.name || 'Payer'})`,
+      itemLabel: (_i, it) => `${it.name || 'Payer'}:`,
       fields: {
-        amount: f('Amount', c.allowNegative),
-        accrued: f('Accrued Interest Paid'),
-        taxExempt: f('Tax-Exempt Interest'),
-        qdiv: f('Qualified Dividends'),
-        fedWithheld: f('Federal Tax Withheld'),
-        penalty: f('Early Distribution (Code 1)')
+        amount: f(`${c.label} Amount`, c.allowNegative),
+        accrued: f(`${c.label} Accrued Interest Paid`),
+        taxExempt: f(`${c.label} Tax-Exempt Interest`),
+        qdiv: f(`${c.label} Qualified Dividends`),
+        fedWithheld: f(`${c.label} Federal Tax Withheld`),
+        penalty: f(`${c.label} Early Distribution (Code 1)`)
       }
     });
   });
 
   // Other income
-  io('in.interest', 'Taxable Interest', 'input-other-interest', '1099-int', 'other-income', { optional: true });
+  io('in.interest', 'Bank Interest (1099-INT Box 1)', 'input-other-interest', '1099-int', 'other-income', { optional: true });
   io('in.schedCExpenses', 'Schedule C Expenses', 'input-sched-c-expenses', 'schedule-c-expenses', 'other-income', { optional: true });
   io('in.stGain', 'Short-Term Capital Gain/Loss', 'input-capital-gains-st', 'capital-gains', 'other-income', { allowNegative: true, optional: true });
   io('in.ltGain', 'Long-Term Capital Gain/Loss', 'input-capital-gains-lt', 'capital-gains', 'other-income', { allowNegative: true, optional: true });
@@ -604,4 +604,44 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
       'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.tipsFica', 'fed.otherTaxes', 'fed.excessSS'] },
   { id: 'calc-final-verdict', stepLabel: 'Step 8 • Federal Bottom Line', title: 'Total Tax, Payments & Federal Refund / Owed', isOutput: true,
     quantities: [{ id: 'fed.totalTax', show: 'always' }, { id: 'fed.payments', show: 'always' }, { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
+];
+
+/**
+ * Automatically applied items shown as panels in the input sections. Each panel *is* a graph
+ * quantity: its amount, formula and arrows come from that quantity. Presentation only.
+ */
+export interface AutoPanelSpec {
+  id: string;
+  quantity: string;
+  section: PanelSectionCategory;
+  title: string;
+  officialTitle: string;
+  shortExplanation: string;
+  badge: string;
+  /** 'always' panels show even at $0 (e.g. the standard deduction). */
+  show?: 'always' | 'nonzero';
+}
+
+export const FEDERAL_AUTO_PANELS: AutoPanelSpec[] = [
+  { id: 'auto-fed-std-deduction', quantity: 'fed.stdDeduction', section: 'itemized', show: 'always', title: 'Federal Standard Deduction',
+    officialTitle: 'Form 1040 Line 12', badge: 'Auto-Calculated',
+    shortExplanation: 'Granted automatically from your filing status, tax year and age 65+/blind boxes; compared against your itemized deductions.' },
+  { id: 'auto-fed-half-se', quantity: 'fed.halfSeTax', section: 'adjustments', title: '½ Self-Employment Tax Deduction',
+    officialTitle: 'Schedule 1 Line 15 • Deductible Part of SE Tax', badge: 'Auto-Calculated',
+    shortExplanation: 'Half of your self-employment tax is deducted automatically when computing AGI.' },
+  { id: 'auto-fed-qbi', quantity: 'fed.qbi', section: 'itemized', title: '20% QBI Deduction',
+    officialTitle: 'Form 8995 • Form 1040 Line 13', badge: 'Auto-Calculated',
+    shortExplanation: 'Up to 20% of qualified Schedule C / K-1 business income is deducted automatically.' },
+  { id: 'auto-fed-savers-credit', quantity: 'fed.saversCredit', section: 'credits', title: "Saver's Credit",
+    officialTitle: 'Form 8880 • Retirement Savings Contributions Credit', badge: 'Auto-Calculated',
+    shortExplanation: 'Triggered automatically by your IRA contribution when your AGI qualifies.' },
+  { id: 'auto-fed-actc', quantity: 'fed.actc', section: 'credits', title: 'Additional Child Tax Credit (Refundable)',
+    officialTitle: 'Schedule 8812 • Form 1040 Line 28', badge: 'Refundable • Auto',
+    shortExplanation: 'Refunds the part of your Child Tax Credit that exceeds your tax, based on earned income above $2,500.' },
+  { id: 'auto-fed-eitc', quantity: 'fed.eitc', section: 'credits', title: 'Earned Income Tax Credit (EITC)',
+    officialTitle: 'Schedule EIC • Form 1040 Line 27', badge: 'Refundable • Auto',
+    shortExplanation: 'Refundable credit for low-to-moderate earned income, computed automatically.' },
+  { id: 'auto-fed-excess-ss', quantity: 'fed.excessSS', section: 'credits', title: 'Excess Social Security Tax Credit',
+    officialTitle: 'Schedule 3 Line 11 • Multi-Employer Over-Withholding', badge: 'Refundable • Auto',
+    shortExplanation: 'Credits Social Security tax withheld above the annual maximum when you had 2+ employers.' }
 ];

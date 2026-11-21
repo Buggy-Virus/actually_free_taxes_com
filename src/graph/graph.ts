@@ -820,12 +820,33 @@ export class Evaluation {
       stepLabel: spec.stepLabel,
       title: spec.title,
       isOutput: spec.isOutput,
-      hasImpact: entries.some(q => this.applies(q.id) && this.value(q.id) !== 0),
+      hasImpact: entries.some(q => this.applies(q.id) && this.value(q.id) !== 0 && this.usesUserData(q.id)),
       lines,
       variables: Object.fromEntries(vars),
       sourceIds,
       quantityIds: shown
     };
+  }
+
+  private userDataMemo = new Map<string, boolean>();
+
+  /** True if the quantity depends on at least one non-zero value the user entered. */
+  usesUserData(id: string): boolean {
+    const cached = this.userDataMemo.get(id);
+    if (cached !== undefined) return cached;
+    this.userDataMemo.set(id, false);
+    const walk = (n: EvalNode): boolean => {
+      const e = n.expr;
+      if (e.k === 'ref') return this.graph.inputs.has(e.id) ? n.value !== 0 : this.usesUserData(e.id);
+      if (e.k === 'field') return n.value !== 0;
+      if (e.k === 'count') return n.value !== 0;
+      if (e.k === 'sum_over') return (n.items || []).some(it => walk(it.node));
+      if (n.cond && this.condNodes(n.cond).some(walk)) return true;
+      return n.children.some(walk);
+    };
+    const r = walk(this.node(id));
+    this.userDataMemo.set(id, r);
+    return r;
   }
 
   // ---------- dependencies / arrows ----------
@@ -878,23 +899,11 @@ export class Evaluation {
    */
   edges(visible: Iterable<string>, groupOf?: (quantityId: string) => string | undefined): GraphEdge[] {
     const visibleSet = new Set(visible);
-    const resolved = new Map<string, string[]>();
-    const resolve = (dom: string, stack: Set<string>): string[] => {
-      const qid = this.domToQuantity.get(dom);
-      if (!qid || visibleSet.has(qid)) return [dom];
-      if (resolved.has(qid)) return resolved.get(qid)!;
-      if (stack.has(qid)) return [];
-      stack.add(qid);
-      const r = Array.from(new Set(this.sources(qid).flatMap(s => resolve(s, stack))));
-      stack.delete(qid);
-      resolved.set(qid, r);
-      return r;
-    };
     const out: GraphEdge[] = [];
     visibleSet.forEach(id => {
       const q = this.graph.quantities.get(id)!;
       const targetGroup = groupOf?.(id);
-      const srcs = new Set(this.sources(id).flatMap(s => resolve(s, new Set())));
+      const srcs = this.resolvedSources(id, visibleSet);
       srcs.forEach(src => {
         const srcQ = this.domToQuantity.get(src);
         if (srcQ && targetGroup !== undefined && groupOf!(srcQ) === targetGroup) return;
@@ -902,6 +911,23 @@ export class Evaluation {
       });
     });
     return out;
+  }
+
+  /**
+   * Sources of a quantity, where any source that is a quantity *not* in `visible` is replaced by
+   * that quantity's own (resolved) sources — so every returned id is an on-screen element.
+   */
+  resolvedSources(id: string, visible: Set<string>): string[] {
+    const resolve = (dom: string, stack: Set<string>): string[] => {
+      const qid = this.domToQuantity.get(dom);
+      if (!qid || visible.has(qid)) return [dom];
+      if (stack.has(qid)) return [];
+      stack.add(qid);
+      const r = this.sources(qid).flatMap(s => resolve(s, stack));
+      stack.delete(qid);
+      return r;
+    };
+    return Array.from(new Set(this.sources(id).flatMap(s => resolve(s, new Set()))));
   }
 
   /** Full transitive upstream (for "highlight everything that feeds this"). */

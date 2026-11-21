@@ -3338,265 +3338,27 @@ class TaxApp {
     }
     buildConnections(taxData) {
         const connections = [];
-        // 1. W2 Box 1 (Wages) -> Total Wages Calc
-        this.state.w2s.forEach(w => {
-            connections.push({
-                id: `conn-w2-${w.id}-box1-wages`,
-                sourceId: `w2-${w.id}-box1`,
-                targetId: 'calc-total-w2-wages',
-                category: 'wages',
-                label: `W-2 #${w.id + 1} Wages to Total Wages`
-            });
-        });
-        // 2. Total Wages -> Gross Income
-        connections.push({
-            id: 'conn-wages-gross',
-            sourceId: 'calc-total-w2-wages',
-            targetId: 'calc-gross-income',
-            category: 'wages',
-            label: 'Total Wages to Gross Income'
-        });
-        // 3. Other Incomes -> Gross Income
-        if (this.state.otherIncome.interest > 0) {
-            connections.push({
-                id: 'conn-interest-gross',
-                sourceId: 'input-other-interest',
-                targetId: 'calc-gross-income',
-                category: 'wages',
-                label: 'Interest to Gross Income'
-            });
-        }
-        (this.state.otherIncome.sources || []).forEach(src => {
-            if (src.amount > 0) {
-                connections.push({
-                    id: `conn-income-source-${src.id}-gross`,
-                    sourceId: `input-income-source-${src.id}`,
-                    targetId: 'calc-gross-income',
-                    category: 'wages',
-                    label: `${src.type} (${src.payer}) to Gross Income`
-                });
-            }
-        });
-        // 3b. Capital Gains -> Capital Gains Card & Gross Income
-        const cap = this.state.otherIncome.capitalGains;
-        if (cap && (cap.shortTerm !== 0 || cap.longTerm !== 0)) {
-            connections.push({
-                id: 'conn-capital-gains-st',
-                sourceId: 'input-capital-gains-st',
-                targetId: 'calc-capital-gains',
-                category: 'capital',
-                label: 'Short-Term Capital Gains'
-            });
-            connections.push({
-                id: 'conn-capital-gains-lt',
-                sourceId: 'input-capital-gains-lt',
-                targetId: 'calc-capital-gains',
-                category: 'capital',
-                label: 'Long-Term Capital Gains'
-            });
-            connections.push({
-                id: 'conn-capital-gains-gross',
-                sourceId: 'calc-capital-gains',
-                targetId: 'calc-gross-income',
-                category: 'capital',
-                label: 'Allowable Capital Gains/Loss'
-            });
-        }
-        // 3c. Schedule C Freelance Expenses -> Gross Income
-        const schedExp = this.state.otherIncome.scheduleCExpenses || 0;
-        if (schedExp > 0) {
-            connections.push({
-                id: 'conn-1099-expenses-gross',
-                sourceId: 'input-1099-nec-expenses',
-                targetId: 'calc-gross-income',
-                category: 'adjustments',
-                label: 'Schedule C Expenses reduce Business Profit'
-            });
-        }
-        // 3d. Schedule E Rental Real Estate -> Schedule E Card -> Gross Income & Property State
-        const rental = this.state.otherIncome.scheduleERental;
-        if (rental && (rental.grossRents > 0 || rental.expenses > 0 || rental.depreciation > 0)) {
-            if (rental.grossRents > 0) {
-                connections.push({
-                    id: 'conn-rental-gross',
-                    sourceId: 'input-rental-gross',
-                    targetId: 'calc-schedule-e',
-                    category: 'wages',
-                    label: 'Gross Rents Received'
-                });
-            }
-            if (rental.expenses > 0) {
-                connections.push({
-                    id: 'conn-rental-expenses',
-                    sourceId: 'input-rental-expenses',
-                    targetId: 'calc-schedule-e',
-                    category: 'adjustments',
-                    label: 'Rental Operating Expenses'
-                });
-            }
-            if (rental.depreciation > 0) {
-                connections.push({
-                    id: 'conn-rental-depreciation',
-                    sourceId: 'input-rental-depreciation',
-                    targetId: 'calc-schedule-e',
-                    category: 'adjustments',
-                    label: 'MACRS Depreciation'
-                });
-            }
-            connections.push({
-                id: 'conn-schedule-e-gross',
-                sourceId: 'calc-schedule-e',
-                targetId: 'calc-gross-income',
-                category: 'wages',
-                label: 'Schedule E Net Rental Income to Gross Income'
-            });
-            if (rental.propertyState) {
-                const propStateKey = rental.propertyState.toLowerCase();
-                connections.push({
-                    id: `conn-schedule-e-state-${propStateKey}`,
-                    sourceId: 'calc-schedule-e',
-                    targetId: `calc-state-${propStateKey}-card`,
-                    category: 'state',
-                    label: `Schedule E Net Rent (${rental.propertyState}) to ${rental.propertyState} Return`
-                });
-            }
-        }
-        // 4. Adjustments -> Total Adjustments
-        connections.push({
-            id: 'conn-adj-student-loan',
-            sourceId: 'input-adj-student-loan',
-            targetId: 'calc-total-adjustments',
-            category: 'adjustments',
-            label: 'Student Loan to Adjustments'
-        });
-        if (this.state.adjustments.ira > 0) {
-            connections.push({
-                id: 'conn-adj-ira',
-                sourceId: 'input-adj-ira',
-                targetId: 'calc-total-adjustments',
-                category: 'adjustments',
-                label: 'IRA Deduction to Adjustments'
-            });
-        }
-        if (this.state.adjustments.hsa > 0) {
-            connections.push({
-                id: 'conn-adj-hsa',
-                sourceId: 'input-adj-hsa',
-                targetId: 'calc-total-adjustments',
-                category: 'adjustments',
-                label: 'HSA Form 8889 to Adjustments'
-            });
-        }
-        // 5. Gross Income & Adjustments -> AGI
-        connections.push({
-            id: 'conn-gross-agi',
-            sourceId: 'calc-gross-income',
-            targetId: 'calc-agi',
-            category: 'wages',
-            label: 'Gross to AGI'
-        });
-        connections.push({
-            id: 'conn-adj-agi',
-            sourceId: 'calc-total-adjustments',
-            targetId: 'calc-agi',
-            category: 'adjustments',
-            label: 'Adjustments to AGI'
-        });
-        // 5b. Schedule A Itemized Deductions Connections
-        const itm = this.state.itemizedDeductions;
-        if (itm && itm.medicalExpenses > 0) {
-            connections.push({
-                id: 'conn-itemized-medical',
-                sourceId: 'input-itemized-medical',
-                targetId: 'calc-itemized-deductions',
-                category: 'itemized',
-                label: 'Medical Expenses (>7.5% AGI)'
-            });
-        }
-        if (itm && itm.realEstateTax > 0) {
-            connections.push({
-                id: 'conn-itemized-salt',
-                sourceId: 'input-itemized-salt',
-                targetId: 'calc-itemized-deductions',
-                category: 'itemized',
-                label: 'Real Estate Tax (SALT)'
-            });
-        }
-        if (itm && itm.mortgageInterest > 0) {
-            connections.push({
-                id: 'conn-itemized-mortgage',
-                sourceId: 'input-itemized-mortgage',
-                targetId: 'calc-itemized-deductions',
-                category: 'itemized',
-                label: 'Mortgage Interest'
-            });
-        }
-        if (itm && itm.charity > 0) {
-            connections.push({
-                id: 'conn-itemized-charity',
-                sourceId: 'input-itemized-charity',
-                targetId: 'calc-itemized-deductions',
-                category: 'itemized',
-                label: 'Charitable Donations'
-            });
-        }
-        // 6-12. Derive calculation-to-calculation and contributor-to-calculation arrows directly from active CalcBlocks
-        const inferCategory = (sourceId, targetId) => {
-            if (sourceId.includes('box2') || sourceId.includes('withhold'))
-                return 'withholding';
-            if (sourceId.includes('box4') || sourceId.includes('ss'))
-                return 'ss';
-            if (sourceId.includes('box6') || sourceId.includes('medicare'))
-                return 'medicare';
-            if (sourceId.includes('credit'))
-                return 'credits';
-            if (sourceId.includes('itemized') || sourceId.includes('salt') || sourceId.includes('mortgage') || sourceId.includes('charity'))
-                return 'itemized';
-            if (sourceId.includes('filing-status') || sourceId.includes('deduction'))
-                return 'status';
-            if (sourceId.includes('capital') || sourceId.includes('stcg') || sourceId.includes('ltcg'))
-                return 'capital';
-            if (targetId === 'calc-tax-before-credits' || targetId === 'calc-other-taxes' || targetId === 'calc-final-verdict')
-                return 'tax';
-            return 'wages';
-        };
+        // Federal arrows are derived from the formula graph: every arrow is a reference in a formula
+        // that was actually evaluated, landing on the specific formula line that uses it. Arrows
+        // between lines of the same card are omitted (the card's formula already shows them).
+        const ev = taxData?.federalEval;
+        const visibleFederal = new Set();
+        const blockOf = new Map();
         const showEmpty = Boolean(this.uiPrefs.showEmptyCalcBlocks);
         this.currentCalcBlocks
             .filter(b => b.hasImpact || showEmpty)
-            .forEach(block => {
-            (block.sourceIds || []).forEach(srcId => {
+            .forEach(b => b.quantityIds.forEach(q => { visibleFederal.add(q); blockOf.set(q, b.id); }));
+        if (ev) {
+            ev.edges(visibleFederal, q => blockOf.get(q)).forEach(e => {
                 connections.push({
-                    id: `conn-block-${srcId}-to-${block.id}`,
-                    sourceId: srcId,
-                    targetId: block.id,
-                    category: inferCategory(srcId, block.id),
-                    label: `${srcId} to ${block.title}`
+                    id: `g-${e.sourceId}-to-${e.targetId}`,
+                    sourceId: e.sourceId,
+                    targetId: e.targetId,
+                    category: e.category,
+                    label: `${e.sourceId} to ${e.quantityId}`
                 });
             });
-            Object.values(block.variables || {}).forEach(variable => {
-                (variable.contributors || []).forEach(contrib => {
-                    if (contrib.isSetUp && contrib.targetElementId && contrib.targetElementId !== block.id) {
-                        connections.push({
-                            id: `conn-var-${contrib.targetElementId}-to-${block.id}`,
-                            sourceId: contrib.targetElementId,
-                            targetId: block.id,
-                            category: inferCategory(contrib.targetElementId, block.id),
-                            label: contrib.label
-                        });
-                    }
-                });
-            });
-        });
-        // W-2 Box 2 (Federal Withholding) -> Federal Bottom Line (calc-final-verdict)
-        this.state.w2s.forEach(w => {
-            connections.push({
-                id: `conn-w2-${w.id}-box2-verdict`,
-                sourceId: `w2-${w.id}-box2`,
-                targetId: 'calc-final-verdict',
-                category: 'withholding',
-                label: `W-2 #${w.id + 1} Box 2 Withheld to Federal Bottom Line`
-            });
-        });
+        }
         // Federal Bottom Line -> Unified Multi-Jurisdiction Final Summary
         connections.push({
             id: 'conn-verdict-unified',
@@ -3668,7 +3430,8 @@ class TaxApp {
             ...Object.values(this.currentAutoPanels.byState).flat()
         ];
         allAutoPanels.forEach(ap => {
-            (ap.sourceIds || []).forEach(srcId => {
+            const apSources = ap.quantityId && ev ? ev.resolvedSources(ap.quantityId, visibleFederal) : (ap.sourceIds || []);
+            apSources.forEach(srcId => {
                 connections.push({
                     id: `conn-auto-${srcId}-to-${ap.id}`,
                     sourceId: srcId,
@@ -4953,8 +4716,8 @@ class TaxApp {
         const container = document.getElementById('calc-blocks-container');
         if (!container)
             return;
-        this.currentCalcBlocks = buildCalculationBlocks(this.state, taxData);
         const showEmpty = Boolean(this.uiPrefs.showEmptyCalcBlocks);
+        this.currentCalcBlocks = buildCalculationBlocks(this.state, taxData, showEmpty);
         const visibleBlocks = this.currentCalcBlocks.filter(b => b.hasImpact || showEmpty);
         container.innerHTML = '';
         if (visibleBlocks.length === 0) {
@@ -4976,7 +4739,8 @@ class TaxApp {
                 if (target.closest('.formula-var'))
                     return;
                 const curr = this.arrowEngine?.getSelectedNode();
-                this.arrowEngine?.setSelectedNode(curr === block.id ? null : block.id);
+                // Selecting a card highlights every arrow into or out of any of its formula lines.
+                this.arrowEngine?.setSelectedNode(curr === block.id ? null : block.id, block.lines.map(l => l.id));
             });
             container.appendChild(card);
         });
