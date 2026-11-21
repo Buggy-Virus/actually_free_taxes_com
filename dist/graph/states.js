@@ -278,6 +278,8 @@ const STATE_EITC_MULTIPLIERS = {
 };
 const LTCG_EXCLUSION = { SC: 0.44, NM: 0.40, ND: 0.40, WI: 0.30, AR: 0.50, AZ: 0.25, VT: 0.40 };
 const LOCAL_PASSTHROUGH = ['PA', 'OH', 'IN', 'KY', 'MI', 'MO', 'DE', 'AL', 'OR'];
+/** States that compute nonresident tax as (tax on all income as a resident) × (state-source share). */
+const NONRESIDENT_RATIO_METHOD = ['AR', 'CA', 'CO', 'CT', 'IA', 'KS', 'ME', 'MN', 'MO', 'MT', 'NE', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'RI', 'UT', 'VT', 'WV'];
 /** States that tax some Social Security benefits (each with its own exemptions — not yet modeled). */
 const SS_TAXING_STATES = ['CO', 'CT', 'MN', 'MT', 'NM', 'RI', 'UT', 'VT', 'WV'];
 /** States that exempt unemployment compensation. */
@@ -619,12 +621,28 @@ function defineNonresident(g, plan, code) {
         expr: add(R(S('w2Wages')), R(S('documentIncome')), atLeast0(R(S('rentalNet')))) });
     const reciprocalByRule = Boolean(rule.reciprocalWith?.includes(plan.resident) || resRule.reciprocalWith?.includes(code));
     const reciprocal = reciprocalByRule ? lte(R(S('rentalNet')), lit(0)) : gt(lit(0), lit(1));
-    // Standard nonresident computation (rule-table brackets / flat rate).
-    q('adjustedIncome', { label: `${code} Income After State Adjustments`, unit: 'usd', category: 'state',
+    // Nonresident computation. Most states use one of two methods (see docs/state_local_tax_logic.md §2):
+    //   ratio method   — tax all federal AGI as if a resident, then multiply by the state-source share;
+    //   prorate method — tax only state-source income, with the standard deduction prorated by that share.
+    q('adjustedIncome', { label: `${code}-Source Income After State Adjustments`, unit: 'usd', category: 'state',
         expr: atLeast0(sub(add(R(S('income')), R(S('panelOther'))), R(S('panelAdj')))) });
-    q('deduction', { label: `${code} Standard Deduction`, unit: 'usd', category: 'state', expr: add(P(S('stdBase')), R(S('panelItem'))) });
-    q('taxable', { label: `${code} Taxable Income`, unit: 'usd', category: 'state', expr: atLeast0(sub(R(S('adjustedIncome')), R(S('deduction')))) });
-    q('tentativeTax', { label: `${code} Tax on Taxable Income`, unit: 'usd', category: 'state', expr: ruleTax(code, rule, R(S('taxable'))) });
+    q('incomeRatio', { label: `${code}-Source Share of Federal AGI`, unit: 'rate', category: 'state',
+        expr: when(gt(R('fed.agi'), lit(0)), min(rate(1), div(R(S('adjustedIncome')), R('fed.agi'))), rate(1)) });
+    if (NONRESIDENT_RATIO_METHOD.includes(code)) {
+        q('deduction', { label: `${code} Standard Deduction`, unit: 'usd', category: 'state', expr: add(P(S('stdBase')), R(S('panelItem'))) });
+        q('taxableIfResident', { label: `${code} Taxable Income as if Resident (all federal AGI)`, unit: 'usd', category: 'state',
+            expr: atLeast0(sub(R('fed.agi'), R(S('deduction')))) });
+        q('taxIfResident', { label: `${code} Tax as if Resident`, unit: 'usd', category: 'state', expr: ruleTax(code, rule, R(S('taxableIfResident'))) });
+        q('taxable', { label: `${code} Taxable Income`, unit: 'usd', category: 'state', expr: R(S('taxableIfResident')) });
+        q('tentativeTax', { label: `${code} Nonresident Tax (resident tax × ${code} share)`, unit: 'usd', category: 'state',
+            expr: mul(R(S('taxIfResident')), R(S('incomeRatio'))) });
+    }
+    else {
+        q('deduction', { label: `${code} Prorated Standard Deduction`, unit: 'usd', category: 'state',
+            expr: add(mul(P(S('stdBase')), R(S('incomeRatio'))), R(S('panelItem'))) });
+        q('taxable', { label: `${code} Taxable Income`, unit: 'usd', category: 'state', expr: atLeast0(sub(R(S('adjustedIncome')), R(S('deduction')))) });
+        q('tentativeTax', { label: `${code} Tax on Taxable Income`, unit: 'usd', category: 'state', expr: ruleTax(code, rule, R(S('taxable'))) });
+    }
     const standard = atLeast0(round(sub(R(S('tentativeTax')), R(S('panelCred')))));
     let liability = !rule.hasIncomeTax ? lit(0) : when(reciprocal, lit(0), standard);
     let incomeForCredit = R(S('income'));
@@ -692,7 +710,7 @@ export function stateBlocks(plan, code, g) {
     }
     out.push({ id: `calc-state-${lc}-taxable`, stepLabel: `${name} • Nonresident Income & Taxable Income`, title: `${code} Nonresident Taxable Income`,
         quantities: [S('w2Wages'), S('documentIncome'), S('rentalNet'), { id: S('income'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'),
-            S('deduction'), S('taxable'), S('tentativeTax')] });
+            S('incomeRatio'), S('deduction'), ...pick('taxableIfResident', 'taxIfResident'), ...(has('taxableIfResident') ? [] : [S('taxable')]), S('tentativeTax')] });
     out.push({ id: `calc-state-${lc}-card`, stepLabel: `${name} • Nonresident Return`, title: rule.formNonResident, isOutput: true,
         quantities: [S('panelCred'), { id: S('totalTax'), show: 'always' }, { id: S('totalWithholding'), show: 'always' }, { id: S('net'), show: 'always' }] });
     return out;

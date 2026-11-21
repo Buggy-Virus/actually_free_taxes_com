@@ -377,6 +377,18 @@ const CASES = [
         expect: [['AGI', fed('fed.agi'), 38000], ['CA income', st('CA', 'agi'), 30000]]
     },
     {
+        name: 'NJ resident working in NY — NY nonresident tax uses the IT-203 income percentage',
+        source: 'IT-203: tax on all federal AGI as if a resident × (NY-source income ÷ federal AGI). AGI $100,000, NY wages $60,000 → 60% of resident tax',
+        state: ret({ residentState: 'NJ', w2s: [w2(60000, { state: 'NY', stateWithheld: 3000 }), w2(40000, { state: 'NJ' })] }),
+        expect: [['NY income percentage', st('NY', 'incomeRatio'), 0.6], ['NY taxable income (as resident)', st('NY', 'taxableIfResident'), 92000]]
+    },
+    {
+        name: 'Arizona nonresident — standard deduction prorated',
+        source: 'Form 140NR: standard deduction × (AZ income ÷ federal AGI); AZ wages $30,000 of $100,000 AGI → $14,600 × 30% = $4,380; ($30,000 − $4,380) × 2.5%',
+        state: ret({ residentState: 'TX', w2s: [w2(30000, { state: 'AZ' }), w2(70000, { state: 'TX' })] }),
+        expect: [['AZ prorated deduction', st('AZ', 'deduction'), 4380], ['AZ tax', st('AZ', 'totalTax'), 640.5]]
+    },
+    {
         name: 'Texas resident — no state income tax',
         source: 'Texas has no personal income tax',
         state: ret({ residentState: 'TX', w2s: [w2(90000, { state: 'TX' })] }),

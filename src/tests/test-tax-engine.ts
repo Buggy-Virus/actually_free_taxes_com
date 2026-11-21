@@ -675,7 +675,8 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   for (const sr of res.stateReturnsCalc) {
     expectedTotal += sr.isRefund ? sr.netOutcome : -sr.netOutcome;
   }
-  assert.strictEqual(ledger.grandTotalNet, expectedTotal, 'Grand total matches exact sum of Federal + all State nets');
+  expectedTotal = Math.round(expectedTotal * 100) / 100;
+  assert.strictEqual(ledger.grandTotalNet, expectedTotal, 'Grand total matches the sum of Federal + all State nets (to the cent)');
   assert.strictEqual(ledger.result, Math.abs(expectedTotal), 'Result matches absolute grand total');
 
   console.log("✓ TS Test 12: Unified Multi-Jurisdiction Grand Total Ledger verified correctly!");
