@@ -243,6 +243,8 @@ function defineParams(g: FormulaGraph): void {
   p('fed.saversT20', "Saver's Credit 20% AGI Limit", 'usd', c => byStatus(savers(c.year).t20)(c.status), 'Form 8880', YEAR_STATUS);
   p('fed.saversT10', "Saver's Credit 10% AGI Limit", 'usd', c => byStatus(savers(c.year).t10)(c.status), 'Form 8880', YEAR_STATUS);
   p('fed.adoptionCap', 'Adoption Credit Limit', 'usd', c => (c.year === 2025 ? 17280 : 16810), 'Form 8839', ['select-tax-year']);
+  p('fed.adoptionPhaseStart', 'Adoption Credit Phase-Out Start (MAGI)', 'usd', c => (c.year === 2025 ? 259190 : 252150), 'Form 8839 line 7; Rev. Proc. 2023-34 / 2024-40', ['select-tax-year']);
+  p('fed.adoptionRefundableMax', 'Refundable Adoption Credit Limit', 'usd', c => (c.year >= 2025 ? 5000 : 0), 'P.L. 119-21 §70402', ['select-tax-year']);
   p('fed.eitcInvCap', 'EITC Investment Income Limit', 'usd', c => (c.year === 2025 ? 11950 : 11600), 'Schedule EIC', ['select-tax-year']);
   p('fed.eitcMax', 'EITC Maximum Credit', 'usd', c => (c.year >= 2025 ? [649, 4328, 7152, 8046] : [632, 4213, 6960, 7830]), 'Rev. Proc. 2023-34 / 2024-40', ['select-tax-year']);
   p('fed.eitcPhaseInRate', 'EITC Phase-In Rate', 'rate', () => [0.0765, 0.34, 0.40, 0.45], 'Schedule EIC', []);
@@ -708,7 +710,14 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     presentIf: gt(R('fed.saversContributions'), lit(0)),
     expr: when(flag('fed.claimedAsDependent', 'someone can claim you as a dependent', 'no one can claim you as a dependent', 'check-claimed-as-dependent'), lit(0),
       round(mul(min(P('fed.saversMax'), R('fed.saversContributions')), R('fed.saversRate')))) });
-  q({ id: 'fed.adoptionCredit', label: 'Adoption Credit', unit: 'usd', display: 'inline', optional: true, expr: min(P('fed.adoptionCap'), R('in.adoption')) });
+  // Form 8839: limit × (1 − (MAGI − phase-out start) ÷ $40,000). From 2025 up to $5,000 of it is refundable (P.L. 119-21).
+  q({ id: 'fed.adoptionMagi', label: 'MAGI for Adoption Credit', unit: 'usd', display: 'inline', expr: add(R('fed.agi'), R('fed.feie')) });
+  q({ id: 'fed.adoptionAllowed', label: 'Adoption Credit After Phase-Out', unit: 'usd', form: 'Form 8839', category: 'credits', optional: true,
+    presentIf: gt(R('in.adoption'), lit(0)),
+    expr: round(mul(min(P('fed.adoptionCap'), R('in.adoption')), sub(rate(1), min(rate(1), div(atLeast0(sub(R('fed.adoptionMagi'), P('fed.adoptionPhaseStart'))), lit(40000)))))) });
+  q({ id: 'fed.adoptionRefundable', label: 'Refundable Adoption Credit', unit: 'usd', form: 'Form 8839 / Form 1040 Line 30', category: 'credits', optional: true,
+    expr: min(P('fed.adoptionRefundableMax'), R('fed.adoptionAllowed')) });
+  q({ id: 'fed.adoptionCredit', label: 'Nonrefundable Adoption Credit', unit: 'usd', display: 'inline', optional: true, expr: sub(R('fed.adoptionAllowed'), R('fed.adoptionRefundable')) });
 
   q({ id: 'fed.nonrefundableBeforeLimit', label: 'Nonrefundable Credits Before Tax Limit', unit: 'usd', category: 'credits', optional: true,
     expr: add(R('fed.ctcAfterPhaseout'), R('fed.odcAfterPhaseout'), R('fed.childCareCredit'), R('fed.educationNonrefundable'), R('fed.saversCredit'),
@@ -749,7 +758,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
       round(atLeast0(min(R('fed.eitcPhaseIn'), sub(lookup('fed.eitcMax', R('fed.eitcKids')), R('fed.eitcReduction')))), 'dollar'),
       lit(0)) });
   q({ id: 'fed.refundableCredits', label: 'Refundable Credits', unit: 'usd', form: 'Form 1040 Lines 27–31', category: 'credits', optional: true,
-    expr: round(add(R('fed.actc'), R('fed.eitc'), R('fed.aotcRefundable'), R('in.ptc'))) });
+    expr: round(add(R('fed.actc'), R('fed.eitc'), R('fed.aotcRefundable'), R('in.ptc'), R('fed.adoptionRefundable'))) });
 
   // ---------- Other taxes (Schedule 2) & excess Social Security ----------
   q({ id: 'fed.ssMaxTax', label: 'Max Social Security Tax per Year', unit: 'usd', display: 'inline', expr: round(mul(P('fed.ssWageBase'), P('fed.ssRate'))) });
@@ -1033,7 +1042,7 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
       'fed.collectiblesTax', 'fed.regularTaxRow', 'fed.regularTax', { id: 'fed.tax', show: 'always' }] },
   { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
     quantities: ['fed.ctcChildren', 'fed.odcDependents', 'fed.eitcChildren', 'fed.careQualifyingPersons', 'fed.depCareExcluded', 'fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.careEarnedIncomeLimit', 'fed.childCareCredit', 'fed.aotcTotal',
-      'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
+      'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.adoptionAllowed', 'fed.adoptionRefundable', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
       'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
   { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',
     quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',

@@ -909,6 +909,25 @@ const CASES = [
         state: ret({ w2s: [w2(80000)], otherIncome: { interest: 0, sources: [], capitalGains: { shortTerm: 0, longTerm: 0, homeSaleGain: 60000 } } }),
         expect: [['exclusion', fed('fed.homeSaleExclusion'), 0], ['net capital gain', fed('fed.capNet'), 60000]]
     },
+    // ---------------- Federal: adoption credit (B33) ----------------
+    {
+        name: 'Adoption credit phase-out: MAGI $10,000 over the 2024 start keeps 75%',
+        source: 'Form 8839 lines 7–12 (2024): ($262,150 − $252,150) ÷ $40,000 = 0.25 → $16,810 × 0.75 = $12,607.50',
+        state: ret({ filingStatus: 'married_joint', w2s: [w2(262150)], dependents: { childrenCount: 0, adoptionCredit: 20000 } }),
+        expect: [['adoption credit', fed('fed.adoptionAllowed'), 12607.5], ['refundable part (2024)', fed('fed.adoptionRefundable'), 0]]
+    },
+    {
+        name: 'Adoption credit fully phased out at the top of the range',
+        source: 'Form 8839 (2024): MAGI $292,150 or more → $0',
+        state: ret({ filingStatus: 'married_joint', w2s: [w2(300000)], dependents: { childrenCount: 0, adoptionCredit: 20000 } }),
+        expect: [['adoption credit', fed('fed.adoptionAllowed'), 0]]
+    },
+    {
+        name: '2025: up to $5,000 of the adoption credit is refundable',
+        source: 'P.L. 119-21 §70402; 2025 limit $17,280 — $40,000 wages, $17,280 credit: $5,000 refundable, $12,280 nonrefundable (limited by tax)',
+        state: ret({ year: 2025, w2s: [w2(40000)], dependents: { childrenCount: 0, adoptionCredit: 25000 } }),
+        expect: [['adoption credit', fed('fed.adoptionAllowed'), 17280], ['refundable part', fed('fed.adoptionRefundable'), 5000], ['nonrefundable part', fed('fed.adoptionCredit'), 12280]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];

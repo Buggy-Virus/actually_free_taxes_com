@@ -62,7 +62,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B30 | P2 | QBI above threshold (Form 8995-A: SSTB, W-2 wages / UBIA), REIT/PTP | Simple 20% | W-2 wages / UBIA per business | ⬜ |
 | B31 | P2 | Foreign tax credit limitation (Form 1116) and $300/$600 de minimis | Entered amount | Foreign income/tax inputs | ⬜ |
 | B32 | P2 | FEIE housing exclusion and stacking worksheet | Exclusion capped | Stacking worksheet in tax | ⬜ |
-| B33 | P2 | Adoption credit MAGI phase-out and refundable part (2025+) | Capped amount, nonrefundable | | ⬜ |
+| B33 | P2 | Adoption credit MAGI phase-out and refundable part (2025+) | Capped amount, nonrefundable | | ✅ Form 8839 MAGI phase-out ($252,150 / $259,190 + $40,000), 2025 refundable part up to $5,000; one child, no carryforward |
 | B34 | P2 | Schedule R elderly/disabled credit computed | Entered amount | From A1 | ⬜ |
 | B35 | P2 | Education credits per student, 4-year AOTC limit | One student | From A2 (students) | ⬜ |
 | B36 | P2 | Schedule H household employment taxes computed | Entered amount | Cash wages paid | ⬜ |
