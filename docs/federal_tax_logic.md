@@ -298,7 +298,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Additional Medicare withheld (25c) | ❌ | |
 | Estimated payments + prior-year overpayment applied (Line 26) | ⚠️ | Single amount |
 | Extension payment (Form 4868), amount paid with extension | ❌ | |
-| Earned Income Credit (Line 27): year-indexed tables (2024 and 2025 differ); EIC Table $50 bands; investment income limit; age 25–64 when no qualifying child; qualifying child age/residency/relationship; MFS separated-spouse rule; SSN requirements; disallowance periods | ⚠️ | `fed.eitc`: ✅ 2024 and 2025 parameters; formula instead of EIC Table; age and child tests not modeled |
+| Earned Income Credit (Line 27): year-indexed tables (2024 and 2025 differ); EIC Table $50 bands; investment income limit; age 25–64 when no qualifying child; qualifying child age/residency/relationship; MFS separated-spouse rule; SSN requirements; disallowance periods | ⚠️ | `fed.eitc`: ✅ 2024 and 2025 parameters; ✅ EIC Table $50 bands; ❌ age and qualifying-child tests |
 | Additional Child Tax Credit (Line 28): 15% of earned income over $2,500, $1,700 per child (2024 and 2025) | ✅ | `fed.actc` |
 | Refundable AOTC (Line 29) | ✅ | `fed.aotcRefundable` |
 | Net Premium Tax Credit (Form 8962): 1095-A reconciliation, SLCSP, household income as % of FPL, applicable percentage (enhanced subsidies expired after 2025 → 400% FPL cliff returns for 2026), shared policy allocation, excess APTC repayment | ⚠️ | Net amount accepted as entered |

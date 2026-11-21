@@ -204,8 +204,7 @@ const CASES = [
         name: 'Illinois resident, $60,000 wages — 4.95% after one $2,775 exemption',
         source: 'IL-1040 2024: ($60,000 − $2,775) × 4.95% = $2,832.64',
         state: ret({ residentState: 'IL', w2s: [w2(60000, { state: 'IL' })] }),
-        expect: [['IL tax', st('IL', 'totalTax'), 2832.64]],
-        knownGap: 'IL exemption is applied twice (rule table standard deduction + personal exemption)'
+        expect: [['IL tax', st('IL', 'totalTax'), 2832.64]]
     },
     {
         name: 'Massachusetts resident, $60,000 wages — 5% after $4,400 exemption',
@@ -223,14 +222,57 @@ const CASES = [
         name: 'California resident, IRA deduction reduces CA income',
         source: 'Schedule CA (540): CA conforms to the federal IRA deduction → CA AGI $73,000; taxable $73,000 − $5,540',
         state: ret({ residentState: 'CA', w2s: [w2(80000, { state: 'CA' })], adjustments: { studentLoan: 0, ira: 7000, hsa: 0 } }),
-        expect: [['CA AGI', st('CA', 'agi'), 73000], ['CA taxable income', st('CA', 'taxable'), 67460]],
-        knownGap: 'State starting point is max(state wages, AGI, federal wages), which ignores federal adjustments'
+        expect: [['CA AGI', st('CA', 'agi'), 73000], ['CA taxable income', st('CA', 'taxable'), 67460]]
     },
     {
         name: 'Pennsylvania resident working in New Jersey — reciprocity',
         source: 'NJ-PA Reciprocal Income Tax Agreement: NJ wages of a PA resident are taxable only in PA',
         state: ret({ residentState: 'PA', w2s: [w2(70000, { state: 'NJ', stateWithheld: 1200 })] }),
         expect: [['NJ tax', st('NJ', 'totalTax'), 0], ['NJ refund', st('NJ', 'net'), 1200], ['PA tax', st('PA', 'totalTax'), 2149]]
+    },
+    {
+        name: 'Indiana resident, $50,000 wages — 3.05% after one $1,000 exemption',
+        source: 'IT-40 2024: ($50,000 − $1,000) × 3.05% = $1,494.50 (county tax not included)',
+        state: ret({ residentState: 'IN', w2s: [w2(50000, { state: 'IN' })] }),
+        expect: [['IN state tax', st('IN', 'netStateTax'), 1494.5]]
+    },
+    {
+        name: 'Michigan resident, $50,000 wages — 4.25% after $5,600 exemption',
+        source: 'MI-1040 2024: ($50,000 − $5,600) × 4.25% = $1,887',
+        state: ret({ residentState: 'MI', w2s: [w2(50000, { state: 'MI' })] }),
+        expect: [['MI state tax', st('MI', 'netStateTax'), 1887]]
+    },
+    {
+        name: 'Colorado resident — starts from federal taxable income',
+        source: 'DR 0104 line 1: federal taxable income ($60,000 − $14,600 = $45,400)',
+        state: ret({ residentState: 'CO', w2s: [w2(60000, { state: 'CO' })] }),
+        expect: [['CO income', st('CO', 'agi'), 45400], ['CO taxable income', st('CO', 'taxable'), 45400]]
+    },
+    {
+        name: 'Colorado resident 2024 — temporary 4.25% rate',
+        source: 'Colorado 2024 rate reduced to 4.25% (SB24-228 TABOR mechanism): $45,400 × 4.25% = $1,929.50',
+        state: ret({ residentState: 'CO', w2s: [w2(60000, { state: 'CO' })] }),
+        expect: [['CO tax', st('CO', 'totalTax'), 1929.5]],
+        knownGap: 'State rate tables are not keyed by year (engine uses 4.4% for 2024)'
+    },
+    {
+        name: 'New Jersey resident — IRA contributions are not deductible',
+        source: 'NJ-1040 instructions: no deduction for IRA contributions; NJ income $80,000 − $1,000 exemption',
+        state: ret({ residentState: 'NJ', w2s: [w2(80000, { state: 'NJ' })], adjustments: { studentLoan: 0, ira: 7000, hsa: 0 } }),
+        expect: [['NJ income', st('NJ', 'agi'), 80000], ['NJ taxable income', st('NJ', 'taxable'), 79000]]
+    },
+    {
+        name: 'Massachusetts HOH, 1 child — Child & Family Credit is refundable',
+        source: 'Form 1 2024: ($30,000 − $6,800 HOH exemption − $1,000 dependent) × 5% = $1,110; $440 Child and Family Credit is refundable',
+        state: ret({ filingStatus: 'head_of_household', residentState: 'MA', w2s: [w2(30000, { state: 'MA' })], dependents: { childrenCount: 1 } }),
+        expect: [['MA tax before credits', st('MA', 'tentativeTax'), 1110], ['Child & Family Credit', st('MA', 'exemptionCredit'), 440],
+            ['MA tax after nonrefundable credits', st('MA', 'netStateTax'), 1110]]
+    },
+    {
+        name: 'HOH, $30,000 wages, 1 child — EITC from the EIC Table',
+        source: '2024 EIC Table row $30,000–$30,050 (midpoint $30,025): $4,213 − 15.98% × ($30,025 − $22,720) = $3,046',
+        state: ret({ filingStatus: 'head_of_household', w2s: [w2(30000)], dependents: { childrenCount: 1 } }),
+        expect: [['EITC', fed('fed.eitc'), 3046]]
     },
     {
         name: 'Texas resident — no state income tax',

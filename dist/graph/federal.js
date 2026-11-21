@@ -391,12 +391,18 @@ function defineQuantities(g, year) {
         expr: add(R('in.interest'), R('fed.interest1099'), R('fed.taxExemptInterest'), R('fed.dividends'), atLeast0(R('fed.capAllowed')), atLeast0(R('fed.rentalAllowed'))) });
     q({ id: 'fed.eitcKids', label: 'EITC Qualifying Children', unit: 'count', display: 'inline', expr: min(num(3), R('in.children')) });
     q({ id: 'fed.eitcIncome', label: 'EITC Income (greater of earned income or AGI)', unit: 'usd', display: 'inline', expr: max(R('fed.earnedIncome'), R('fed.agi')) });
+    // The EIC Table computes the credit at the midpoint of $50 income bands.
+    const eicRow = (x) => when(gt(x, lit(0)), add(mul(floor(div(x, lit(50))), lit(50)), lit(25)), lit(0));
+    q({ id: 'fed.eitcEarnedRow', label: 'EIC Table Row Midpoint (Earned Income)', unit: 'usd', category: 'credits', optional: true,
+        appliesWhen: gt(R('fed.earnedIncome'), lit(0)), expr: eicRow(R('fed.earnedIncome')) });
+    q({ id: 'fed.eitcIncomeRow', label: 'EIC Table Row Midpoint (Phase-Out Income)', unit: 'usd', category: 'credits', optional: true,
+        appliesWhen: gt(R('fed.earnedIncome'), lit(0)), expr: eicRow(R('fed.eitcIncome')) });
     q({ id: 'fed.eitcPhaseIn', label: 'EITC Phase-In Amount', unit: 'usd', display: 'inline',
-        expr: min(lookup('fed.eitcMax', R('fed.eitcKids')), mul(R('fed.earnedIncome'), lookup('fed.eitcPhaseInRate', R('fed.eitcKids')))) });
+        expr: min(lookup('fed.eitcMax', R('fed.eitcKids')), mul(R('fed.eitcEarnedRow'), lookup('fed.eitcPhaseInRate', R('fed.eitcKids')))) });
     q({ id: 'fed.eitcReduction', label: 'EITC Phase-Out Reduction', unit: 'usd', display: 'inline',
-        expr: atLeast0(mul(sub(R('fed.eitcIncome'), sub(lookup('fed.eitcIncomeLimit', R('fed.eitcKids')), div(lookup('fed.eitcMax', R('fed.eitcKids')), lookup('fed.eitcPhaseOutRate', R('fed.eitcKids'))))), lookup('fed.eitcPhaseOutRate', R('fed.eitcKids')))) });
+        expr: atLeast0(mul(sub(R('fed.eitcIncomeRow'), sub(lookup('fed.eitcIncomeLimit', R('fed.eitcKids')), div(lookup('fed.eitcMax', R('fed.eitcKids')), lookup('fed.eitcPhaseOutRate', R('fed.eitcKids'))))), lookup('fed.eitcPhaseOutRate', R('fed.eitcKids')))) });
     q({ id: 'fed.eitc', label: 'Earned Income Credit', unit: 'usd', form: 'Form 1040 Line 27', category: 'credits', optional: true,
-        expr: when(and(not(statusIs('married_separate')), gt(R('fed.earnedIncome'), lit(0)), lte(R('fed.eitcInvestmentIncome'), P('fed.eitcInvCap')), lt(R('fed.eitcIncome'), lookup('fed.eitcIncomeLimit', R('fed.eitcKids')))), round(atLeast0(min(R('fed.eitcPhaseIn'), sub(lookup('fed.eitcMax', R('fed.eitcKids')), R('fed.eitcReduction'))))), lit(0)) });
+        expr: when(and(not(statusIs('married_separate')), gt(R('fed.earnedIncome'), lit(0)), lte(R('fed.eitcInvestmentIncome'), P('fed.eitcInvCap')), lt(R('fed.eitcIncome'), lookup('fed.eitcIncomeLimit', R('fed.eitcKids')))), round(atLeast0(min(R('fed.eitcPhaseIn'), sub(lookup('fed.eitcMax', R('fed.eitcKids')), R('fed.eitcReduction')))), 'dollar'), lit(0)) });
     q({ id: 'fed.refundableCredits', label: 'Refundable Credits', unit: 'usd', form: 'Form 1040 Lines 27–31', category: 'credits', optional: true,
         expr: round(add(R('fed.actc'), R('fed.eitc'), R('fed.aotcRefundable'), R('in.ptc'))) });
     // ---------- Other taxes (Schedule 2) & excess Social Security ----------
@@ -574,7 +580,7 @@ export const FEDERAL_BLOCKS = [
     { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
         quantities: ['fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.childCareCredit', 'fed.aotcTotal',
             'fed.educationNonrefundable', 'fed.saversCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
-            'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
+            'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
     { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',
         quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',
             'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.tipsFica', 'fed.otherTaxes', 'fed.excessSS'] },

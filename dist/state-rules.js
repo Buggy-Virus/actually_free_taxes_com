@@ -251,7 +251,7 @@ export const STATE_TAX_RULES = {
         hasIncomeTax: true,
         formResident: 'Form IL-1040',
         formNonResident: 'Form IL-1040 Schedule NR',
-        standardDeduction: { single: 2775, married_joint: 5550, married_separate: 2775, head_of_household: 2775 },
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
         isFlat: true,
         flatRate: 0.0495,
         reciprocalWith: ['IA', 'KY', 'MI', 'WI'],
@@ -260,7 +260,7 @@ export const STATE_TAX_RULES = {
     IN: {
         code: 'IN', name: 'Indiana', hasIncomeTax: true,
         formResident: 'Form IT-40', formNonResident: 'Form IT-40PNR',
-        standardDeduction: { single: 1000, married_joint: 2000, married_separate: 1000, head_of_household: 1000 },
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
         isFlat: true, flatRate: 0.0305,
         reciprocalWith: ['KY', 'MI', 'OH', 'PA', 'WI'],
         notes: 'Indiana imposes a flat 3.05% state income tax rate plus county income taxes.'
@@ -356,7 +356,7 @@ export const STATE_TAX_RULES = {
     MI: {
         code: 'MI', name: 'Michigan', hasIncomeTax: true,
         formResident: 'Form MI-1040', formNonResident: 'Form MI-1040 (Schedule NR)',
-        standardDeduction: { single: 5600, married_joint: 11200, married_separate: 5600, head_of_household: 5600 },
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
         isFlat: true, flatRate: 0.0425,
         reciprocalWith: ['IL', 'IN', 'KY', 'MN', 'OH', 'WI'],
         notes: 'Michigan imposes a flat 4.25% income tax rate.'
@@ -448,12 +448,7 @@ export const STATE_TAX_RULES = {
         hasIncomeTax: true,
         formResident: 'Form NJ-1040',
         formNonResident: 'Form NJ-1040NR',
-        standardDeduction: {
-            single: 1000,
-            married_joint: 2000,
-            married_separate: 1000,
-            head_of_household: 1000
-        },
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
         isFlat: false,
         brackets: {
             single: [
@@ -595,7 +590,7 @@ export const STATE_TAX_RULES = {
     OH: {
         code: 'OH', name: 'Ohio', hasIncomeTax: true,
         formResident: 'Form IT 1040', formNonResident: 'Form IT 1040 (Schedule IT NRC)',
-        standardDeduction: { single: 2400, married_joint: 4800, married_separate: 2400, head_of_household: 2400 },
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
         isFlat: false,
         brackets: makeBrackets([
             { rate: 0.00, min: 0, max: 26050 },
@@ -734,7 +729,7 @@ export const STATE_TAX_RULES = {
     WV: {
         code: 'WV', name: 'West Virginia', hasIncomeTax: true,
         formResident: 'Form IT-140', formNonResident: 'Form IT-140 (ScheduleNR)',
-        standardDeduction: { single: 2000, married_joint: 4000, married_separate: 2000, head_of_household: 2000 },
+        standardDeduction: { single: 0, married_joint: 0, married_separate: 0, head_of_household: 0 },
         isFlat: false,
         brackets: makeBrackets([
             { rate: 0.0236, min: 0, max: 10000 },

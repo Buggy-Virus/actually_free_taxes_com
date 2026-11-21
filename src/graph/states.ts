@@ -299,6 +299,12 @@ const STATE_EITC_MULTIPLIERS: Record<string, number> = {
 };
 const LTCG_EXCLUSION: Record<string, number> = { SC: 0.44, NM: 0.40, ND: 0.40, WI: 0.30, AR: 0.50, AZ: 0.25, VT: 0.40 };
 const LOCAL_PASSTHROUGH = ['PA', 'OH', 'IN', 'KY', 'MI', 'MO', 'DE', 'AL', 'OR'];
+/** States whose starting point is federal taxable income. */
+const FTI_STATES = ['CO', 'ND', 'SC'];
+/** State EITCs that can only offset tax (all other modeled state EITCs are refundable). */
+const NONREFUNDABLE_EITC = ['SC', 'VA'];
+/** States whose modeled exemption/child credit is refundable (NY Empire State, MN, NM, VT child credits; MA Child & Family). */
+const REFUNDABLE_EXEMPTION_CREDIT = ['NY', 'MN', 'NM', 'VT', 'MA'];
 
 function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   const code = plan.resident;
@@ -338,13 +344,22 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   }
 
   // ---------- starting point & modifications ----------
-  q('startingPoint', { label: `${code} Starting Income`, unit: 'usd', category: 'state',
-    expr: max(add(R(S('w2Wages')), R(S('documentIncome'))), when(gt(R('fed.agi'), lit(0)), R('fed.agi'), R('fed.totalIncome')), R('fed.wages')) });
+  // Starting point: federal taxable income for FTI states, otherwise federal AGI (own-income states
+  // reach their base through the additions/subtractions below).
+  const startsFromFti = FTI_STATES.includes(code) || (code === 'MT' && year >= 2024);
+  q('startingPoint', { label: startsFromFti ? `${code} Starting Income (Federal Taxable Income)` : `${code} Starting Income (Federal AGI)`,
+    unit: 'usd', category: 'state', expr: startsFromFti ? R('fed.taxableIncome') : R('fed.agi') });
   const additions: Expr[] = [];
   const subtractions: Expr[] = [];
   if (code === 'CA' || code === 'NJ') {
     q('hsaAddBack', { label: `${code} HSA Add-Back`, unit: 'usd', category: 'state', optional: true, expr: R('in.hsa') });
     additions.push(R(S('hsaAddBack')));
+  }
+  if (code === 'NJ') {
+    // NJ gross income allows no deduction for IRA contributions or student loan interest.
+    q('adjustmentAddBack', { label: 'NJ Add-Back of IRA & Student Loan Deductions', unit: 'usd', category: 'state', optional: true,
+      expr: add(R('in.ira'), R('fed.studentLoanDeduction')) });
+    additions.push(R(S('adjustmentAddBack')));
   }
   if (code === 'PA') {
     q('paAddBack', { label: 'PA Non-Conformity Add-Back (IRA/HSA/Student Loan/Capital Loss)', unit: 'usd', category: 'state', optional: true,
@@ -379,7 +394,8 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
 
   // ---------- deductions ----------
   let baseStd: Expr = P(S('stdBase'));
-  if (code === 'MD') baseStd = min(when(MFJ, lit(5450), lit(2700)), max(when(MFJ, lit(3650), lit(1800)), round(mul(R(S('agi')), rate(0.15)), 'dollar')));
+  if (startsFromFti) baseStd = lit(0); // the federal deduction is already in federal taxable income
+  else if (code === 'MD') baseStd = min(when(MFJ, lit(5450), lit(2700)), max(when(MFJ, lit(3650), lit(1800)), round(mul(R(S('agi')), rate(0.15)), 'dollar')));
   else if (code === 'LA' && year >= 2025) baseStd = when(MFJ, lit(25000), lit(12500));
   else if (code === 'DE') baseStd = add(P(S('stdBase')), mul(min(num(2), R('in.age65Blind')), lit(2500)));
   else if (code === 'WI') baseStd = atLeast0(round(sub(P(S('stdBase')), mul(atLeast0(sub(R(S('agi')), when(MFJ, lit(26360), lit(18220)))), when(MFJ, rate(0.19778), rate(0.12)))), 'dollar'));
@@ -538,12 +554,22 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   }
   q('exemptionCredit', { label: exLabel, unit: 'usd', category: 'state_credit', optional: true, expr: exCredit });
 
+  // Nonrefundable credits can only reduce tax to $0; refundable credits are paid out like withholding.
+  const eitcRefundable = eitcRate > 0 && !NONREFUNDABLE_EITC.includes(code);
+  const exRefundable = REFUNDABLE_EXEMPTION_CREDIT.includes(code);
+  const nonref: Expr[] = [R(S('otherStateCredit')), R(S('panelCred'))];
+  const refundable: Expr[] = [];
+  (eitcRefundable ? refundable : nonref).push(R(S('stateEitc')));
+  (exRefundable ? refundable : nonref).push(R(S('exemptionCredit')));
+  q('nonrefundableCredits', { label: `${code} Nonrefundable Credits`, unit: 'usd', category: 'state_credit', optional: true, expr: add(...nonref) });
+  q('refundableCredits', { label: `${code} Refundable Credits`, unit: 'usd', category: 'state_credit', optional: true, expr: refundable.length ? add(...refundable) : lit(0) });
   q('netStateTax', { label: `${code} Net State Tax`, unit: 'usd', category: 'state',
-    expr: atLeast0(round(sub(R(S('tentativeTax')), R(S('otherStateCredit')), R(S('panelCred')), R(S('stateEitc')), R(S('exemptionCredit'))))) });
+    expr: atLeast0(round(sub(R(S('tentativeTax')), R(S('nonrefundableCredits'))))) });
   q('totalTax', { label: `${code} Total Tax`, unit: 'usd', category: 'state', expr: round(add(R(S('netStateTax')), R(S('localTax')))) });
   q('totalWithholding', { label: `${code} Total Withholding`, unit: 'usd', category: 'withholding',
     expr: when(gt(R(S('localTax')), lit(0)), add(R(S('w2Withheld')), R(S('localWithheld'))), R(S('w2Withheld'))) });
-  q('net', { label: `${code} Refund / (Owed)`, unit: 'usd', category: 'state', expr: round(sub(R(S('totalWithholding')), R(S('totalTax')))) });
+  q('net', { label: `${code} Refund / (Owed)`, unit: 'usd', category: 'state',
+    expr: round(sub(add(R(S('totalWithholding')), R(S('refundableCredits'))), R(S('totalTax')))) });
 }
 
 // ---------- nonresident returns ----------
@@ -619,7 +645,7 @@ export function stateBlocks(plan: ReturnPlan, code: string, g: FormulaGraph): Bl
     const blocks: BlockSpec[] = [
       { id: `calc-state-${lc}-taxable`, stepLabel: `${name} • Step 1: Income, Deductions & Taxable Income`, title: `${code} Deductions & Taxable Income`,
         quantities: [S('w2Wages'), S('documentIncome'), { id: S('startingPoint'), show: 'always' },
-          ...pick('hsaAddBack', 'paAddBack', 'saltAddBack', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
+          ...pick('hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
           { id: S('agi'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'), { id: S('baseStdDeduction'), show: 'always' },
           ...pick('itemized'), S('panelItem'), S('deduction'), ...pick('personalExemption', 'dependentExemption', 'childDeduction'), S('exemptions'),
           { id: S('taxable'), show: 'always' }] },
@@ -630,8 +656,8 @@ export function stateBlocks(plan: ReturnPlan, code: string, g: FormulaGraph): Bl
       quantities: [S('localTax')] });
     const ostc = plan.nonresidents.filter(nr => has(`ostc.${nr.toLowerCase()}`)).map(nr => S(`ostc.${nr.toLowerCase()}`));
     blocks.push({ id: `calc-state-${lc}-card`, stepLabel: `${name} • Credits, Total Tax & Net Outcome`, title: `${rule.formResident} • Bottom Line`, isOutput: true,
-      quantities: [...ostc, S('otherStateCredit'), S('stateEitc'), S('exemptionCredit'), S('panelCred'), { id: S('netStateTax'), show: 'always' },
-        { id: S('totalTax'), show: 'always' }, { id: S('totalWithholding'), show: 'always' }, { id: S('net'), show: 'always' }] });
+      quantities: [...ostc, S('otherStateCredit'), S('stateEitc'), S('exemptionCredit'), S('panelCred'), S('nonrefundableCredits'), { id: S('netStateTax'), show: 'always' },
+        { id: S('totalTax'), show: 'always' }, { id: S('totalWithholding'), show: 'always' }, S('refundableCredits'), { id: S('net'), show: 'always' }] });
     return blocks;
   }
   const out: BlockSpec[] = [];

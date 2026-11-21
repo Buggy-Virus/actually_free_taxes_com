@@ -16,7 +16,7 @@ Every income-tax state is modeled with the same slots, so every state's return r
 
 | Slot (`st.<code>.*`) | Meaning | Default today | Status |
 | :-- | :-- | :-- | :--: |
-| `startingPoint` | Federal AGI, federal taxable income, or the state's own gross income | `max(state W-2 wages + state 1099s, federal AGI, federal wages)` | ❌ **wrong default**: ignores federal adjustments and losses. Must be the state's actual starting line |
+| `startingPoint` | Federal AGI, federal taxable income, or the state's own gross income | Federal AGI; federal taxable income for CO, ND, SC, MT (2024+) | ✅ (own-income states reach their base via additions, e.g. NJ IRA/student loan add-back; more needed) |
 | additions (`hsaAddBack`, `paAddBack`, `saltAddBack`, …) | Income the state taxes that federal doesn't | State-specific list | ⚠️ few states |
 | subtractions (`ltcgExclusion`, `fedTaxDeduction`, `propertyTaxDeduction`, …) | Income the state exempts | State-specific list | ⚠️ few states |
 | `agi` | State adjusted income | start + additions − subtractions | ✅ |
@@ -28,14 +28,14 @@ Every income-tax state is modeled with the same slots, so every state's return r
 | `ostc.<xx>` / `otherStateCredit` | Credit for tax paid to other states | Ratio method | ⚠️ |
 | `stateEitc` | State EITC | % of federal | ⚠️ |
 | `exemptionCredit` | Personal/dependent/child credits, forgiveness | Per state | ⚠️ |
-| `netStateTax` / `totalTax` | Tax after credits, plus local | | ⚠️ refundable credits are clamped to $0 |
+| `nonrefundableCredits` / `refundableCredits` / `netStateTax` / `totalTax` | Tax after credits, plus local | Refundable state EITCs and child credits paid out | ✅ |
 | `totalWithholding` / `net` | Payments and refund/owed | W-2 box 17 (+19) | ⚠️ no estimated or extension payments |
 
 Required template additions:
 
 | Requirement | Status |
 | :-- | :--: |
-| Separate **nonrefundable** and **refundable** credit slots (refundable credits can create a refund) | ❌ |
+| Separate **nonrefundable** and **refundable** credit slots (refundable credits can create a refund) | ✅ |
 | `payments` slot: withholding + estimated payments + extension payment + prior-year overpayment applied | ❌ |
 | `useTax` slot (most income-tax states put use tax on the income tax return) | ❌ |
 | `stateAmt` slot (CA, CO, CT, MN) | ❌ |
@@ -50,7 +50,7 @@ Required template additions:
 | Rule | Status | Notes |
 | :-- | :--: | :-- |
 | Resident state selection; no state selected | ⚠️ | Defaults silently to **CA**. Should require a choice |
-| Federal starting point per state (AGI vs taxable income vs own gross income) | ❌ | See §1 |
+| Federal starting point per state (AGI vs taxable income vs own gross income) | ✅ | See §1 |
 | IRC conformity date (rolling vs static, e.g. CA conforms to 2015 IRC) and decoupling from bonus depreciation, §179, QBI (no state allows QBI except a few), HSA (CA, NJ), student loan forgiveness, FEIE | ⚠️ | HSA add-back for CA/NJ only |
 | **US Treasury / federal obligation interest is exempt in every income-tax state** (subtraction) | ❌ | Not in old docs |
 | **Out-of-state municipal bond interest is taxable in most states** (addition); in-state munis exempt | ❌ | Not in old docs |
@@ -104,7 +104,7 @@ Every income-tax state also needs every item in §1–§2.
 | **GA** | FAGI | Rule table (brackets) | **Flat 5.39% (2024) / 5.19% (2025)**; std deduction $12k/$24k; dependent exemption $4,000 (in table); retirement exclusion $35k/$65k; itemized; surplus refund; low-income credit |
 | **HI** | FAGI | Brackets; personal exemption | Itemized without SALT cap + phase-out; food/excise credit; refundable EITC; renter credit; pension exclusion |
 | **ID** | FAGI | Brackets/flat; $120 + $205 child credits | Flat rate by year (5.695% 2024 / 5.3% 2025); grocery credit; itemized carryover |
-| **IL** | FAGI | 4.95%; personal exemption with $250k/$500k cliff; 5% property tax credit; EITC 20% | **Exemption double-counted** (rule table std deduction + exemption; known gap); retirement & SS subtraction; IL child tax credit (2024+); K-12 education credit; refundable EITC |
+| **IL** | FAGI | 4.95%; personal exemption with $250k/$500k cliff; 5% property tax credit; refundable EITC 20% | Retirement & SS subtraction; IL child tax credit (2024+); K-12 education credit |
 | **IN** | FAGI | 3.05% flat; exemptions; EITC 10%; county tax via box 19 passthrough | Rate by year (3.0% 2025); **county LIT computed by county of residence on Jan 1**; renter's and property tax deductions; 529 credit |
 | **IA** | FAGI | Brackets (2024); flat 3.8% (2025); $40 credits; EITC 15% | Retirement income exclusion (full, age 55+); school district surtax; itemized |
 | **KS** | FAGI | Brackets; exemptions; EITC 17% | 2024 rate cut (5.2%/5.58%) and std deduction increase; SS exemption; food sales tax credit |
