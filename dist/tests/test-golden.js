@@ -263,8 +263,7 @@ const CASES = [
         name: 'Colorado resident 2024 — temporary 4.25% rate',
         source: 'Colorado 2024 rate reduced to 4.25% (SB24-228 TABOR mechanism): $45,400 × 4.25% = $1,929.50',
         state: ret({ residentState: 'CO', w2s: [w2(60000, { state: 'CO' })] }),
-        expect: [['CO tax', st('CO', 'totalTax'), 1929.5]],
-        knownGap: 'State rate tables are not keyed by year (engine uses 4.4% for 2024)'
+        expect: [['CO tax', st('CO', 'totalTax'), 1929.5]]
     },
     {
         name: 'New Jersey resident — IRA contributions are not deductible',
@@ -284,6 +283,12 @@ const CASES = [
         source: '2024 EIC Table row $30,000–$30,050 (midpoint $30,025): $4,213 − 15.98% × ($30,025 − $22,720) = $3,046',
         state: ret({ filingStatus: 'head_of_household', w2s: [w2(30000)], dependents: { childrenCount: 1 } }),
         expect: [['EITC', fed('fed.eitc'), 3046]]
+    },
+    {
+        name: 'Georgia resident 2025, $60,000 wages — flat 5.19%',
+        source: 'GA HB 111: 2025 rate 5.19%; ($60,000 − $12,000 standard deduction) × 5.19% = $2,491.20',
+        state: ret({ year: 2025, residentState: 'GA', w2s: [w2(60000, { state: 'GA' })] }),
+        expect: [['GA tax', st('GA', 'totalTax'), 2491.2]]
     },
     {
         name: 'Texas resident — no state income tax',

@@ -195,14 +195,14 @@ function defineStateDocuments(g: FormulaGraph, plan: ReturnPlan, code: string): 
     g.quantity({ id: S('rentalGross'), label: `${code} Gross Rents`, unit: 'usd', display: 'inline', optional: true, expr: lit(0) });
   }
 
-  const rule = getStateTaxRule(code);
+  const rule = getStateTaxRule(code, plan.year);
   g.param({ id: S('stdBase'), label: `${code} Standard Deduction`, unit: 'usd', domSources: ['select-filing-status'],
     source: rule.formResident, resolve: c => rule.standardDeduction[c.status as CoreFilingStatus] || 0 });
   if (rule.brackets) {
-    g.param({ id: S('brackets'), label: `${code} Tax Brackets`, unit: 'usd', domSources: ['select-filing-status'], source: rule.formResident,
+    g.param({ id: S('brackets'), label: `${code} Tax Brackets`, unit: 'usd', domSources: ['select-filing-status', 'select-tax-year'], source: rule.formResident,
       resolve: c => rule.brackets![c.status as CoreFilingStatus] || rule.brackets!.single || [] });
   }
-  g.param({ id: S('flatRate'), label: `${code} Flat Rate`, unit: 'rate', source: rule.formResident, resolve: () => rule.flatRate || 0 });
+  g.param({ id: S('flatRate'), label: `${code} Flat Rate`, unit: 'rate', source: rule.formResident, domSources: ['select-tax-year'], resolve: () => rule.flatRate || 0 });
   ['otherIncome', 'adjustments', 'credits', 'itemized'].forEach(k => {
     g.input({ id: `in.st.${lc}.${k}`, label: `${code} Other ${k === 'itemized' ? 'Itemized Deductions' : k.replace(/([A-Z])/g, ' $1')}`, unit: 'usd',
       domId: 'section-state-inputs', optional: true });
@@ -311,7 +311,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   const year = plan.year;
   const S = (slot: string) => sid(code, slot);
   const q = (slot: string, def: Omit<QuantityDef, 'id'>) => g.quantity({ id: S(slot), ...def });
-  const rule = getStateTaxRule(code);
+  const rule = getStateTaxRule(code, year);
   defineStateDocuments(g, plan, code);
   definePanels(g, code, true);
 
@@ -577,8 +577,8 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
 function defineNonresident(g: FormulaGraph, plan: ReturnPlan, code: string): void {
   const S = (slot: string) => sid(code, slot);
   const q = (slot: string, def: Omit<QuantityDef, 'id'>) => g.quantity({ id: S(slot), ...def });
-  const rule = getStateTaxRule(code);
-  const resRule = getStateTaxRule(plan.resident);
+  const rule = getStateTaxRule(code, plan.year);
+  const resRule = getStateTaxRule(plan.resident, plan.year);
   defineStateDocuments(g, plan, code);
   definePanels(g, code, false);
 

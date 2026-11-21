@@ -174,14 +174,14 @@ function defineStateDocuments(g, plan, code) {
         g.quantity({ id: S('rentalNet'), label: `${code} Rental Income`, unit: 'usd', optional: true, expr: lit(0) });
         g.quantity({ id: S('rentalGross'), label: `${code} Gross Rents`, unit: 'usd', display: 'inline', optional: true, expr: lit(0) });
     }
-    const rule = getStateTaxRule(code);
+    const rule = getStateTaxRule(code, plan.year);
     g.param({ id: S('stdBase'), label: `${code} Standard Deduction`, unit: 'usd', domSources: ['select-filing-status'],
         source: rule.formResident, resolve: c => rule.standardDeduction[c.status] || 0 });
     if (rule.brackets) {
-        g.param({ id: S('brackets'), label: `${code} Tax Brackets`, unit: 'usd', domSources: ['select-filing-status'], source: rule.formResident,
+        g.param({ id: S('brackets'), label: `${code} Tax Brackets`, unit: 'usd', domSources: ['select-filing-status', 'select-tax-year'], source: rule.formResident,
             resolve: c => rule.brackets[c.status] || rule.brackets.single || [] });
     }
-    g.param({ id: S('flatRate'), label: `${code} Flat Rate`, unit: 'rate', source: rule.formResident, resolve: () => rule.flatRate || 0 });
+    g.param({ id: S('flatRate'), label: `${code} Flat Rate`, unit: 'rate', source: rule.formResident, domSources: ['select-tax-year'], resolve: () => rule.flatRate || 0 });
     ['otherIncome', 'adjustments', 'credits', 'itemized'].forEach(k => {
         g.input({ id: `in.st.${lc}.${k}`, label: `${code} Other ${k === 'itemized' ? 'Itemized Deductions' : k.replace(/([A-Z])/g, ' $1')}`, unit: 'usd',
             domId: 'section-state-inputs', optional: true });
@@ -289,7 +289,7 @@ function defineResident(g, plan) {
     const year = plan.year;
     const S = (slot) => sid(code, slot);
     const q = (slot, def) => g.quantity({ id: S(slot), ...def });
-    const rule = getStateTaxRule(code);
+    const rule = getStateTaxRule(code, year);
     defineStateDocuments(g, plan, code);
     definePanels(g, code, true);
     q('withholding', { label: `${code} Tax Withheld`, unit: 'usd', category: 'withholding', expr: R(S('w2Withheld')) });
@@ -583,8 +583,8 @@ function defineResident(g, plan) {
 function defineNonresident(g, plan, code) {
     const S = (slot) => sid(code, slot);
     const q = (slot, def) => g.quantity({ id: S(slot), ...def });
-    const rule = getStateTaxRule(code);
-    const resRule = getStateTaxRule(plan.resident);
+    const rule = getStateTaxRule(code, plan.year);
+    const resRule = getStateTaxRule(plan.resident, plan.year);
     defineStateDocuments(g, plan, code);
     definePanels(g, code, false);
     q('withholding', { label: `${code} Tax Withheld`, unit: 'usd', category: 'withholding', expr: R(S('w2Withheld')) });

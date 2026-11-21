@@ -763,10 +763,38 @@ export const STATE_TAX_RULES = {
         notes: 'Wyoming has no state personal income tax.'
     }
 };
-export function getStateTaxRule(code) {
+/**
+ * Year-specific changes layered over the base table (which holds 2024 law). Only changes
+ * confirmed from state revenue department publications are listed; see
+ * docs/state_local_tax_logic.md for states still needing annual review.
+ */
+const replaceRate = (rule, from, to) => ({
+    brackets: rule.brackets
+        ? Object.fromEntries(Object.entries(rule.brackets).map(([k, rows]) => [k, rows.map(r => (r.rate === from ? { ...r, rate: to } : r))]))
+        : undefined
+});
+export const STATE_YEAR_OVERRIDES = {
+    2024: {
+        CO: () => ({ flatRate: 0.0425 }) // SB24-228 temporary reduction for tax year 2024
+    },
+    2025: {
+        GA: () => ({ flatRate: 0.0519 }),
+        IN: () => ({ flatRate: 0.03 }),
+        ID: () => ({ flatRate: 0.053 }),
+        UT: () => ({ flatRate: 0.045 }),
+        MS: base => replaceRate(base, 0.047, 0.044)
+    }
+};
+export function getStateTaxRule(code, year) {
     const upper = (code || '').toUpperCase().trim();
-    if (STATE_TAX_RULES[upper])
-        return STATE_TAX_RULES[upper];
+    const base = STATE_TAX_RULES[upper];
+    if (base) {
+        const override = year !== undefined ? STATE_YEAR_OVERRIDES[year]?.[upper] : undefined;
+        if (!override)
+            return base;
+        const patch = override(base);
+        return { ...base, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) };
+    }
     return {
         code: upper || 'OTHER',
         name: upper || 'State',

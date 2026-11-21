@@ -784,9 +784,38 @@ export const STATE_TAX_RULES: Record<string, StateTaxRuleDefinition> = {
   }
 };
 
-export function getStateTaxRule(code: string): StateTaxRuleDefinition {
+/**
+ * Year-specific changes layered over the base table (which holds 2024 law). Only changes
+ * confirmed from state revenue department publications are listed; see
+ * docs/state_local_tax_logic.md for states still needing annual review.
+ */
+const replaceRate = (rule: StateTaxRuleDefinition, from: number, to: number): Partial<StateTaxRuleDefinition> => ({
+  brackets: rule.brackets
+    ? (Object.fromEntries(Object.entries(rule.brackets).map(([k, rows]) => [k, rows.map(r => (r.rate === from ? { ...r, rate: to } : r))])) as StateTaxRuleDefinition['brackets'])
+    : undefined
+});
+export const STATE_YEAR_OVERRIDES: Record<number, Record<string, (base: StateTaxRuleDefinition) => Partial<StateTaxRuleDefinition>>> = {
+  2024: {
+    CO: () => ({ flatRate: 0.0425 }) // SB24-228 temporary reduction for tax year 2024
+  },
+  2025: {
+    GA: () => ({ flatRate: 0.0519 }), // HB 111
+    IN: () => ({ flatRate: 0.03 }),
+    ID: () => ({ flatRate: 0.053 }), // HB 40
+    UT: () => ({ flatRate: 0.045 }), // HB 106
+    MS: base => replaceRate(base, 0.047, 0.044)
+  }
+};
+
+export function getStateTaxRule(code: string, year?: number): StateTaxRuleDefinition {
   const upper = (code || '').toUpperCase().trim();
-  if (STATE_TAX_RULES[upper]) return STATE_TAX_RULES[upper];
+  const base = STATE_TAX_RULES[upper];
+  if (base) {
+    const override = year !== undefined ? STATE_YEAR_OVERRIDES[year]?.[upper] : undefined;
+    if (!override) return base;
+    const patch = override(base);
+    return { ...base, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) };
+  }
   return {
     code: upper || 'OTHER',
     name: upper || 'State',
