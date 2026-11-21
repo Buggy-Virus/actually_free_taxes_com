@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "test": "tsc && node dist/tests/test-tax-engine.js && node dist/tests/test-graph.js && node dist/tests/test-golden.js && node dist/tests/test-fuzz.js",
+    "test": "tsc && node dist/tests/test-tax-engine.js && node dist/tests/test-graph.js && node dist/tests/test-golden.js && node dist/tests/test-validation.js && node dist/tests/test-fuzz.js",
     "start": "python serve.py"
   },
   "keywords": [

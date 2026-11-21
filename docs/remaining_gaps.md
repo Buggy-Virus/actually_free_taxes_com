@@ -23,7 +23,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | A3 | P0 | **TY2026 parameters** (Rev. Proc. 2025-32 + P.L. 119-21 2026 rules) | Year selector stops at 2025 | Add 2026 to `tax-constants.ts` from the published Rev. Proc.; 2026-only rules below (B9–B13). Must be entered from the source document, not memory | ⬜ |
 | A4 | P1 | Per-person ownership of 1099s, Schedule C, IRA, HSA | Only W-2s have an owner | `owner` on income sources / businesses / IRA; per-person SE tax and IRA limits | ⬜ |
 | A5 | P1 | Multi-year carryovers: capital loss ST/LT, passive losses, charity, investment interest, NOL, AMT credit, FTC, §179, QBI loss | Capital loss carryforward computed as one number | "Prior-year carryovers" panel + computed next-year carryovers in a summary card | ⬜ |
-| A6 | P1 | Input validation (impossible / inconsistent entries) | Values clamped silently | Validation messages: box 4 vs 6.2% × box 3, box 6 vs box 5, negative amounts, dependents with no qualifying test met | ⬜ |
+| A6 | P1 | Input validation (impossible / inconsistent entries) | Values clamped silently | Validation messages: box 4 vs 6.2% × box 3, box 6 vs box 5, negative amounts, dependents with no qualifying test met | ✅ `src/validation.ts` Review card (W-2 box 2–6 consistency, wage base, single-employer SS over-withholding, dependent birth year / residency / age tests, missing state, Form 2210 heads-up); tests in `test-validation.ts` |
 
 ## B. Federal
 
@@ -32,7 +32,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B1 | P0 | Child Tax Credit age (< 17) and SSN tests | Count entered directly | From A2 | ✅ Age < 17 + SSN (golden test) |
 | B2 | P0 | EITC eligibility: qualifying-child age/residency/relationship; age 25–64 with no child | Only filing status, investment income, dependent flag | From A1/A2 | ✅ Qualifying-child age/student/disabled/residency + no-child age 25–64 (golden tests) |
 | B3 | P0 | Form 2441 qualifying person under 13 (or disabled) | All children counted | From A2 | ✅ Under 13 or disabled (golden test) |
-| B4 | P1 | Filing status eligibility checks (HOH qualifying person, QSS timing) | No validation | Warnings from A2 | ⬜ |
+| B4 | P1 | Filing status eligibility checks (HOH qualifying person, QSS timing) | No validation | Warnings from A2 | ✅ HOH needs a person who lived with you > 6 months; QSS needs a child who lived with you all year (Review card) |
 | B5 | P1 | Form 1040 line 1e: W-2 box 10 dependent care benefits over $5,000 taxable; reduce Form 2441 limit | Ignored | Box 10 already entered | ✅ `fed.depCareExcluded`, `fed.depCareTaxable` |
 | B6 | P1 | Form 5329 exceptions to the 10% early-distribution tax | 10% on all code-1 distributions | Exception amount input on 1099-R | ✅ 1099-R exception amount |
 | B7 | P1 | 1099-R distribution codes beyond G/H and 1 (2, 3, 4, 7, J, Q, T, B) | Rollover + code 1 checkbox | Code select per 1099-R | ⬜ |

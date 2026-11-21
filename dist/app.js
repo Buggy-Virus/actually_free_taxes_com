@@ -3,6 +3,7 @@
  */
 import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlocks, buildAutoPanels, formatCurrency, formatCurrencyExact } from './tax-engine.js';
 import { ArrowEngine } from './arrow-engine.js';
+import { reviewReturn } from './validation.js';
 import { renderRatingPill, renderRatingCardHtml, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
 import { PANEL_CATALOG, getPanelCatalogEntry } from './panel-catalog.js';
 import { getStateCatalogForSection, getStateCatalogEntry } from './state-panel-catalog.js';
@@ -4966,6 +4967,32 @@ class TaxApp {
             return `<span class="formula-var ${emptyClass}" data-block-id="${esc(blockId)}" data-var-id="${esc(tok.varId)}" role="button" tabindex="0" title="Click to view contributing inputs">${esc(display)}</span>`;
         }).join('');
     }
+    /** "Review" card: inconsistent entries and unsupported choices (src/validation.ts). Click a message to jump to the field. */
+    renderReviewCard(container, taxData) {
+        const review = reviewReturn(this.state, taxData);
+        if (review.length === 0)
+            return;
+        const icon = { error: '⛔', warning: '⚠️', info: 'ℹ️' };
+        const card = document.createElement('div');
+        card.className = 'calc-card review-card';
+        card.id = 'calc-review';
+        card.innerHTML = `
+      <div class="calc-card-header"><div><span class="step-indicator">Review</span><h3 class="calc-card-title">Check these entries (${review.length})</h3></div></div>
+      <ul style="margin:0.25rem 0 0;padding-left:1.1rem;line-height:1.5;list-style:none;">
+        ${review.map(r => `<li class="review-item review-${r.severity}" data-review-target="${esc(r.targetId || '')}" style="cursor:${r.targetId ? 'pointer' : 'default'};margin-bottom:0.35rem;">${icon[r.severity]} ${esc(r.message)}</li>`).join('')}
+      </ul>`;
+        card.querySelectorAll('[data-review-target]').forEach(li => {
+            li.addEventListener('click', () => {
+                const target = li.dataset.reviewTarget ? document.getElementById(li.dataset.reviewTarget) : null;
+                if (!target)
+                    return;
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement)
+                    target.focus({ preventScroll: true });
+            });
+        });
+        container.appendChild(card);
+    }
     renderCalculationBlocks(taxData) {
         const container = document.getElementById('calc-blocks-container');
         if (!container)
@@ -4983,6 +5010,7 @@ class TaxApp {
       `;
             return;
         }
+        this.renderReviewCard(container, taxData);
         visibleBlocks.forEach(block => {
             const wrapper = document.createElement('div');
             wrapper.innerHTML = this.renderCalcCardHtml(block);
