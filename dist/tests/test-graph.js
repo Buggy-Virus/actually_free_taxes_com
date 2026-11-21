@@ -45,7 +45,7 @@ for (const [id, q] of federalGraph().quantities) {
 }
 const adjLine = ev.lines('fed.adjustments').slice(-1)[0];
 assert.strictEqual(text(adjLine.pluggedTokens), 'Adjustments to Income = $0.00 + $5,000.00 + $1,000.00 = $6,000.00', 'student loan interest is fully phased out at MAGI $114,800 and stays visible as $0');
-assert.strictEqual(text(adjLine.generalTokens), 'Adjustments to Income = Student Loan Interest Deduction + Traditional IRA Deduction + HSA Deduction');
+assert.strictEqual(text(adjLine.generalTokens), 'Adjustments to Income = Student Loan Interest Deduction + IRA Deduction + HSA Deduction');
 const sliLine = ev.lines('fed.studentLoanDeduction').slice(-1)[0];
 assert.ok(text(sliLine.pluggedTokens).startsWith('Student Loan Interest Deduction = min($3,000.00, $2,500.00) × (100% − min(100%, max($0.00,'), 'the student loan cap and phase-out are shown with the real numbers');
 assert.strictEqual(text(ev.lines('fed.wages')[0].pluggedTokens), 'Total W-2 Wages = $90,000.00 + $30,000.00 = $120,000.00');

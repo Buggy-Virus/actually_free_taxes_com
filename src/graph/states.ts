@@ -358,18 +358,18 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   const additions: Expr[] = [];
   const subtractions: Expr[] = [];
   if (code === 'CA' || code === 'NJ') {
-    q('hsaAddBack', { label: `${code} HSA Add-Back`, unit: 'usd', category: 'state', optional: true, expr: R('in.hsa') });
+    q('hsaAddBack', { label: `${code} HSA Add-Back`, unit: 'usd', category: 'state', optional: true, expr: R('fed.hsaDeduction') });
     additions.push(R(S('hsaAddBack')));
   }
   if (code === 'NJ') {
     // NJ gross income allows no deduction for IRA contributions or student loan interest.
     q('adjustmentAddBack', { label: 'NJ Add-Back of IRA & Student Loan Deductions', unit: 'usd', category: 'state', optional: true,
-      expr: add(R('in.ira'), R('fed.studentLoanDeduction')) });
+      expr: add(R('fed.iraDeduction'), R('fed.studentLoanDeduction')) });
     additions.push(R(S('adjustmentAddBack')));
   }
   if (code === 'PA') {
     q('paAddBack', { label: 'PA Non-Conformity Add-Back (IRA/HSA/Student Loan/Capital Loss)', unit: 'usd', category: 'state', optional: true,
-      expr: add(R('in.ira'), R('in.hsa'), R('in.studentLoan'),
+      expr: add(R('fed.iraDeduction'), R('fed.hsaDeduction'), R('fed.studentLoanDeduction'),
         when(lt(add(R('in.stGain'), R('fed.longTermGain')), lit(0)), neg(max(lit(-3000), add(R('in.stGain'), R('fed.longTermGain')))), lit(0))) });
     additions.push(R(S('paAddBack')));
   }

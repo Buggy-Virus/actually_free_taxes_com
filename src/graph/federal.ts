@@ -55,6 +55,10 @@ function defineInputs(g: FormulaGraph): void {
       box4: w2Field('box4', 'Box 4 Social Security Tax'),
       box5: w2Field('box5', 'Box 5 Medicare Wages'),
       box6: w2Field('box6', 'Box 6 Medicare Tax'),
+      employerHsa: { label: 'Box 12 W Employer HSA Contributions', unit: 'usd', optional: true, domId: (it: CollectionItem) => `w2-${it.id}-box12-container` },
+      deferrals: { label: 'Box 12 Elective Deferrals (D/E/G/S/AA/BB/EE)', unit: 'usd', optional: true, domId: (it: CollectionItem) => `w2-${it.id}-box12-container` },
+      retirementPlanTaxpayer: { label: "Box 13 Retirement Plan (taxpayer's W-2)", unit: 'count', domId: (it: CollectionItem) => `w2-${it.id}-box1-container` },
+      retirementPlanSpouse: { label: "Box 13 Retirement Plan (spouse's W-2)", unit: 'count', domId: (it: CollectionItem) => `w2-${it.id}-box1-container` },
       isTaxpayer: { label: "Taxpayer's W-2", unit: 'count', domId: (it: CollectionItem) => `w2-${it.id}-owner` },
       isSpouse: { label: "Spouse's W-2", unit: 'count', domId: (it: CollectionItem) => `w2-${it.id}-owner` }
     }
@@ -111,8 +115,8 @@ function defineInputs(g: FormulaGraph): void {
 
   // Adjustments
   io('in.studentLoan', 'Student Loan Interest Paid', 'input-adj-student-loan', 'adj-student-loan', 'adjustments', { optional: true });
-  io('in.ira', 'Traditional IRA Deduction', 'input-adj-ira', 'adj-ira', 'adjustments', { optional: true });
-  io('in.hsa', 'HSA Deduction', 'input-adj-hsa', 'adj-hsa', 'adjustments', { optional: true });
+  io('in.ira', 'Traditional IRA Contributions', 'input-adj-ira', 'adj-ira', 'adjustments', { optional: true });
+  io('in.hsa', 'HSA Contributions', 'input-adj-hsa', 'adj-hsa', 'adjustments', { optional: true });
   io('in.educator', 'Educator Expenses Paid', 'input-adj-educator', 'adj-educator', 'adjustments', { optional: true });
   io('in.seRetirement', 'SEP / SIMPLE / Solo 401(k)', 'input-adj-se-retirement', 'adj-se-retirement', 'adjustments', { optional: true });
   io('in.seHealth', 'Self-Employed Health Insurance', 'input-adj-se-health', 'adj-se-health', 'adjustments', { optional: true });
@@ -178,6 +182,13 @@ function defineParams(g: FormulaGraph): void {
   p('fed.slPhaseRange', 'Student Loan Interest Phase-Out Range', 'usd', c => (c.status === 'married_joint' ? 30000 : 15000), 'Pub. 970 ch. 4', ['select-filing-status']);
   p('fed.medicareRate', 'Medicare Employee Rate', 'rate', c => rules(c.year).medicareRate, 'IRC §3101(b)(1)', []);
   p('fed.dependentStdMin', 'Dependent Standard Deduction Minimum', 'usd', c => (c.year >= 2025 ? 1350 : 1300), 'IRC §63(c)(5)', ['select-tax-year']);
+  g.param({ id: 'fed.hsaLimitSelf', label: 'HSA Limit (Self-Only)', unit: 'usd', source: 'Rev. Proc. 2023-23 / 2024-25', domSources: ['select-tax-year'], resolve: c => (c.year >= 2025 ? 4300 : 4150) });
+  g.param({ id: 'fed.hsaLimitFamily', label: 'HSA Limit (Family)', unit: 'usd', source: 'Rev. Proc. 2023-23 / 2024-25', domSources: ['select-tax-year'], resolve: c => (c.year >= 2025 ? 8550 : 8300) });
+  p('fed.iraLimit', 'IRA Contribution Limit', 'usd', () => 7000, 'IRC §219(b)(5)', []);
+  p('fed.iraPhaseStartCovered', 'IRA Phase-Out Start (covered by workplace plan)', 'usd',
+    c => (c.status === 'married_joint' ? (c.year >= 2025 ? 126000 : 123000) : c.status === 'married_separate' ? 0 : (c.year >= 2025 ? 79000 : 77000)), 'Pub. 590-A', YEAR_STATUS);
+  p('fed.iraPhaseRangeCovered', 'IRA Phase-Out Range (covered)', 'usd', c => (c.status === 'married_joint' ? 20000 : 10000), 'Pub. 590-A', ['select-filing-status']);
+  p('fed.iraPhaseStartSpouse', 'IRA Phase-Out Start (spouse covered)', 'usd', c => (c.year >= 2025 ? 236000 : 230000), 'Pub. 590-A', ['select-tax-year']);
   p('fed.tipsOvertimePhaseStart', 'Tips/Overtime Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? 300000 : 150000), 'IRC §224, §225', ['select-filing-status']);
   p('fed.overtimeCap', 'Overtime Deduction Cap', 'usd', c => (c.status === 'married_joint' ? 25000 : 12500), 'IRC §225', ['select-filing-status']);
   p('fed.carLoanPhaseStart', 'Car Loan Interest Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? 200000 : 100000), 'IRC §163(h)(4)', ['select-filing-status']);
@@ -293,11 +304,50 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: min(R('in.studentLoan'), P('fed.studentLoanCap')) });
   q({ id: 'fed.educatorDeduction', label: 'Educator Expense Deduction', unit: 'usd', display: 'inline', optional: true,
     expr: min(R('in.educator'), P('fed.educatorCap')) });
+  // Form 8889: contribution limit by coverage (+$1,000 at 55+), reduced by employer contributions (W-2 box 12 W).
+  const familyHsa = flag('fed.hsaFamily', 'family HDHP coverage', 'self-only HDHP coverage', 'select-hsa-coverage');
+  const hsaCatch = flag('fed.hsaCatchUp', 'age 55+', 'under 55', 'check-hsa-catchup');
+  q({ id: 'fed.hsaLimit', label: 'HSA Contribution Limit', unit: 'usd', category: 'adjustments', appliesWhen: gt(R('in.hsa'), lit(0)),
+    expr: atLeast0(sub(add(when(familyHsa, P('fed.hsaLimitFamily'), P('fed.hsaLimitSelf')), when(hsaCatch, lit(1000), lit(0))), each('w2', 'employerHsa'))) });
+  q({ id: 'fed.hsaDeduction', label: 'HSA Deduction', unit: 'usd', form: 'Form 8889 Line 13', category: 'adjustments', optional: true,
+    presentIf: gt(R('in.hsa'), lit(0)), expr: min(R('in.hsa'), R('fed.hsaLimit')) });
+  q({ id: 'fed.hsaExcess', label: 'Excess HSA Contributions', unit: 'usd', category: 'adjustments', optional: true, expr: atLeast0(sub(R('in.hsa'), R('fed.hsaLimit'))) });
   q({ id: 'fed.adjustmentsExIraSli', label: 'Adjustments Other Than IRA & Student Loan Interest', unit: 'usd', display: 'inline',
-    expr: add(R('in.hsa'), R('fed.educatorDeduction'), R('in.seRetirement'), R('in.seHealth'),
+    expr: add(R('fed.hsaDeduction'), R('fed.educatorDeduction'), R('in.seRetirement'), R('in.seHealth'),
       R('in.alimonyPaid'), R('in.militaryMoving'), R('in.earlyWithdrawal'), R('in.juryDuty'), R('fed.halfSeTax')) });
+  // ---- IRA deduction (Pub. 590-A): phase-out when the taxpayer (or spouse) is covered by a workplace plan ----
+  // Appendix B: MAGI uses taxable Social Security figured *before* the IRA deduction, which avoids circularity.
+  q({ id: 'fed.provisionalIncomeBeforeIra', label: 'Provisional Income Before IRA Deduction', unit: 'usd', display: 'inline',
+    expr: atLeast0(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'),
+      R('fed.taxExemptInterest'), mul(R('fed.ssaGross'), rate(0.5))), R('fed.adjustmentsExIraSli'))) });
+  q({ id: 'fed.taxableSSBeforeIra', label: 'Taxable Social Security Before IRA Deduction', unit: 'usd', display: 'inline',
+    expr: when(gt(R('fed.provisionalIncomeBeforeIra'), P('fed.ssBase2')),
+      round(min(mul(R('fed.ssaGross'), rate(0.85)), add(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(P('fed.ssBase2'), P('fed.ssBase1')), rate(0.5))),
+        mul(sub(R('fed.provisionalIncomeBeforeIra'), P('fed.ssBase2')), rate(0.85))))),
+      when(gt(R('fed.provisionalIncomeBeforeIra'), P('fed.ssBase1')),
+        round(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(R('fed.provisionalIncomeBeforeIra'), P('fed.ssBase1')), rate(0.5)))), lit(0))) });
+  q({ id: 'fed.iraMagi', label: 'MAGI for IRA Deduction', unit: 'usd', category: 'adjustments', appliesWhen: gt(R('in.ira'), lit(0)),
+    expr: add(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'), R('fed.taxableSSBeforeIra'),
+      R('in.alimonyReceived'), R('in.tips')), R('fed.adjustmentsExIraSli')), R('fed.feie')) });
+  const iraCatch = flag('fed.iraCatchUp', 'age 50+', 'under 50', 'check-ira-catchup');
+  q({ id: 'fed.iraContributionLimit', label: 'IRA Contribution Limit', unit: 'usd', display: 'inline',
+    expr: min(add(P('fed.iraLimit'), when(iraCatch, lit(1000), lit(0))), R('fed.earnedIncome')) });
+  const coveredT = gt(count('w2', 'retirementPlanTaxpayer'), num(0));
+  const coveredS = gt(count('w2', 'retirementPlanSpouse'), num(0));
+  // Reduced limit = limit × (1 − (MAGI − start) ÷ range), rounded up to the next $10, and at least $200 if not fully phased out.
+  const reduced = (start: Expr, range: Expr) => {
+    const raw = mul(R('fed.iraContributionLimit'), sub(rate(1), div(atLeast0(sub(R('fed.iraMagi'), start)), range)));
+    return when(lte(raw, lit(0)), lit(0), max(lit(200), mul(ceil(div(raw, lit(10))), lit(10))));
+  };
+  q({ id: 'fed.iraDeductibleLimit', label: 'Deductible IRA Limit', unit: 'usd', category: 'adjustments', appliesWhen: gt(R('in.ira'), lit(0)),
+    expr: when(coveredT, min(R('fed.iraContributionLimit'), reduced(P('fed.iraPhaseStartCovered'), P('fed.iraPhaseRangeCovered'))),
+      when(and(flag('fed.jointReturn', 'married filing jointly', 'not a joint return'), coveredS),
+        min(R('fed.iraContributionLimit'), reduced(P('fed.iraPhaseStartSpouse'), lit(10000))),
+        R('fed.iraContributionLimit'))) });
+  q({ id: 'fed.iraDeduction', label: 'IRA Deduction', unit: 'usd', form: 'Schedule 1 Line 20', category: 'adjustments', optional: true,
+    presentIf: gt(R('in.ira'), lit(0)), expr: min(R('in.ira'), R('fed.iraDeductibleLimit')) });
   q({ id: 'fed.otherAdjustments', label: 'Adjustments Other Than Student Loan Interest', unit: 'usd', display: 'inline',
-    expr: add(R('in.ira'), R('fed.adjustmentsExIraSli')) });
+    expr: add(R('fed.iraDeduction'), R('fed.adjustmentsExIraSli')) });
   // Pub. 970 Student Loan Interest Deduction Worksheet: MAGI = income − other adjustments + excluded foreign income.
   q({ id: 'fed.studentLoanMagi', label: 'MAGI for Student Loan Interest', unit: 'usd', category: 'adjustments',
     appliesWhen: gt(R('fed.studentLoanInterestCapped'), lit(0)),
@@ -492,9 +542,13 @@ function defineQuantities(g: FormulaGraph, year: number): void {
 
   q({ id: 'fed.saversRate', label: "Saver's Credit Rate", unit: 'rate', display: 'inline',
     expr: when(lte(R('fed.agi'), P('fed.saversT50')), rate(0.5), when(lte(R('fed.agi'), P('fed.saversT20')), rate(0.2), when(lte(R('fed.agi'), P('fed.saversT10')), rate(0.1), rate(0)))) });
+  // Form 8880: IRA contributions plus elective deferrals (W-2 box 12), up to $2,000 per person; not for dependents.
+  q({ id: 'fed.saversContributions', label: "Saver's Credit Contributions", unit: 'usd', category: 'credits', optional: true,
+    expr: add(min(lit(2000), add(R('in.ira'), each('w2', 'deferrals', 'isTaxpayer'))), min(lit(2000), each('w2', 'deferrals', 'isSpouse'))) });
   q({ id: 'fed.saversCredit', label: "Saver's Credit", unit: 'usd', form: 'Form 8880', category: 'credits', optional: true,
-    presentIf: gt(R('in.ira'), lit(0)),
-    expr: round(mul(min(P('fed.saversMax'), R('in.ira')), R('fed.saversRate'))) });
+    presentIf: gt(R('fed.saversContributions'), lit(0)),
+    expr: when(flag('fed.claimedAsDependent', 'someone can claim you as a dependent', 'no one can claim you as a dependent', 'check-claimed-as-dependent'), lit(0),
+      round(mul(min(P('fed.saversMax'), R('fed.saversContributions')), R('fed.saversRate')))) });
   q({ id: 'fed.adoptionCredit', label: 'Adoption Credit', unit: 'usd', display: 'inline', optional: true, expr: min(P('fed.adoptionCap'), R('in.adoption')) });
 
   q({ id: 'fed.nonrefundableBeforeLimit', label: 'Nonrefundable Credits Before Tax Limit', unit: 'usd', category: 'credits', optional: true,
@@ -577,11 +631,13 @@ function defineQuantities(g: FormulaGraph, year: number): void {
 
   q({ id: 'fed.earlyDistributionPenalty', label: 'Early Distribution Penalty', unit: 'usd', form: 'Form 5329', category: 'tax', optional: true,
     expr: round(mul(R('fed.earlyDistributions'), rate(0.1))) });
+  q({ id: 'fed.hsaExcise', label: '6% Excise on Excess HSA Contributions', unit: 'usd', form: 'Form 5329 Part VII', category: 'tax', optional: true,
+    expr: round(mul(R('fed.hsaExcess'), rate(0.06))) });
   q({ id: 'fed.tipsFica', label: 'Unreported Tips FICA', unit: 'usd', form: 'Form 4137', category: 'tax', optional: true,
     expr: round(mul(R('in.tips'), rate(0.0765))) });
   q({ id: 'fed.otherTaxes', label: 'Other Taxes', unit: 'usd', form: 'Form 1040 Line 23', category: 'tax', optional: true,
     expr: round(add(R('fed.seTax'), R('fed.additionalMedicareTax'), R('fed.niit'), R('fed.amt'), R('fed.earlyDistributionPenalty'),
-      R('fed.tipsFica'), R('in.householdTax'))) });
+      R('fed.tipsFica'), R('fed.hsaExcise'), R('in.householdTax'))) });
 
   // ---------- Bottom line ----------
   q({ id: 'fed.totalTax', label: 'Total Tax', unit: 'usd', form: 'Form 1040 Line 24', category: 'tax',
@@ -626,7 +682,15 @@ export function federalContext(state: TaxAppState): GraphContext {
     w2: w2s.map(w => {
       // Ownership only matters on a joint return; otherwise every W-2 is the taxpayer's.
       const spouse = w.owner === 'spouse' && normalizeFilingStatus(state.filingStatus || 'single') === 'married_joint' && state.filingStatus !== 'qualifying_surviving_spouse';
+      // Box 12 entries by code (data extraction from the four code/amount pairs).
+      const box12 = (['a', 'b', 'c', 'd'] as const).map(k => ({
+        code: String((w as unknown as Record<string, unknown>)[`box12${k}Code`] ?? (k === 'a' ? w.box12Code ?? '' : '')).trim().toUpperCase(),
+        amount: n((w as unknown as Record<string, unknown>)[`box12${k}Amount`] ?? (k === 'a' ? w.box12Amount : 0))
+      }));
+      const byCodes = (codes: string[]) => box12.filter(b => codes.includes(b.code)).reduce((sum, b) => sum + b.amount, 0);
       return { id: w.id, name: w.employer, values: { box1: n(w.box1), box2: n(w.box2), box3: n(w.box3), box4: n(w.box4), box5: n(w.box5), box6: n(w.box6),
+        employerHsa: byCodes(['W']), deferrals: byCodes(['D', 'E', 'F', 'G', 'H', 'S', 'AA', 'BB', 'EE']),
+        retirementPlanTaxpayer: w.box13Retirement && !spouse ? 1 : 0, retirementPlanSpouse: w.box13Retirement && spouse ? 1 : 0,
         isTaxpayer: spouse ? 0 : 1, isSpouse: spouse ? 1 : 0 } };
     }),
     w2State: w2s.flatMap(w => (w.states || []).map(s => ({
@@ -667,7 +731,10 @@ export function federalContext(state: TaxAppState): GraphContext {
       'fed.forceStandard': state.deductionMethod === 'standard',
       'fed.claimedAsDependent': Boolean(state.claimedAsDependent),
       // QSS uses joint brackets but is not a joint return (no spouse on the return).
-      'fed.jointReturn': state.filingStatus === 'married_joint'
+      'fed.jointReturn': state.filingStatus === 'married_joint',
+      'fed.hsaFamily': state.adjustments?.hsaCoverage === 'family',
+      'fed.hsaCatchUp': Boolean(state.adjustments?.hsaCatchUp),
+      'fed.iraCatchUp': Boolean(state.adjustments?.iraCatchUp)
     },
     collections,
     inputs: {
@@ -733,7 +800,8 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
   { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',
     quantities: ['fed.interestTotal', 'fed.taxExemptInterest', 'fed.dividends', 'fed.qualifiedDividends', 'fed.businessProfit', 'fed.retirement',
       'fed.gambling', 'fed.otherSourceIncome', 'fed.ssaGross', 'fed.provisionalIncome', 'fed.taxableSS',
-      { id: 'fed.totalIncome', show: 'always' }, 'fed.studentLoanMagi', 'fed.studentLoanDeduction', { id: 'fed.adjustments', show: 'always' },
+      { id: 'fed.totalIncome', show: 'always' }, 'fed.hsaLimit', 'fed.hsaDeduction', 'fed.iraMagi', 'fed.iraDeductibleLimit', 'fed.iraDeduction',
+      'fed.studentLoanMagi', 'fed.studentLoanDeduction', { id: 'fed.adjustments', show: 'always' },
       { id: 'fed.agi', show: 'always' }] },
   { id: 'calc-itemized-deductions', stepLabel: 'Step 4a • Schedule A Itemized Deductions', title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',
     quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
@@ -746,11 +814,11 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
       'fed.collectiblesTax', 'fed.regularTaxRow', 'fed.regularTax', { id: 'fed.tax', show: 'always' }] },
   { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
     quantities: ['fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.careEarnedIncomeLimit', 'fed.childCareCredit', 'fed.aotcTotal',
-      'fed.educationNonrefundable', 'fed.saversCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
+      'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
       'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
   { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',
     quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',
-      'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.tipsFica', 'fed.otherTaxes', 'fed.excessSS'] },
+      'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.hsaExcise', 'fed.tipsFica', 'fed.otherTaxes', 'fed.excessSS'] },
   { id: 'calc-final-verdict', stepLabel: 'Step 8 • Federal Bottom Line', title: 'Total Tax, Payments & Federal Refund / Owed', isOutput: true,
     quantities: [{ id: 'fed.totalTax', show: 'always' }, 'fed.addlMedicareWithheld', { id: 'fed.payments', show: 'always' }, { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
 ];

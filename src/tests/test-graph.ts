@@ -56,7 +56,7 @@ assert.strictEqual(
 );
 assert.strictEqual(
   text(adjLine.generalTokens),
-  'Adjustments to Income = Student Loan Interest Deduction + Traditional IRA Deduction + HSA Deduction'
+  'Adjustments to Income = Student Loan Interest Deduction + IRA Deduction + HSA Deduction'
 );
 const sliLine = ev.lines('fed.studentLoanDeduction').slice(-1)[0];
 assert.ok(text(sliLine.pluggedTokens).startsWith('Student Loan Interest Deduction = min($3,000.00, $2,500.00) × (100% − min(100%, max($0.00,'),

@@ -964,6 +964,9 @@ class TaxApp {
             },
             adjustments: {
                 ...numericFields(parsed.adjustments),
+                hsaCoverage: parsed.adjustments?.hsaCoverage === 'family' ? 'family' : 'self',
+                hsaCatchUp: Boolean(parsed.adjustments?.hsaCatchUp),
+                iraCatchUp: Boolean(parsed.adjustments?.iraCatchUp),
                 studentLoan: Number(parsed.adjustments?.studentLoan) || 0,
                 ira: Number(parsed.adjustments?.ira) || 0,
                 hsa: Number(parsed.adjustments?.hsa) || 0,
@@ -3098,28 +3101,28 @@ class TaxApp {
               <div class="w2-overlay-box box-12" id="w2-${w2.id}-box12-container">
                 <div class="box-12-rows">
                   <div class="box-12-row">
-                    <input type="text" class="w2-overlay-input box-12-code" value="${w2.box12aCode ?? w2.box12Code ?? ''}" placeholder="12a" data-w2-id="${w2.id}" data-w2-field="box12aCode">
+                    <input type="text" class="w2-overlay-input box-12-code" value="${esc(w2.box12aCode ?? w2.box12Code)}" placeholder="12a" data-w2-id="${w2.id}" data-w2-field="box12aCode">
                     <div class="w2-overlay-input-wrap box-12-amt-wrap">
                       <span class="w2-overlay-curr">$</span>
                       <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12a-amt" value="${w2.box12aAmount ?? w2.box12Amount ?? ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12aAmount">
                     </div>
                   </div>
                   <div class="box-12-row">
-                    <input type="text" class="w2-overlay-input box-12-code" value="${w2.box12bCode || ''}" placeholder="12b" data-w2-id="${w2.id}" data-w2-field="box12bCode">
+                    <input type="text" class="w2-overlay-input box-12-code" value="${esc(w2.box12bCode)}" placeholder="12b" data-w2-id="${w2.id}" data-w2-field="box12bCode">
                     <div class="w2-overlay-input-wrap box-12-amt-wrap">
                       <span class="w2-overlay-curr">$</span>
                       <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12b-amt" value="${w2.box12bAmount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12bAmount">
                     </div>
                   </div>
                   <div class="box-12-row">
-                    <input type="text" class="w2-overlay-input box-12-code" value="${w2.box12cCode || ''}" placeholder="12c" data-w2-id="${w2.id}" data-w2-field="box12cCode">
+                    <input type="text" class="w2-overlay-input box-12-code" value="${esc(w2.box12cCode)}" placeholder="12c" data-w2-id="${w2.id}" data-w2-field="box12cCode">
                     <div class="w2-overlay-input-wrap box-12-amt-wrap">
                       <span class="w2-overlay-curr">$</span>
                       <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12c-amt" value="${w2.box12cAmount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12cAmount">
                     </div>
                   </div>
                   <div class="box-12-row">
-                    <input type="text" class="w2-overlay-input box-12-code" value="${w2.box12dCode || ''}" placeholder="12d" data-w2-id="${w2.id}" data-w2-field="box12dCode">
+                    <input type="text" class="w2-overlay-input box-12-code" value="${esc(w2.box12dCode)}" placeholder="12d" data-w2-id="${w2.id}" data-w2-field="box12dCode">
                     <div class="w2-overlay-input-wrap box-12-amt-wrap">
                       <span class="w2-overlay-curr">$</span>
                       <input type="number" step="any" class="w2-overlay-input num" id="w2-${w2.id}-box12d-amt" value="${w2.box12dAmount || ''}" placeholder="0" data-w2-id="${w2.id}" data-w2-field="box12dAmount">
@@ -3210,7 +3213,10 @@ class TaxApp {
                 document.querySelectorAll(`[data-w2-field="${String(field)}"][data-w2-id="${w2.id}"]`).forEach(el => {
                     el.addEventListener('input', (e) => {
                         w2[field] = e.target.value;
-                        this.saveDraft();
+                        if (String(field).startsWith('box12'))
+                            this.recalculateAndRender();
+                        else
+                            this.saveDraft();
                     });
                 });
             };
@@ -3231,7 +3237,7 @@ class TaxApp {
                 document.querySelectorAll(`input[type="checkbox"][data-w2-field="${String(field)}"][data-w2-id="${w2.id}"]`).forEach(el => {
                     el.addEventListener('change', () => {
                         w2[field] = el.checked;
-                        this.saveDraft();
+                        this.recalculateAndRender(); // box 13 retirement plan drives the IRA deduction phase-out
                     });
                 });
             };
@@ -3242,7 +3248,7 @@ class TaxApp {
                 document.querySelectorAll(`[data-w2-field="${String(field)}"][data-w2-id="${w2.id}"]`).forEach(el => {
                     el.addEventListener('input', (e) => {
                         w2[field] = Number(e.target.value) || 0;
-                        this.saveDraft();
+                        this.recalculateAndRender(); // box 12 amounts feed HSA, IRA and Saver's Credit rules
                     });
                 });
             };
@@ -4184,6 +4190,26 @@ class TaxApp {
         </div>
       </div>`;
         }
+        else if (entry.key === 'adj-hsa') {
+            const cov = this.state.adjustments?.hsaCoverage === 'family' ? 'family' : 'self';
+            inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-adj-hsa', 'Your HSA Contributions')}
+        <div>
+          <label for="select-hsa-coverage" class="panel-input-label">HDHP Coverage</label>
+          <select id="select-hsa-coverage" class="w2-input">
+            <option value="self" ${cov === 'self' ? 'selected' : ''}>Self-only</option>
+            <option value="family" ${cov === 'family' ? 'selected' : ''}>Family</option>
+          </select>
+        </div>
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-hsa-catchup" ${this.state.adjustments?.hsaCatchUp ? 'checked' : ''}> Age 55+ catch-up</label>
+      </div>`;
+        }
+        else if (entry.key === 'adj-ira') {
+            inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-adj-ira', 'Traditional IRA Contributions')}
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-ira-catchup" ${this.state.adjustments?.iraCatchUp ? 'checked' : ''}> Age 50+ catch-up</label>
+      </div>`;
+        }
         else if (entry.key === 'cred-children' || entry.key === 'cred-other-dependents' || entry.key === 'cred-age-blind' || entry.key === 'sched1a-senior') {
             inputsHtml = numBox(entry.inputIds[0], undefined, true);
         }
@@ -4256,6 +4282,15 @@ class TaxApp {
         bindNum('input-adj-military-moving', v => this.state.adjustments.militaryMoving = v);
         bindNum('input-adj-early-withdrawal', v => this.state.adjustments.earlyWithdrawalPenalty = v);
         bindNum('input-adj-jury-duty', v => this.state.adjustments.juryDutyPay = v);
+        const hsaCov = document.getElementById('select-hsa-coverage');
+        if (hsaCov)
+            hsaCov.addEventListener('change', () => { this.state.adjustments.hsaCoverage = hsaCov.value === 'family' ? 'family' : 'self'; this.recalculateAndRender(); });
+        const hsaCatch = document.getElementById('check-hsa-catchup');
+        if (hsaCatch)
+            hsaCatch.addEventListener('change', () => { this.state.adjustments.hsaCatchUp = hsaCatch.checked; this.recalculateAndRender(); });
+        const iraCatch = document.getElementById('check-ira-catchup');
+        if (iraCatch)
+            iraCatch.addEventListener('change', () => { this.state.adjustments.iraCatchUp = iraCatch.checked; this.recalculateAndRender(); });
         bindNum('input-sched1a-tips', v => this.state.adjustments.qualifiedTips = v);
         bindNum('input-sched1a-overtime', v => this.state.adjustments.qualifiedOvertime = v);
         bindNum('input-sched1a-car-loan', v => this.state.adjustments.carLoanInterest = v);

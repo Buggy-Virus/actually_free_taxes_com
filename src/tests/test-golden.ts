@@ -320,6 +320,44 @@ const CASES: Golden[] = [
     expect: [['business profit (loss)', fed('fed.businessProfit'), -5000], ['AGI', fed('fed.agi'), 55000], ['SE tax', fed('fed.seTax'), 0]]
   },
 
+  // ---------------- Federal: retirement & HSA limits ----------------
+  {
+    name: 'IRA deduction phase-out — covered by a workplace plan',
+    source: 'Pub. 590-A: 2024 single covered $77,000–$87,000; MAGI $82,000 → $7,000 × (1 − 5,000/10,000) = $3,500',
+    state: ret({ w2s: [{ ...w2(82000), box13Retirement: true }], adjustments: { studentLoan: 0, ira: 7000, hsa: 0 } }),
+    expect: [['IRA MAGI', fed('fed.iraMagi'), 82000], ['IRA deduction', fed('fed.iraDeduction'), 3500]]
+  },
+  {
+    name: 'IRA deduction — not covered by any plan, no phase-out',
+    source: 'Pub. 590-A: full deduction when neither spouse is covered',
+    state: ret({ w2s: [w2(150000)], adjustments: { studentLoan: 0, ira: 7000, hsa: 0 } }),
+    expect: [['IRA deduction', fed('fed.iraDeduction'), 7000]]
+  },
+  {
+    name: 'IRA deduction — spouse covered, taxpayer not covered',
+    source: 'Pub. 590-A: 2024 $230,000–$240,000; MAGI $235,000 → $3,500',
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(100000), { ...w2(135000), box13Retirement: true, owner: 'spouse' }], adjustments: { studentLoan: 0, ira: 7000, hsa: 0 } }),
+    expect: [['IRA deduction', fed('fed.iraDeduction'), 3500]]
+  },
+  {
+    name: 'HSA limit reduced by employer contributions; 6% excise on the excess',
+    source: 'Form 8889: 2024 self-only $4,150 − $1,000 box 12 W = $3,150 deductible; Form 5329: 6% × $1,850 excess = $111',
+    state: ret({ w2s: [{ ...w2(60000), box12aCode: 'W', box12aAmount: 1000 }], adjustments: { studentLoan: 0, ira: 0, hsa: 5000 } }),
+    expect: [['HSA deduction', fed('fed.hsaDeduction'), 3150], ['excess contributions', fed('fed.hsaExcess'), 1850], ['excise', fed('fed.hsaExcise'), 111]]
+  },
+  {
+    name: 'HSA family coverage with age-55 catch-up',
+    source: 'Form 8889: 2024 family $8,300 + $1,000 catch-up = $9,300',
+    state: ret({ w2s: [w2(90000)], adjustments: { studentLoan: 0, ira: 0, hsa: 9300, hsaCoverage: 'family', hsaCatchUp: true } }),
+    expect: [['HSA deduction', fed('fed.hsaDeduction'), 9300], ['excess contributions', fed('fed.hsaExcess'), 0]]
+  },
+  {
+    name: "Saver's Credit counts 401(k) deferrals (W-2 box 12 D)",
+    source: 'Form 8880: $1,000 IRA + $1,500 401(k) → $2,000 cap × 50% (AGI $19,000 ≤ $23,000) = $1,000',
+    state: ret({ w2s: [{ ...w2(20000), box12aCode: 'D', box12aAmount: 1500 }], adjustments: { studentLoan: 0, ira: 1000, hsa: 0 } }),
+    expect: [["Saver's contributions", fed('fed.saversContributions'), 2000], ["Saver's Credit", fed('fed.saversCredit'), 1000]]
+  },
+
   // ---------------- Federal: adjustment limits ----------------
   {
     name: 'Student loan interest phaseout, single MAGI $87,500',

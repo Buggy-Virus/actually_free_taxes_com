@@ -60,8 +60,8 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Box 6 Additional Medicare withheld credited on Line 25c (Form 8959 Part V) | ✅ | `fed.addlMedicareWithheld`; golden test |
 | Box 7/8 SS tips, allocated tips (Line 1c) | ❌ | Allocated tips are taxable and need Form 4137 |
 | Box 10 dependent care benefits: excess over $5,000 is taxable (Line 1e); reduces the Form 2441 expense limit | ❌ | |
-| Box 12 codes: D/E/G/S (deferrals → Saver's Credit, IRA phaseout); W (employer HSA → reduces HSA limit); C (group-term life); DD (info); AA/BB (Roth); Q (combat pay → EITC election); T (adoption benefits, Line 1f) | ❌ | Fields exist in UI, unused in math |
-| Box 13 retirement plan → IRA deduction phaseout applies | ❌ | |
+| Box 12 codes: D/E/G/S (deferrals → Saver's Credit, IRA phaseout); W (employer HSA → reduces HSA limit); C (group-term life); DD (info); AA/BB (Roth); Q (combat pay → EITC election); T (adoption benefits, Line 1f) | ⚠️ | ✅ deferral codes and W; ❌ Q, T, C |
+| Box 13 retirement plan → IRA deduction phaseout applies | ✅ | Per person (W-2 owner) |
 | Statutory employee → wages go to Schedule C | ❌ | |
 | Household employee wages without W-2 (Line 1b), Medicaid waiver payments (1d), scholarships (1f text), Form 8919 uncollected FICA wages (1g) | ❌ | |
 | **2025–2028: qualified tips deduction** (≤ $25,000; phase-out $100 per $1,000 MAGI over $150k / $300k MFJ; listed occupations; SSN; MFJ if married) | ⚠️ | `fed.tipsDeduction`; ✅ cap, phase-out, MFS bar; ❌ occupation/SSN checks; phase-out applied proportionally (verify IRS rounding) |
@@ -173,14 +173,14 @@ Every federal rule the app must support for a person to prepare and file a compl
 | :-- | :--: | :-- |
 | Educator expenses ($300 each, $600 MFJ both educators) | ⚠️ | Cap is $600 for MFJ regardless of whether both spouses are educators |
 | Reservist / performing artist / fee-basis official (Form 2106) | ❌ | |
-| HSA deduction (Form 8889): annual limit $4,150 / $8,300 (2024), $4,300 / $8,550 (2025), +$1,000 age 55; reduced by employer contributions (W-2 box 12 W); last-month rule; 6% excess excise | ⚠️ | Amount accepted as entered |
+| HSA deduction (Form 8889): annual limit $4,150 / $8,300 (2024), $4,300 / $8,550 (2025), +$1,000 age 55; reduced by employer contributions (W-2 box 12 W); last-month rule; 6% excess excise | ⚠️ | ✅ limits, catch-up, box 12 W, 6% excise (`fed.hsaDeduction`, `fed.hsaExcise`); ❌ partial-year / last-month rule, distributions |
 | Moving expenses (Armed Forces only, Form 3903) | ✅ | `in.militaryMoving` |
 | ½ SE tax | ✅ | |
 | SEP / SIMPLE / solo 401(k) limits (20% of net SE earnings, $23,000 deferral 2024) | ⚠️ | Amount accepted as entered |
 | SE health insurance (limited to net SE profit; months not eligible for employer plan; PTC interaction) | ⚠️ | Amount accepted as entered |
 | Penalty on early withdrawal of savings | ✅ | |
 | Alimony paid (pre-2019) | ✅ | |
-| IRA deduction: $7,000 limit (+$1,000 age 50), limited to compensation, spousal IRA, MAGI phase-out when covered by workplace plan (2024: $77k–$87k single, $123k–$143k MFJ; $230k–$240k spouse covered) | ⚠️ | Amount accepted as entered |
+| IRA deduction: $7,000 limit (+$1,000 age 50), limited to compensation, spousal IRA, MAGI phase-out when covered by workplace plan (2024: $77k–$87k single, $123k–$143k MFJ; $230k–$240k spouse covered) | ⚠️ | ✅ limit, catch-up, compensation limit, covered/spouse-covered phase-outs with $10 round-up and $200 minimum, Appendix B SS ordering (`fed.iraDeduction`); ❌ separate spousal IRA |
 | Student loan interest: $2,500 cap and MAGI phase-out ($80k–$95k single / $165k–$195k MFJ 2024; $85k–$100k / $170k–$200k 2025; MFS not allowed) | ✅ | `fed.studentLoanMagi`, `fed.studentLoanDeduction`; golden test |
 | Archer MSA, jury duty pay remitted, other | ⚠️ | Jury duty ✅ |
 
@@ -259,7 +259,7 @@ Every federal rule the app must support for a person to prepare and file a compl
 | Child & dependent care (Form 2441): 35%→20% rate, $3,000 / $6,000; **qualifying person under 13**; limited to the lower earner's earned income (student/disabled spouse deemed $250/$500 per month); reduced by employer benefits (box 10); MFS generally ineligible | ⚠️ | `fed.childCareCredit`; ✅ earned-income limit (lower-earning spouse); ❌ under-13 test, deemed income, box 10 |
 | **2026+ dependent care rate up to 50%** (P.L. 119-21) | ❌ | |
 | Education credits (Form 8863): AOTC per student ($2,500, 40% refundable, first 4 years, half-time, no felony drug conviction; refundability limited for some under-24 students); LLC 20% of $10,000 per return; MAGI phase-out $80k–$90k / $160k–$180k | ⚠️ | `fed.aotcTotal`, `fed.llc`; one student only; no per-student or 4-year tracking |
-| Saver's Credit (Form 8880): includes elective deferrals (W-2 box 12 D/E/G/S, Roth), minus distributions; not for full-time students or dependents; thresholds by year | ⚠️ | IRA contributions only; ✅ thresholds by year |
+| Saver's Credit (Form 8880): includes elective deferrals (W-2 box 12 D/E/G/S, Roth), minus distributions; not for full-time students or dependents; thresholds by year | ⚠️ | ✅ IRA + box 12 deferrals per person, dependents excluded, year thresholds; ❌ distributions reduction, full-time student test |
 | Foreign tax credit (Form 1116) with limitation; de minimis $300/$600 election without the form; carryover | ⚠️ | Amount accepted as entered |
 | Residential clean energy (Form 5695 Part I, 30%) — **ends for expenditures after 12/31/2025** | ⚠️ | Amount accepted as entered |
 | Energy-efficient home improvement (25C, $1,200 / $2,000 heat pumps) — **ends after 2025** | ⚠️ | Amount accepted as entered |

@@ -139,6 +139,9 @@ export interface Adjustments {
   militaryMoving?: number; // Form 3903 / Schedule 1 Line 14
   earlyWithdrawalPenalty?: number; // Schedule 1 Line 18 (1099-INT Box 2)
   juryDutyPay?: number; // Schedule 1 Line 24a (Jury duty pay given to employer)
+  hsaCoverage?: 'self' | 'family'; // Form 8889 line 1 (HDHP coverage type)
+  hsaCatchUp?: boolean; // Form 8889: age 55+ additional $1,000
+  iraCatchUp?: boolean; // IRA: age 50+ additional $1,000
   qualifiedTips?: number; // 2025-2028 Schedule 1-A: qualified tips (P.L. 119-21)
   qualifiedOvertime?: number; // 2025-2028 Schedule 1-A: qualified overtime premium pay
   carLoanInterest?: number; // 2025-2028 Schedule 1-A: interest on a new US-assembled personal vehicle loan
