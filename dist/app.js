@@ -885,7 +885,7 @@ class TaxApp {
             throw new Error('Root JSON value must be an object.');
         }
         const base = getDefaultTaxAppState();
-        const validYear = parsed.year === 2024 || parsed.year === 2025 ? parsed.year : base.year;
+        const validYear = parsed.year === 2024 || parsed.year === 2025 || parsed.year === 2026 ? parsed.year : base.year;
         const validStatuses = ['single', 'married_joint', 'married_separate', 'head_of_household', 'qualifying_surviving_spouse'];
         const validStatus = validStatuses.includes(parsed.filingStatus) ? parsed.filingStatus : base.filingStatus;
         const rawW2s = Array.isArray(parsed.w2s) ? parsed.w2s : [];
@@ -1124,7 +1124,7 @@ class TaxApp {
         const promptText = `Convert my tax documents/notes into a single valid JSON object matching this schema for ActuallyFreeTaxes.com (output ONLY raw JSON, no commentary):
 
 {
-  "year": 2024, // 2024 or 2025
+  "year": 2024, // 2024, 2025 or 2026
   "filingStatus": "single", // "single" | "married_joint" | "married_separate" | "head_of_household" | "qualifying_surviving_spouse"
   "residentState": "NY", // 2-letter US state code or "DC"
   "w2s": [

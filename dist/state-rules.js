@@ -789,7 +789,9 @@ export function getStateTaxRule(code, year) {
     const upper = (code || '').toUpperCase().trim();
     const base = STATE_TAX_RULES[upper];
     if (base) {
-        const override = year !== undefined ? STATE_YEAR_OVERRIDES[year]?.[upper] : undefined;
+        // Rates set for 2025 carry forward to later years unless that year has its own entry.
+        const override = year === undefined ? undefined
+            : STATE_YEAR_OVERRIDES[year]?.[upper] ?? (year > 2025 ? STATE_YEAR_OVERRIDES[2025]?.[upper] : undefined);
         if (!override)
             return base;
         const patch = override(base);

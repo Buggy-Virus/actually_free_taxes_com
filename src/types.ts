@@ -9,7 +9,7 @@ export type FilingStatus =
   | 'head_of_household'
   | 'qualifying_surviving_spouse';
 
-export type TaxYear = 2024 | 2025;
+export type TaxYear = 2024 | 2025 | 2026;
 
 export interface StateTaxLine {
   id: number;

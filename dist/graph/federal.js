@@ -11,6 +11,8 @@ import { TAX_CONSTANTS, normalizeFilingStatus } from '../tax-constants.js';
 import { add, and, atLeast0, quietly, brackets, ceil, count, div, each, field, flag, floor, gt, gte, itemFlag, lit, lookup, lt, lte, max, min, mul, neg, not, num, or, param, rate, ref, round, statusIs, sub, sumOver, when } from './expr.js';
 import { FormulaGraph } from './graph.js';
 const rules = (year) => TAX_CONSTANTS[year] || TAX_CONSTANTS[2024];
+/** Pick a value by tax year (2024, 2025, 2026+). */
+const Y = (year, v2024, v2025, v2026) => (year >= 2026 ? v2026 : year >= 2025 ? v2025 : v2024);
 const byStatus = (map) => (s) => (map[s] !== undefined ? map[s] : map.other);
 const YEAR_STATUS = ['select-tax-year', 'select-filing-status'];
 /** Income-source collections, one per document type. */
@@ -173,7 +175,7 @@ function defineInputs(g) {
 function defineParams(g) {
     const p = (id, label, unit, resolve, source, domSources = YEAR_STATUS) => g.param({ id, label, unit, resolve, source, domSources });
     p('fed.stdBase', 'Base Standard Deduction', 'usd', c => rules(c.year).standardDeduction[c.status], 'Form 1040 Line 12 instructions');
-    p('fed.addlStdPerBox', 'Additional Standard Deduction per Box', 'usd', c => (c.status === 'single' || c.status === 'head_of_household') ? (c.year === 2025 ? 2000 : 1950) : (c.year === 2025 ? 1600 : 1550), 'IRC §63(f)');
+    p('fed.addlStdPerBox', 'Additional Standard Deduction per Box', 'usd', c => (c.status === 'single' || c.status === 'head_of_household') ? Y(c.year, 1950, 2000, 2050) : Y(c.year, 1550, 1600, 1650), 'IRC §63(f); Rev. Proc. 2025-32 §4.14(3)');
     p('fed.ssWageBase', 'Social Security Wage Base', 'usd', c => rules(c.year).ssWageLimit, 'SSA annual wage base', ['select-tax-year']);
     p('fed.ssRate', 'Social Security Employee Rate', 'rate', c => rules(c.year).ssRate, 'IRC §3101(a)', []);
     p('fed.addlMedRate', 'Additional Medicare Rate', 'rate', c => rules(c.year).additionalMedicareRate, 'Form 8959', []);
@@ -186,28 +188,29 @@ function defineParams(g) {
     p('fed.odcPerDependent', 'Credit per Other Dependent', 'usd', () => 500, 'Schedule 8812', []);
     p('fed.capLossFloor', 'Capital Loss Limit', 'usd', c => (c.status === 'married_separate' ? -1500 : -3000), 'IRC §1211(b)', ['select-filing-status']);
     p('fed.studentLoanCap', 'Student Loan Interest Cap', 'usd', () => 2500, 'IRC §221(b)(1)', []);
-    p('fed.educatorCap', 'Educator Expense Cap (per educator)', 'usd', () => 300, 'IRC §62(a)(2)(D)', []);
-    p('fed.saltCapBase', 'SALT Cap', 'usd', c => (c.year >= 2025 ? 40000 : 10000) / (c.status === 'married_separate' ? 2 : 1), 'IRC §164(b)(6) as amended by P.L. 119-21', YEAR_STATUS);
-    p('fed.saltPhaseStart', 'SALT Cap Phase-Down Threshold (MAGI)', 'usd', c => (c.status === 'married_separate' ? 250000 : 500000), 'IRC §164(b)(7)', ['select-filing-status']);
+    p('fed.educatorCap', 'Educator Expense Cap (per educator)', 'usd', c => Y(c.year, 300, 300, 350), 'IRC §62(a)(2)(D); Rev. Proc. 2025-32 §4.12', ['select-tax-year']);
+    p('fed.saltCapBase', 'SALT Cap', 'usd', c => Y(c.year, 10000, 40000, 40400) / (c.status === 'married_separate' ? 2 : 1), 'IRC §164(b)(6) as amended by P.L. 119-21', YEAR_STATUS);
+    p('fed.saltPhaseStart', 'SALT Cap Phase-Down Threshold (MAGI)', 'usd', c => Y(c.year, 500000, 500000, 505000) / (c.status === 'married_separate' ? 2 : 1), 'IRC §164(b)(7) (+1% a year 2026–2029)', YEAR_STATUS);
     p('fed.saltFloor', 'SALT Cap Minimum', 'usd', c => (c.status === 'married_separate' ? 5000 : 10000), 'IRC §164(b)(7)', ['select-filing-status']);
-    p('fed.slPhaseStart', 'Student Loan Interest Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? (c.year >= 2025 ? 170000 : 165000) : (c.year >= 2025 ? 85000 : 80000)), 'Pub. 970 ch. 4', YEAR_STATUS);
+    p('fed.slPhaseStart', 'Student Loan Interest Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? Y(c.year, 165000, 170000, 175000) : Y(c.year, 80000, 85000, 85000)), 'Pub. 970 ch. 4; Rev. Proc. 2025-32 §4.29', YEAR_STATUS);
     p('fed.slPhaseRange', 'Student Loan Interest Phase-Out Range', 'usd', c => (c.status === 'married_joint' ? 30000 : 15000), 'Pub. 970 ch. 4', ['select-filing-status']);
     p('fed.medicareRate', 'Medicare Employee Rate', 'rate', c => rules(c.year).medicareRate, 'IRC §3101(b)(1)', []);
     p('fed.taxYear', 'Tax Year', 'count', c => c.year, 'Form 1040', ['select-tax-year']);
-    p('fed.electiveDeferralLimit', 'Elective Deferral Limit', 'usd', c => (c.year >= 2025 ? 23500 : 23000), 'IRC §402(g)', ['select-tax-year']);
-    p('fed.annualAdditionsCap', 'Annual Additions Limit', 'usd', c => (c.year >= 2025 ? 70000 : 69000), 'IRC §415(c)', ['select-tax-year']);
+    p('fed.electiveDeferralLimit', 'Elective Deferral Limit', 'usd', c => Y(c.year, 23000, 23500, 24500), 'IRC §402(g)', ['select-tax-year']);
+    p('fed.annualAdditionsCap', 'Annual Additions Limit', 'usd', c => Y(c.year, 69000, 70000, 72000), 'IRC §415(c)', ['select-tax-year']);
     p('fed.dependentStdMin', 'Dependent Standard Deduction Minimum', 'usd', c => (c.year >= 2025 ? 1350 : 1300), 'IRC §63(c)(5)', ['select-tax-year']);
-    g.param({ id: 'fed.hsaLimitSelf', label: 'HSA Limit (Self-Only)', unit: 'usd', source: 'Rev. Proc. 2023-23 / 2024-25', domSources: ['select-tax-year'], resolve: c => (c.year >= 2025 ? 4300 : 4150) });
-    g.param({ id: 'fed.hsaLimitFamily', label: 'HSA Limit (Family)', unit: 'usd', source: 'Rev. Proc. 2023-23 / 2024-25', domSources: ['select-tax-year'], resolve: c => (c.year >= 2025 ? 8550 : 8300) });
-    p('fed.iraLimit', 'IRA Contribution Limit', 'usd', () => 7000, 'IRC §219(b)(5)', []);
-    p('fed.iraPhaseStartCovered', 'IRA Phase-Out Start (covered by workplace plan)', 'usd', c => (c.status === 'married_joint' ? (c.year >= 2025 ? 126000 : 123000) : c.status === 'married_separate' ? 0 : (c.year >= 2025 ? 79000 : 77000)), 'Pub. 590-A', YEAR_STATUS);
+    g.param({ id: 'fed.hsaLimitSelf', label: 'HSA Limit (Self-Only)', unit: 'usd', source: 'Rev. Proc. 2023-23 / 2024-25 / 2025-19', domSources: ['select-tax-year'], resolve: c => Y(c.year, 4150, 4300, 4400) });
+    g.param({ id: 'fed.hsaLimitFamily', label: 'HSA Limit (Family)', unit: 'usd', source: 'Rev. Proc. 2023-23 / 2024-25 / 2025-19', domSources: ['select-tax-year'], resolve: c => Y(c.year, 8300, 8550, 8750) });
+    p('fed.iraLimit', 'IRA Contribution Limit', 'usd', c => Y(c.year, 7000, 7000, 7500), 'IRC §219(b)(5); Notice 2025-67', ['select-tax-year']);
+    p('fed.iraCatchUpAmount', 'IRA Catch-Up (age 50+)', 'usd', c => Y(c.year, 1000, 1000, 1100), 'IRC §219(b)(5)(B); Notice 2025-67', ['select-tax-year']);
+    p('fed.iraPhaseStartCovered', 'IRA Phase-Out Start (covered by workplace plan)', 'usd', c => (c.status === 'married_joint' ? Y(c.year, 123000, 126000, 129000) : c.status === 'married_separate' ? 0 : Y(c.year, 77000, 79000, 81000)), 'Pub. 590-A; IR-2025-111', YEAR_STATUS);
     p('fed.iraPhaseRangeCovered', 'IRA Phase-Out Range (covered)', 'usd', c => (c.status === 'married_joint' ? 20000 : 10000), 'Pub. 590-A', ['select-filing-status']);
-    p('fed.iraPhaseStartSpouse', 'IRA Phase-Out Start (spouse covered)', 'usd', c => (c.year >= 2025 ? 236000 : 230000), 'Pub. 590-A', ['select-tax-year']);
+    p('fed.iraPhaseStartSpouse', 'IRA Phase-Out Start (spouse covered)', 'usd', c => Y(c.year, 230000, 236000, 242000), 'Pub. 590-A', ['select-tax-year']);
     p('fed.tipsOvertimePhaseStart', 'Tips/Overtime Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? 300000 : 150000), 'IRC §224, §225', ['select-filing-status']);
     p('fed.overtimeCap', 'Overtime Deduction Cap', 'usd', c => (c.status === 'married_joint' ? 25000 : 12500), 'IRC §225', ['select-filing-status']);
     p('fed.carLoanPhaseStart', 'Car Loan Interest Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? 200000 : 100000), 'IRC §163(h)(4)', ['select-filing-status']);
     p('fed.seniorPhaseStart', 'Senior Deduction Phase-Out Start (MAGI)', 'usd', c => (c.status === 'married_joint' ? 150000 : 75000), 'IRC §151(d)(5)', ['select-filing-status']);
-    p('fed.feieLimit', 'Foreign Earned Income Exclusion Limit', 'usd', c => (c.year === 2025 ? 130000 : 126500), 'Form 2555', ['select-tax-year']);
+    p('fed.feieLimit', 'Foreign Earned Income Exclusion Limit', 'usd', c => Y(c.year, 126500, 130000, 132900), 'Form 2555', ['select-tax-year']);
     p('fed.palAllowance', 'Rental Loss Allowance', 'usd', c => (c.status === 'married_separate' ? 12500 : 25000), 'Form 8582', ['select-filing-status']);
     p('fed.palPhaseStart', 'Rental Allowance Phaseout Start', 'usd', c => (c.status === 'married_separate' ? 50000 : 100000), 'Form 8582', ['select-filing-status']);
     p('fed.ssBase1', 'Social Security Base Amount', 'usd', c => byStatus({ married_joint: 32000, married_separate: 0, other: 25000 })(c.status), 'SS Benefits Worksheet', ['select-filing-status']);
@@ -215,26 +218,32 @@ function defineParams(g) {
     p('fed.eduPhaseStart', 'Education Credit Phaseout Start', 'usd', c => (c.status === 'married_joint' ? 160000 : 80000), 'Form 8863', ['select-filing-status']);
     p('fed.eduPhaseSpan', 'Education Credit Phaseout Range', 'usd', c => (c.status === 'married_joint' ? 20000 : 10000), 'Form 8863', ['select-filing-status']);
     p('fed.saversMax', "Saver's Credit Contribution Cap", 'usd', c => (c.status === 'married_joint' ? 4000 : 2000), 'Form 8880', ['select-filing-status']);
-    const savers = (y) => y >= 2025
-        ? { t50: { married_joint: 47500, head_of_household: 35625, other: 23750 }, t20: { married_joint: 51000, head_of_household: 38250, other: 25500 }, t10: { married_joint: 79000, head_of_household: 59250, other: 39500 } }
-        : { t50: { married_joint: 46000, head_of_household: 34500, other: 23000 }, t20: { married_joint: 50000, head_of_household: 37500, other: 25000 }, t10: { married_joint: 76500, head_of_household: 57375, other: 38250 } };
+    const savers = (y) => y >= 2026
+        ? { t50: { married_joint: 48500, head_of_household: 36375, other: 24250 }, t20: { married_joint: 52500, head_of_household: 39375, other: 26250 }, t10: { married_joint: 80500, head_of_household: 60375, other: 40250 } }
+        : y >= 2025
+            ? { t50: { married_joint: 47500, head_of_household: 35625, other: 23750 }, t20: { married_joint: 51000, head_of_household: 38250, other: 25500 }, t10: { married_joint: 79000, head_of_household: 59250, other: 39500 } }
+            : { t50: { married_joint: 46000, head_of_household: 34500, other: 23000 }, t20: { married_joint: 50000, head_of_household: 37500, other: 25000 }, t10: { married_joint: 76500, head_of_household: 57375, other: 38250 } };
     p('fed.saversT50', "Saver's Credit 50% AGI Limit", 'usd', c => byStatus(savers(c.year).t50)(c.status), 'Form 8880', YEAR_STATUS);
     p('fed.saversT20', "Saver's Credit 20% AGI Limit", 'usd', c => byStatus(savers(c.year).t20)(c.status), 'Form 8880', YEAR_STATUS);
     p('fed.saversT10', "Saver's Credit 10% AGI Limit", 'usd', c => byStatus(savers(c.year).t10)(c.status), 'Form 8880', YEAR_STATUS);
-    p('fed.householdWageThreshold', 'Household Employee FICA Threshold', 'usd', c => (c.year >= 2025 ? 2800 : 2700), 'Schedule H line A; SSA', ['select-tax-year']);
-    p('fed.adoptionCap', 'Adoption Credit Limit', 'usd', c => (c.year === 2025 ? 17280 : 16810), 'Form 8839', ['select-tax-year']);
-    p('fed.adoptionPhaseStart', 'Adoption Credit Phase-Out Start (MAGI)', 'usd', c => (c.year === 2025 ? 259190 : 252150), 'Form 8839 line 7; Rev. Proc. 2023-34 / 2024-40', ['select-tax-year']);
-    p('fed.adoptionRefundableMax', 'Refundable Adoption Credit Limit', 'usd', c => (c.year >= 2025 ? 5000 : 0), 'P.L. 119-21 §70402', ['select-tax-year']);
-    p('fed.eitcInvCap', 'EITC Investment Income Limit', 'usd', c => (c.year === 2025 ? 11950 : 11600), 'Schedule EIC', ['select-tax-year']);
-    p('fed.eitcMax', 'EITC Maximum Credit', 'usd', c => (c.year >= 2025 ? [649, 4328, 7152, 8046] : [632, 4213, 6960, 7830]), 'Rev. Proc. 2023-34 / 2024-40', ['select-tax-year']);
+    p('fed.householdWageThreshold', 'Household Employee FICA Threshold', 'usd', c => Y(c.year, 2700, 2800, 3000), 'Schedule H line A; SSA', ['select-tax-year']);
+    p('fed.adoptionCap', 'Adoption Credit Limit', 'usd', c => Y(c.year, 16810, 17280, 17670), 'Form 8839', ['select-tax-year']);
+    p('fed.adoptionPhaseStart', 'Adoption Credit Phase-Out Start (MAGI)', 'usd', c => Y(c.year, 252150, 259190, 265080), 'Form 8839 line 7; Rev. Proc. 2023-34 / 2024-40 / 2025-32', ['select-tax-year']);
+    p('fed.adoptionRefundableMax', 'Refundable Adoption Credit Limit', 'usd', c => Y(c.year, 0, 5000, 5120), 'P.L. 119-21 §70402', ['select-tax-year']);
+    p('fed.eitcInvCap', 'EITC Investment Income Limit', 'usd', c => Y(c.year, 11600, 11950, 12200), 'Schedule EIC', ['select-tax-year']);
+    p('fed.eitcMax', 'EITC Maximum Credit', 'usd', c => Y(c.year, [632, 4213, 6960, 7830], [649, 4328, 7152, 8046], [664, 4427, 7316, 8231]), 'Rev. Proc. 2023-34 / 2024-40 / 2025-32', ['select-tax-year']);
     p('fed.eitcPhaseInRate', 'EITC Phase-In Rate', 'rate', () => [0.0765, 0.34, 0.40, 0.45], 'Schedule EIC', []);
     p('fed.eitcPhaseOutRate', 'EITC Phase-Out Rate', 'rate', () => [0.0765, 0.1598, 0.2106, 0.2106], 'Schedule EIC', []);
-    p('fed.eitcIncomeLimit', 'EITC Income Limit', 'usd', c => c.year >= 2025
-        ? (c.status === 'married_joint' ? [26214, 57554, 64430, 68675] : [19104, 50434, 57310, 61555])
-        : (c.status === 'married_joint' ? [25511, 56004, 62688, 66819] : [18591, 49084, 55768, 59899]), 'Rev. Proc. 2023-34 / 2024-40', YEAR_STATUS);
-    p('fed.amtExemption', 'AMT Exemption', 'usd', c => byStatus({ married_joint: c.year === 2025 ? 137000 : 133300, married_separate: c.year === 2025 ? 68500 : 66650, other: c.year === 2025 ? 88100 : 85700 })(c.status), 'Form 6251');
-    p('fed.amtPhaseStart', 'AMT Exemption Phaseout Start', 'usd', c => (c.status === 'married_joint' ? (c.year === 2025 ? 1252700 : 1218700) : (c.year === 2025 ? 626350 : 609350)), 'Form 6251');
-    p('fed.amt28Breakpoint', 'AMT 28% Rate Breakpoint', 'usd', c => (c.year >= 2025 ? 239100 : 232600) / (c.status === 'married_separate' ? 2 : 1), 'Form 6251', YEAR_STATUS);
+    p('fed.eitcIncomeLimit', 'EITC Income Limit', 'usd', c => c.year >= 2026
+        ? (c.status === 'married_joint' ? [26820, 58863, 65899, 70244] : [19540, 51593, 58629, 62974])
+        : c.year >= 2025
+            ? (c.status === 'married_joint' ? [26214, 57554, 64430, 68675] : [19104, 50434, 57310, 61555])
+            : (c.status === 'married_joint' ? [25511, 56004, 62688, 66819] : [18591, 49084, 55768, 59899]), 'Rev. Proc. 2023-34 / 2024-40', YEAR_STATUS);
+    p('fed.amtExemption', 'AMT Exemption', 'usd', c => byStatus({ married_joint: Y(c.year, 133300, 137000, 140200), married_separate: Y(c.year, 66650, 68500, 70100), other: Y(c.year, 85700, 88100, 90100) })(c.status), 'Form 6251');
+    p('fed.amtPhaseStart', 'AMT Exemption Phaseout Start', 'usd', c => (c.status === 'married_joint' ? Y(c.year, 1218700, 1252700, 1000000) : Y(c.year, 609350, 626350, 500000)), 'Form 6251; P.L. 119-21 §70107');
+    p('fed.amtPhaseRate', 'AMT Exemption Phase-Out Rate', 'rate', c => Y(c.year, 0.25, 0.25, 0.5), 'IRC §55(d)(3) as amended by P.L. 119-21', ['select-tax-year']);
+    p('fed.amt28Breakpoint', 'AMT 28% Rate Breakpoint', 'usd', c => Y(c.year, 232600, 239100, 244500) / (c.status === 'married_separate' ? 2 : 1), 'Form 6251', YEAR_STATUS);
+    p('fed.top37Start', '37% Bracket Starts At', 'usd', c => { const b = rules(c.year).brackets[c.status]; return b[b.length - 1].min; }, 'IRC §1(j)', YEAR_STATUS);
     g.param({ id: 'fed.brackets', label: 'Federal Tax Brackets', unit: 'usd', source: 'IRC §1(j)', domSources: YEAR_STATUS, resolve: c => rules(c.year).brackets[c.status] });
     g.param({ id: 'fed.ltcgBrackets', label: 'Capital Gain Rate Brackets', unit: 'usd', source: 'IRC §1(h)', domSources: YEAR_STATUS, resolve: c => rules(c.year).ltcgBrackets[c.status] });
 }
@@ -396,7 +405,7 @@ function defineQuantities(g, year) {
         expr: add(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'), R('fed.taxableSSBeforeIra'), R('in.alimonyReceived'), R('in.tips')), R('fed.adjustmentsExIraSli')), R('fed.feie')) });
     const iraCatch = or(and(hasAges, gte(R('fed.taxpayerAge'), num(50))), and(not(hasAges), flag('fed.iraCatchUp', 'age 50+ (checked)', 'under 50', 'check-ira-catchup')));
     q({ id: 'fed.iraContributionLimit', label: 'IRA Contribution Limit', unit: 'usd', display: 'inline',
-        expr: min(add(P('fed.iraLimit'), when(iraCatch, lit(1000), lit(0))), R('fed.earnedIncome')) });
+        expr: min(add(P('fed.iraLimit'), when(iraCatch, P('fed.iraCatchUpAmount'), lit(0))), R('fed.earnedIncome')) });
     const coveredT = gt(count('w2', 'retirementPlanTaxpayer'), num(0));
     const coveredS = gt(count('w2', 'retirementPlanSpouse'), num(0));
     // Reduced limit = limit × (1 − (MAGI − start) ÷ range), rounded up to the next $10, and at least $200 if not fully phased out.
@@ -412,7 +421,7 @@ function defineQuantities(g, year) {
     // taxpayer's contribution; phase-out uses the covered-worker range if the spouse is covered, else the spouse-covered range.
     const spouseCatch = and(quietly(gt(R('in.spouseBirthYear'), num(0))), gte(R('fed.spouseAge'), num(50)));
     q({ id: 'fed.spouseIraContributionLimit', label: "Spouse's IRA Contribution Limit", unit: 'usd', category: 'adjustments', appliesWhen: gt(R('in.spouseIra'), lit(0)),
-        expr: atLeast0(min(add(P('fed.iraLimit'), when(spouseCatch, lit(1000), lit(0))), sub(R('fed.earnedIncome'), min(R('in.ira'), R('fed.iraContributionLimit'))))) });
+        expr: atLeast0(min(add(P('fed.iraLimit'), when(spouseCatch, P('fed.iraCatchUpAmount'), lit(0))), sub(R('fed.earnedIncome'), min(R('in.ira'), R('fed.iraContributionLimit'))))) });
     q({ id: 'fed.spouseIraDeduction', label: "Spouse's IRA Deduction", unit: 'usd', category: 'adjustments', optional: true, appliesWhen: gt(R('in.spouseIra'), lit(0)),
         expr: min(R('in.spouseIra'), when(coveredS, min(R('fed.spouseIraContributionLimit'), reduced(P('fed.iraPhaseStartCovered'), P('fed.iraPhaseRangeCovered'), R('fed.spouseIraContributionLimit'))), when(coveredT, min(R('fed.spouseIraContributionLimit'), reduced(P('fed.iraPhaseStartSpouse'), lit(10000), R('fed.spouseIraContributionLimit'))), R('fed.spouseIraContributionLimit')))) });
     q({ id: 'fed.iraDeduction', label: 'IRA Deduction', unit: 'usd', form: 'Schedule 1 Line 20', category: 'adjustments', optional: true,
@@ -477,7 +486,8 @@ function defineQuantities(g, year) {
     q({ id: 'fed.salt', label: 'SALT Deduction', unit: 'usd', form: 'Schedule A Line 5e', category: 'itemized', optional: true,
         expr: min(R('fed.saltCap'), add(R('in.realEstateTax'), R('fed.saltIncomeOrSales'), R('in.personalPropertyTax'))) });
     q({ id: 'fed.gamblingLossDeduction', label: 'Deductible Gambling Losses', unit: 'usd', form: 'Schedule A Line 16', category: 'itemized', optional: true,
-        expr: min(R('fed.gambling'), R('in.gamblingLosses')) });
+        // P.L. 119-21 §70114: from 2026 only 90% of gambling losses are deductible (still limited to winnings).
+        expr: min(R('fed.gambling'), year >= 2026 ? mul(R('in.gamblingLosses'), rate(0.9)) : R('in.gamblingLosses')) });
     q({ id: 'fed.investmentInterestDeduction', label: 'Deductible Investment Interest', unit: 'usd', form: 'Schedule A Line 9', category: 'itemized', optional: true,
         expr: min(atLeast0(add(R('in.interest'), R('fed.interest1099'), atLeast0(R('fed.capAllowed')))), R('in.investmentInterest')) });
     // Form 4684: personal casualty loss (federally declared disaster) less $100 per event and 10% of AGI.
@@ -494,11 +504,26 @@ function defineQuantities(g, year) {
         expr: min(R('in.charityNoncash'), mul(R('fed.agi'), rate(0.3))) });
     q({ id: 'fed.charityDeduction', label: 'Deductible Charitable Gifts', unit: 'usd', form: 'Schedule A Line 14', category: 'itemized', optional: true,
         presentIf: gt(add(R('in.charity'), R('in.charityNoncash')), lit(0)),
-        expr: add(min(R('in.charity'), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')) });
+        expr: year >= 2026
+            // P.L. 119-21 §70425: from 2026 itemized charitable gifts count only above 0.5% of AGI.
+            ? atLeast0(sub(add(min(R('in.charity'), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')), round(mul(R('fed.agi'), rate(0.005)))))
+            : add(min(R('in.charity'), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')) });
     q({ id: 'fed.charityCarryforward', label: 'Charitable Gifts Carried to Next Year', unit: 'usd', category: 'itemized', optional: true,
-        expr: sub(add(R('in.charity'), R('in.charityNoncash')), R('fed.charityDeduction')) });
-    q({ id: 'fed.itemized', label: 'Itemized Deductions', unit: 'usd', form: 'Schedule A Line 17', category: 'itemized',
-        expr: add(R('fed.medicalDeduction'), R('fed.salt'), R('fed.mortgageDeduction'), R('fed.charityDeduction'), R('fed.gamblingLossDeduction'), R('fed.investmentInterestDeduction'), R('fed.casualtyDeduction')) });
+        expr: year >= 2026 ? atLeast0(sub(add(min(R('in.charity'), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')), add(R('fed.charityDeduction'), round(mul(R('fed.agi'), rate(0.005)))))) // amounts over the AGI limits carry forward; the 0.5% floor does not
+            : sub(add(R('in.charity'), R('in.charityNoncash')), R('fed.charityDeduction')) });
+    const itemizedSum = add(R('fed.medicalDeduction'), R('fed.salt'), R('fed.mortgageDeduction'), R('fed.charityDeduction'), R('fed.gamblingLossDeduction'), R('fed.investmentInterestDeduction'), R('fed.casualtyDeduction'));
+    if (year >= 2026) {
+        // P.L. 119-21 §70111 (new §68): itemized deductions are reduced by 2/37 of the smaller of the deductions or the amount by which
+        // taxable income (figured with the deductions added back) exceeds the start of the 37% bracket.
+        q({ id: 'fed.itemizedBeforeLimit', label: 'Itemized Deductions Before Limitation', unit: 'usd', display: 'inline', expr: itemizedSum });
+        q({ id: 'fed.itemizedLimitation', label: 'Itemized Deduction Limitation (2/37)', unit: 'usd', form: 'Schedule A Line 17 (§68)', category: 'itemized', optional: true,
+            expr: round(mul(min(R('fed.itemizedBeforeLimit'), atLeast0(sub(sub(R('fed.agi'), R('fed.sched1a')), P('fed.top37Start')))), div(lit(2), lit(37)))) });
+        q({ id: 'fed.itemized', label: 'Itemized Deductions', unit: 'usd', form: 'Schedule A Line 17', category: 'itemized',
+            expr: sub(R('fed.itemizedBeforeLimit'), R('fed.itemizedLimitation')) });
+    }
+    else {
+        q({ id: 'fed.itemized', label: 'Itemized Deductions', unit: 'usd', form: 'Schedule A Line 17', category: 'itemized', expr: itemizedSum });
+    }
     const forceItemized = flag('fed.forceItemized', 'you chose to itemize', 'you did not force itemizing', 'select-deduction-method');
     const forceStandard = flag('fed.forceStandard', 'you chose the standard deduction', 'you did not force the standard deduction', 'select-deduction-method');
     // MFS: if your spouse itemizes, you must itemize too (standard deduction is $0).
@@ -514,8 +539,10 @@ function defineQuantities(g, year) {
         expr: add(atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'), R('fed.seRetirementDeduction'), R('fed.seHealthDeduction'))), atLeast0(R('fed.k1Income'))) });
     q({ id: 'fed.qbiIncomeLimit', label: 'QBI Taxable Income Limit Base', unit: 'usd', category: 'adjustments',
         expr: atLeast0(sub(atLeast0(sub(R('fed.agi'), R('fed.deduction'))), add(R('fed.qualifiedDividends'), R('fed.netLtcg')))) });
+    const qbiBase = round(min(mul(R('fed.qbiIncome'), rate(0.2)), mul(R('fed.qbiIncomeLimit'), rate(0.2))));
     q({ id: 'fed.qbi', label: 'QBI Deduction', unit: 'usd', form: 'Form 1040 Line 13', category: 'adjustments', optional: true,
-        expr: round(min(mul(R('fed.qbiIncome'), rate(0.2)), mul(R('fed.qbiIncomeLimit'), rate(0.2)))) });
+        // P.L. 119-21 §70105: from 2026, at least $400 when QBI from active businesses is $1,000 or more.
+        expr: year >= 2026 ? when(gte(R('fed.qbiIncome'), lit(1000)), max(lit(400), qbiBase), qbiBase) : qbiBase });
     // ---------- Schedule 1-A (P.L. 119-21, tax years 2025–2028) ----------
     if (year >= 2025 && year <= 2028) {
         const notMfs = (e) => when(statusIs('married_separate'), lit(0), e);
@@ -539,8 +566,17 @@ function defineQuantities(g, year) {
     else {
         q({ id: 'fed.sched1a', label: 'Schedule 1-A Deductions', unit: 'usd', optional: true, expr: lit(0) });
     }
+    if (year >= 2026) {
+        // P.L. 119-21 §70424: non-itemizers deduct up to $1,000 ($2,000 joint) of cash gifts to public charities.
+        q({ id: 'fed.nonItemizerCharity', label: 'Charitable Deduction for Non-Itemizers', unit: 'usd', form: 'Form 1040 (2026)', category: 'itemized', optional: true,
+            presentIf: gt(R('in.charity'), lit(0)),
+            expr: when(gt(R('fed.itemizing'), num(0)), lit(0), min(R('in.charity'), when(statusIs('married_joint'), lit(2000), lit(1000)))) });
+    }
+    else {
+        q({ id: 'fed.nonItemizerCharity', label: 'Charitable Deduction for Non-Itemizers', unit: 'usd', optional: true, expr: lit(0) });
+    }
     q({ id: 'fed.taxableIncome', label: 'Taxable Income', unit: 'usd', form: 'Form 1040 Line 15', category: 'tax',
-        expr: round(atLeast0(sub(R('fed.agi'), R('fed.deduction'), R('fed.qbi'), R('fed.sched1a')))) });
+        expr: round(atLeast0(sub(R('fed.agi'), R('fed.deduction'), R('fed.qbi'), R('fed.sched1a'), R('fed.nonItemizerCharity')))) });
     // ---------- Tax (brackets + Qualified Dividends & Capital Gain worksheet) ----------
     q({ id: 'fed.specialGains', label: '25%/28% Rate Gains', unit: 'usd', display: 'inline',
         expr: min(R('fed.netLtcg'), add(R('in.collectibles'), R('in.unrecap1250'))) });
@@ -588,7 +624,11 @@ function defineQuantities(g, year) {
     q({ id: 'fed.odcAfterPhaseout', label: 'Credit for Other Dependents', unit: 'usd', category: 'credits', optional: true,
         expr: atLeast0(sub(R('fed.childCreditsAfterPhaseout'), R('fed.ctcAfterPhaseout'))) });
     q({ id: 'fed.careRate', label: 'Child Care Credit Rate', unit: 'rate', display: 'inline',
-        expr: when(lte(R('fed.agi'), lit(15000)), rate(0.35), max(rate(0.2), sub(rate(0.35), mul(ceil(div(sub(R('fed.agi'), lit(15000)), lit(2000))), rate(0.01))))) });
+        expr: year >= 2026
+            // P.L. 119-21 §70405: 50% less 1 point per $2,000 (or part) of AGI over $15,000, not below 35%; then less 1 point per
+            // $2,000 ($4,000 joint) over $75,000 ($150,000 joint), not below 20%.
+            ? max(rate(0.2), sub(max(rate(0.35), sub(rate(0.5), mul(ceil(div(atLeast0(sub(R('fed.agi'), lit(15000))), lit(2000))), rate(0.01)))), mul(ceil(div(atLeast0(sub(R('fed.agi'), when(statusIs('married_joint'), lit(150000), lit(75000)))), when(statusIs('married_joint'), lit(4000), lit(2000)))), rate(0.01))))
+            : when(lte(R('fed.agi'), lit(15000)), rate(0.35), max(rate(0.2), sub(rate(0.35), mul(ceil(div(sub(R('fed.agi'), lit(15000)), lit(2000))), rate(0.01))))) });
     q({ id: 'fed.careExpenseCap', label: 'Child Care Expense Cap', unit: 'usd', display: 'inline',
         expr: atLeast0(sub(when(gte(R('fed.careQualifyingPersons'), num(2)), lit(6000), lit(3000)), R('fed.depCareExcluded'))) });
     // Form 2441 Part III: employer dependent care benefits (W-2 box 10) are excluded up to $5,000 ($2,500 MFS)
@@ -707,7 +747,7 @@ function defineQuantities(g, year) {
         // Form 6251: standard-deduction filers get no deduction against AMTI; itemizers keep everything except SALT.
         expr: atLeast0(sub(R('fed.agi'), when(gt(R('fed.itemizing'), num(0)), add(R('fed.medicalDeduction'), R('fed.mortgageDeduction'), R('fed.charityDeduction'), R('fed.gamblingLossDeduction')), lit(0)), R('fed.qbi'))) });
     q({ id: 'fed.amtExemptionAllowed', label: 'AMT Exemption After Phaseout', unit: 'usd', category: 'tax',
-        expr: atLeast0(sub(P('fed.amtExemption'), mul(atLeast0(sub(R('fed.amti'), P('fed.amtPhaseStart'))), rate(0.25)))) });
+        expr: atLeast0(sub(P('fed.amtExemption'), mul(atLeast0(sub(R('fed.amti'), P('fed.amtPhaseStart'))), P('fed.amtPhaseRate')))) });
     q({ id: 'fed.amtOrdinaryBase', label: 'AMT Base Excluding Preferential Income', unit: 'usd', display: 'inline',
         expr: atLeast0(sub(atLeast0(sub(R('fed.amti'), R('fed.amtExemptionAllowed'))), R('fed.preferentialIncome'))) });
     q({ id: 'fed.tentativeMinimumTax', label: 'Tentative Minimum Tax', unit: 'usd', form: 'Form 6251 Line 9', category: 'tax',
@@ -952,7 +992,7 @@ export const FEDERAL_BLOCKS = [
             'fed.studentLoanMagi', 'fed.studentLoanDeduction', { id: 'fed.adjustments', show: 'always' },
             { id: 'fed.agi', show: 'always' }] },
     { id: 'calc-itemized-deductions', stepLabel: 'Step 4a • Schedule A Itemized Deductions', title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',
-        quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.mortgageDeduction', 'fed.charityDeduction', 'fed.charityCarryforward', 'fed.casualtyDeduction', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
+        quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.mortgageDeduction', 'fed.charityDeduction', 'fed.charityCarryforward', 'fed.itemizedLimitation', 'fed.nonItemizerCharity', 'fed.casualtyDeduction', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
     { id: 'calc-taxable-income', stepLabel: 'Step 4 • Deductions & Taxable Income', title: 'Deduction & Taxable Income',
         quantities: ['fed.taxpayerAge', 'fed.spouseAge', 'fed.age65BlindBoxes', { id: 'fed.stdDeduction', show: 'always' }, { id: 'fed.deduction', show: 'always' }, 'fed.qbiIncome', 'fed.qbiIncomeLimit', 'fed.qbi',
             'fed.tipsDeduction', 'fed.overtimeDeduction', 'fed.carLoanDeduction', 'fed.seniorDeduction', 'fed.sched1a',

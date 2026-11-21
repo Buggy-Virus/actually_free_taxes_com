@@ -188,6 +188,100 @@ export const TAX_CONSTANTS = {
                 { rate: 0.20, min: 566700, max: Infinity }
             ]
         }
+    },
+    2026: {
+        // Rev. Proc. 2025-32 §4.01, §4.03, §4.05, §4.14; SSA 2026 wage base.
+        standardDeduction: {
+            single: 16100,
+            married_joint: 32200,
+            married_separate: 16100,
+            head_of_household: 24150
+        },
+        ssWageLimit: 184500,
+        ssRate: 0.062,
+        medicareRate: 0.0145,
+        additionalMedicareRate: 0.009,
+        additionalMedicareThreshold: {
+            single: 200000,
+            married_joint: 250000,
+            married_separate: 125000,
+            head_of_household: 200000
+        },
+        niitRate: 0.038,
+        niitThreshold: {
+            single: 200000,
+            married_joint: 250000,
+            married_separate: 125000,
+            head_of_household: 200000
+        },
+        childTaxCreditPerChild: 2200,
+        childTaxCreditRefundableMax: 1700,
+        childTaxCreditPhaseout: {
+            single: 200000,
+            married_joint: 400000,
+            married_separate: 200000,
+            head_of_household: 200000
+        },
+        brackets: {
+            single: [
+                { rate: 0.10, min: 0, max: 12400 },
+                { rate: 0.12, min: 12400, max: 50400 },
+                { rate: 0.22, min: 50400, max: 105700 },
+                { rate: 0.24, min: 105700, max: 201775 },
+                { rate: 0.32, min: 201775, max: 256225 },
+                { rate: 0.35, min: 256225, max: 640600 },
+                { rate: 0.37, min: 640600, max: Infinity }
+            ],
+            married_joint: [
+                { rate: 0.10, min: 0, max: 24800 },
+                { rate: 0.12, min: 24800, max: 100800 },
+                { rate: 0.22, min: 100800, max: 211400 },
+                { rate: 0.24, min: 211400, max: 403550 },
+                { rate: 0.32, min: 403550, max: 512450 },
+                { rate: 0.35, min: 512450, max: 768700 },
+                { rate: 0.37, min: 768700, max: Infinity }
+            ],
+            married_separate: [
+                { rate: 0.10, min: 0, max: 12400 },
+                { rate: 0.12, min: 12400, max: 50400 },
+                { rate: 0.22, min: 50400, max: 105700 },
+                { rate: 0.24, min: 105700, max: 201775 },
+                { rate: 0.32, min: 201775, max: 256225 },
+                { rate: 0.35, min: 256225, max: 384350 },
+                { rate: 0.37, min: 384350, max: Infinity }
+            ],
+            head_of_household: [
+                { rate: 0.10, min: 0, max: 17700 },
+                { rate: 0.12, min: 17700, max: 67450 },
+                { rate: 0.22, min: 67450, max: 105700 },
+                { rate: 0.24, min: 105700, max: 201750 },
+                { rate: 0.32, min: 201750, max: 256200 },
+                { rate: 0.35, min: 256200, max: 640600 },
+                { rate: 0.37, min: 640600, max: Infinity }
+            ]
+        },
+        ltcgBrackets: {
+            single: [
+                { rate: 0.00, min: 0, max: 49450 },
+                { rate: 0.15, min: 49450, max: 545500 },
+                { rate: 0.20, min: 545500, max: Infinity }
+            ],
+            married_joint: [
+                { rate: 0.00, min: 0, max: 98900 },
+                { rate: 0.15, min: 98900, max: 613700 },
+                { rate: 0.20, min: 613700, max: Infinity }
+            ],
+            married_separate: [
+                { rate: 0.00, min: 0, max: 49450 },
+                { rate: 0.15, min: 49450, max: 306850 },
+                { rate: 0.20, min: 306850, max: Infinity }
+            ],
+            head_of_household: [
+                { rate: 0.00, min: 0, max: 66200 },
+                { rate: 0.15, min: 66200, max: 579600 },
+                { rate: 0.20, min: 579600, max: Infinity }
+            ]
+        }
     }
 };
 export function normalizeFilingStatus(status) {

@@ -112,7 +112,7 @@ export function reviewReturn(state: TaxAppState, summary?: TaxCalculationSummary
     const status = state.filingStatus;
     const core = status === 'qualifying_surviving_spouse' ? 'married_joint' : status;
     const married = core === 'married_joint' || core === 'married_separate';
-    const addl = year >= 2025 ? (married ? 1600 : 2000) : (married ? 1550 : 1950);
+    const addl = year >= 2026 ? (married ? 1650 : 2050) : year >= 2025 ? (married ? 1600 : 2000) : (married ? 1550 : 1950);
     const seniors = ev.graph.quantities.has('fed.seniorsCount') ? ev.value('fed.seniorsCount') : 0;
     // 65+ raises the threshold (blindness does not). Married filing separately must file with $5 of gross income.
     const threshold = core === 'married_separate' ? 5 : (rules.standardDeduction as Record<string, number>)[core] + (status === 'qualifying_surviving_spouse' ? Math.min(1, seniors) : seniors) * addl;

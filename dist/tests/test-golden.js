@@ -979,6 +979,85 @@ const CASES = [
         state: ret({ w2s: [w2(80000)], dependents: { childrenCount: 0, foreignTaxCredit: 5000, foreignSourceIncome: 6540 } }),
         expect: [['taxable income', fed('fed.taxableIncome'), 65400], ['income tax', fed('fed.tax'), 9447], ['foreign tax credit', fed('fed.foreignTaxCreditAllowed'), 944.7]]
     },
+    // ---------------- Federal: tax year 2026 (A3, B9–B13) ----------------
+    {
+        name: '2026: single, $60,000 wages — Rev. Proc. 2025-32 brackets and $16,100 standard deduction',
+        source: 'Rev. Proc. 2025-32 §4.01 Table 3 / §4.14: taxable $43,900, Tax Table row midpoint $43,925 → $1,240 + 12% × $31,525 = $5,023',
+        state: ret({ year: 2026, w2s: [w2(60000, { ssWageBase: 184500 })] }),
+        expect: [['standard deduction', fed('fed.stdDeduction'), 16100], ['taxable income', fed('fed.taxableIncome'), 43900], ['income tax', fed('fed.tax'), 5023]]
+    },
+    {
+        name: '2026: MFJ, $150,000 wages, 2 children — $2,200 Child Tax Credit',
+        source: 'Rev. Proc. 2025-32 §4.01 Table 1 / §4.05: taxable $117,800 → $11,600 + 22% × $17,000 = $15,340; CTC 2 × $2,200',
+        state: ret({ year: 2026, filingStatus: 'married_joint', w2s: [w2(150000, { ssWageBase: 184500 })], dependents: { childrenCount: 2 } }),
+        expect: [['taxable income', fed('fed.taxableIncome'), 117800], ['income tax', fed('fed.tax'), 15340], ['child tax credit', r => r.creditsCalc.childTaxCredit, 4400]]
+    },
+    {
+        name: '2026: non-itemizer charitable deduction capped at $1,000 single',
+        source: 'IRC §170(p) (P.L. 119-21 §70424): $1,500 cash gifts → $1,000; taxable $42,900 → row $42,925 → $4,903',
+        state: ret({ year: 2026, w2s: [w2(60000, { ssWageBase: 184500 })], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 1500 } }),
+        expect: [['non-itemizer charity', fed('fed.nonItemizerCharity'), 1000], ['taxable income', fed('fed.taxableIncome'), 42900], ['income tax', fed('fed.tax'), 4903]]
+    },
+    {
+        name: '2026: itemized charity counts only above 0.5% of AGI',
+        source: 'IRC §170(b)(1)(I) (P.L. 119-21 §70425): $10,000 gifts − 0.5% × $200,000 = $9,000',
+        state: ret({ year: 2026, w2s: [w2(200000, { ssWageBase: 184500 })], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 20000, charity: 10000 } }),
+        expect: [['charity deduction', fed('fed.charityDeduction'), 9000], ['itemized deductions', fed('fed.itemized'), 29000]]
+    },
+    {
+        name: '2026: 2/37 limitation on itemized deductions in the 37% bracket',
+        source: 'IRC §68 (P.L. 119-21 §70111): min($30,000, $800,000 − $640,600) × 2/37 = $1,621.62',
+        state: ret({ year: 2026, w2s: [w2(800000, { ssWageBase: 184500 })], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 30000, charity: 0 } }),
+        expect: [['limitation', fed('fed.itemizedLimitation'), 1621.62], ['itemized deductions', fed('fed.itemized'), 28378.38]]
+    },
+    {
+        name: '2026: dependent care credit rate starts at 50%',
+        source: 'IRC §21(a)(2) (P.L. 119-21 §70405): MFJ AGI $25,000 → 50% − 5 points = 45% × $6,000 = $2,700',
+        state: ret({ year: 2026, filingStatus: 'married_joint', w2s: [w2(12500), { ...w2(12500), owner: 'spouse' }], dependents: { childrenCount: 2, childCareExpenses: 6000 } }),
+        expect: [['care rate', fed('fed.careRate'), 0.45], ['credit before tax limit', fed('fed.childCareCredit'), 2700]]
+    },
+    {
+        name: '2026: dependent care rate falls below 35% above $75,000 single',
+        source: 'IRC §21(a)(2): AGI $90,000 → 35% − ceil($15,000 ÷ $2,000) = 8 points → 27% × $3,000 = $810',
+        state: ret({ year: 2026, filingStatus: 'head_of_household', w2s: [w2(90000)], dependents: { childrenCount: 1, childCareExpenses: 3000 } }),
+        expect: [['care rate', fed('fed.careRate'), 0.27], ['credit', fed('fed.childCareCredit'), 810]]
+    },
+    {
+        name: '2026: only 90% of gambling losses are deductible',
+        source: 'IRC §165(d) (P.L. 119-21 §70114): $10,000 winnings, $10,000 losses → $9,000',
+        state: ret({ year: 2026, w2s: [w2(80000)], otherIncome: { interest: 0, sources: [src(1, 'W-2G', 10000)] }, itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 0, gamblingLosses: 10000 } }),
+        expect: [['gambling loss deduction', fed('fed.gamblingLossDeduction'), 9000]]
+    },
+    {
+        name: '2026: AMT exemption phases out at 50% above $500,000',
+        source: 'Rev. Proc. 2025-32 §4.10 / IRC §55(d)(3): $90,100 − 50% × ($600,000 − $500,000) = $40,100',
+        state: ret({ year: 2026, w2s: [w2(600000, { ssWageBase: 184500 })] }),
+        expect: [['AMT exemption', fed('fed.amtExemptionAllowed'), 40100]]
+    },
+    {
+        name: '2026: $400 minimum QBI deduction with $1,000+ of QBI',
+        source: 'IRC §199A(i) (P.L. 119-21 §70105): $1,200 net profit → 20% of QBI ≈ $223, raised to $400',
+        state: ret({ year: 2026, w2s: [w2(50000)], otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 1200)] } }),
+        expect: [['QBI deduction', fed('fed.qbi'), 400]]
+    },
+    {
+        name: '2026: EITC maximum with one child',
+        source: 'Rev. Proc. 2025-32 §4.06: earned income $15,000 ≥ $13,020 and below the $23,890 phase-out → $4,427',
+        state: ret({ year: 2026, filingStatus: 'head_of_household', w2s: [w2(15000)], dependents: { childrenCount: 1 } }),
+        expect: [['EITC', fed('fed.eitc'), 4427]]
+    },
+    {
+        name: '2026: SALT cap rises to $40,400',
+        source: 'IRC §164(b)(6) (P.L. 119-21 §70120): 101% of $40,000 for 2026',
+        state: ret({ year: 2026, w2s: [w2(100000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 50000, mortgageInterest: 0, charity: 0 } }),
+        expect: [['SALT deduction', fed('fed.salt'), 40400]]
+    },
+    {
+        name: '2026: Social Security wage base $184,500',
+        source: 'SSA 2026 contribution and benefit base: SE earnings $100,000 × 92.35% with $150,000 W-2 SS wages → 12.4% × $34,500 + 2.9% × $92,350',
+        state: ret({ year: 2026, w2s: [w2(150000, { ssWageBase: 184500 })], otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 100000)] } }),
+        expect: [['SE Social Security tax', fed('fed.seSsTax'), 4278], ['SE Medicare tax', fed('fed.seMedTax'), 2678.15]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];

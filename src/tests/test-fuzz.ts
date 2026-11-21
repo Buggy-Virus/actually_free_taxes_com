@@ -40,7 +40,7 @@ function randomReturn(): TaxAppState {
     federalTaxWithheld: maybe(0.3, () => money(2000)), state: rnd() < 0.2 ? pick(STATES) : undefined
   }));
   return {
-    year: pick([2024, 2025]) as 2024 | 2025, filingStatus: status, residentState: resident, w2s,
+    year: pick([2024, 2025, 2026]) as 2024 | 2025 | 2026, filingStatus: status, residentState: resident, w2s,
     deductionMethod: pick(['auto', 'auto', 'standard', 'itemized']), claimedAsDependent: rnd() < 0.05,
     otherIncome: {
       interest: maybe(0.4, () => money(5000)), sources, scheduleCExpenses: maybe(0.3, () => money(40000)),

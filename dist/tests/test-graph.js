@@ -25,7 +25,7 @@ const scenario = {
 // 1. Every graph is well-formed: the federal graph and a return graph for every state as resident.
 assert.deepStrictEqual(federalGraph().validate(), [], 'federal graph: every ref/param/collection resolves');
 for (const code of Object.keys(STATE_TAX_RULES)) {
-    for (const year of [2024, 2025]) {
+    for (const year of [2024, 2025, 2026]) {
         const plan = planFromState({ ...scenario, year: year, residentState: code, w2s: [{ ...scenario.w2s[0], states: [{ ...scenario.w2s[0].states[0], state: code }] }, { ...scenario.w2s[1], states: [{ ...scenario.w2s[1].states[0], state: code === 'NY' ? 'NJ' : 'NY' }] }] });
         assert.deepStrictEqual(returnGraph(plan).validate(), [], `${code} ${year} return graph resolves`);
     }

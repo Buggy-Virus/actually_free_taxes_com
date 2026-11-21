@@ -402,6 +402,9 @@ function ssSubtractionExpr(code, year) {
             return round(mul(tss, min(num(1), max(num(0), div(sub(top, agi), lit(10000))))));
         }
         case 'WV':
+            // WV §11-21-12: 35% (2024), 65% (2025), 100% (2026+) above the income limits.
+            if (year >= 2026)
+                return tss;
             return when(lte(agi, when(MFJ, lit(100000), lit(50000))), tss, round(mul(tss, rate(y25 ? 0.65 : 0.35))));
         case 'CO': {
             const age = R('fed.taxpayerAge');
