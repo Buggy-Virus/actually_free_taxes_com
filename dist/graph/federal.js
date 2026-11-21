@@ -86,7 +86,8 @@ function defineInputs(g) {
                 penaltyException: f(`${c.label} Amount Excepted From 10% Tax`, false, true),
                 fedWithheld: f(`${c.label} Federal Tax Withheld`, false, true),
                 penalty: f(`${c.label} Early Distribution (Code 1)`),
-                simple: f(`${c.label} SIMPLE IRA First 2 Years (Code S)`)
+                simple: f(`${c.label} SIMPLE IRA First 2 Years (Code S)`),
+                isSpouse: { label: `${c.label} Belongs to Spouse`, unit: 'count', optional: true, domId: (it) => `input-source-${it.id}-owner` }
             }
         });
     });
@@ -107,6 +108,7 @@ function defineInputs(g) {
     // Adjustments
     io('in.studentLoan', 'Student Loan Interest Paid', 'input-adj-student-loan', 'adj-student-loan', 'adjustments', { optional: true });
     io('in.ira', 'Traditional IRA Contributions', 'input-adj-ira', 'adj-ira', 'adjustments', { optional: true });
+    io('in.spouseIra', "Spouse's Traditional IRA Contributions", 'input-adj-spouse-ira', 'adj-ira', 'adjustments', { optional: true });
     io('in.hsa', 'HSA Contributions', 'input-adj-hsa', 'adj-hsa', 'adjustments', { optional: true });
     io('in.educator', 'Educator Expenses Paid', 'input-adj-educator', 'adj-educator', 'adjustments', { optional: true });
     io('in.seRetirement', 'SEP / SIMPLE / Solo 401(k)', 'input-adj-se-retirement', 'adj-se-retirement', 'adjustments', { optional: true });
@@ -285,6 +287,13 @@ function defineQuantities(g, year) {
     // A Schedule C loss offsets other income (Schedule 1 line 3); SE tax and QBI use only a profit.
     q({ id: 'fed.businessProfit', label: 'Net Business Profit (Loss)', unit: 'usd', form: 'Schedule C Line 31', category: 'wages', optional: true,
         expr: sub(R('fed.businessGross'), R('in.schedCExpenses')) });
+    // Joint returns: each spouse files their own Schedule C / SE. Pooled expenses are shared in proportion to gross receipts.
+    q({ id: 'fed.spouseBusinessGross', label: "Spouse's Gross Business Receipts", unit: 'usd', display: 'inline', optional: true,
+        expr: add(each('src.nec', 'amount', 'isSpouse'), each('src.k', 'amount', 'isSpouse'), each('src.f', 'amount', 'isSpouse')) });
+    q({ id: 'fed.spouseBusinessProfit', label: "Spouse's Business Profit", unit: 'usd', display: 'inline', optional: true,
+        expr: when(gt(R('fed.spouseBusinessGross'), lit(0)), sub(R('fed.spouseBusinessGross'), round(mul(R('in.schedCExpenses'), div(R('fed.spouseBusinessGross'), R('fed.businessGross'))))), lit(0)) });
+    q({ id: 'fed.taxpayerBusinessProfit', label: "Taxpayer's Business Profit", unit: 'usd', display: 'inline', optional: true,
+        expr: sub(R('fed.businessProfit'), R('fed.spouseBusinessProfit')) });
     // ---------- Interest, dividends, other documents ----------
     // Schedule B: total 1099-INT interest (box 1 + box 3) minus accrued interest paid on bonds bought between payment dates.
     q({ id: 'fed.treasuryInterest', label: 'US Treasury Interest', unit: 'usd', display: 'inline', optional: true, expr: each('src.int', 'treasury') });
@@ -315,14 +324,22 @@ function defineQuantities(g, year) {
     q({ id: 'fed.documentIncome', label: '1099 & Business Income', unit: 'usd', display: 'inline',
         expr: add(R('fed.businessProfit'), R('fed.interest1099'), R('fed.dividends'), R('fed.k1Income'), R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableStateRefund')) });
     // ---------- Self-employment tax (Schedule SE) ----------
+    // One Schedule SE per person: each spouse's $400 test and wage base are separate.
+    q({ id: 'fed.taxpayerSeEarnings', label: "Taxpayer's Net SE Earnings", unit: 'usd', display: 'inline', optional: true,
+        expr: when(gte(R('fed.taxpayerBusinessProfit'), lit(400)), mul(R('fed.taxpayerBusinessProfit'), rate(0.9235)), lit(0)) });
+    q({ id: 'fed.spouseSeEarnings', label: "Spouse's Net SE Earnings", unit: 'usd', display: 'inline', optional: true,
+        expr: when(gte(R('fed.spouseBusinessProfit'), lit(400)), mul(R('fed.spouseBusinessProfit'), rate(0.9235)), lit(0)) });
     q({ id: 'fed.seEarnings', label: 'Net SE Earnings', unit: 'usd', form: 'Schedule SE Line 4a', category: 'tax', optional: true,
-        expr: when(gte(R('fed.businessProfit'), lit(400)), mul(R('fed.businessProfit'), rate(0.9235)), lit(0)) });
+        expr: add(R('fed.taxpayerSeEarnings'), R('fed.spouseSeEarnings')) });
     // Schedule SE line 8: only the self-employed person's own W-2 Social Security wages use up the wage base.
     q({ id: 'fed.taxpayerSsWages', label: "Taxpayer's Social Security Wages", unit: 'usd', display: 'inline', expr: each('w2', 'box3', 'isTaxpayer') });
+    q({ id: 'fed.spouseSsWages', label: "Spouse's Social Security Wages", unit: 'usd', display: 'inline', optional: true, expr: each('w2', 'box3', 'isSpouse') });
     q({ id: 'fed.seSsRoom', label: 'Remaining Social Security Wage Base', unit: 'usd', display: 'inline',
         expr: atLeast0(sub(P('fed.ssWageBase'), R('fed.taxpayerSsWages'))) });
+    q({ id: 'fed.spouseSeSsRoom', label: "Spouse's Remaining Social Security Wage Base", unit: 'usd', display: 'inline', optional: true,
+        expr: atLeast0(sub(P('fed.ssWageBase'), R('fed.spouseSsWages'))) });
     q({ id: 'fed.seSsTax', label: 'SE Social Security Tax', unit: 'usd', category: 'tax',
-        expr: round(mul(min(R('fed.seEarnings'), R('fed.seSsRoom')), rate(0.124))) });
+        expr: round(add(mul(min(R('fed.taxpayerSeEarnings'), R('fed.seSsRoom')), rate(0.124)), mul(min(R('fed.spouseSeEarnings'), R('fed.spouseSeSsRoom')), rate(0.124)))) });
     q({ id: 'fed.seMedTax', label: 'SE Medicare Tax', unit: 'usd', category: 'tax', expr: round(mul(R('fed.seEarnings'), rate(0.029))) });
     q({ id: 'fed.seTax', label: 'Self-Employment Tax', unit: 'usd', form: 'Schedule SE Line 12', category: 'tax', optional: true,
         expr: round(add(R('fed.seSsTax'), R('fed.seMedTax'))) });
@@ -359,7 +376,8 @@ function defineQuantities(g, year) {
         expr: atLeast0(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'), R('fed.taxExemptInterest'), mul(R('fed.ssaGross'), rate(0.5))), R('fed.adjustmentsExIraSli'))) });
     q({ id: 'fed.taxableSSBeforeIra', label: 'Taxable Social Security Before IRA Deduction', unit: 'usd', display: 'inline',
         expr: when(gt(R('fed.provisionalIncomeBeforeIra'), R('fed.ssBase2Used')), round(min(mul(R('fed.ssaGross'), rate(0.85)), add(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(R('fed.ssBase2Used'), R('fed.ssBase1Used')), rate(0.5))), mul(sub(R('fed.provisionalIncomeBeforeIra'), R('fed.ssBase2Used')), rate(0.85))))), when(gt(R('fed.provisionalIncomeBeforeIra'), R('fed.ssBase1Used')), round(min(mul(R('fed.ssaGross'), rate(0.5)), mul(sub(R('fed.provisionalIncomeBeforeIra'), R('fed.ssBase1Used')), rate(0.5)))), lit(0))) });
-    q({ id: 'fed.iraMagi', label: 'MAGI for IRA Deduction', unit: 'usd', category: 'adjustments', appliesWhen: gt(R('in.ira'), lit(0)),
+    const anyIra = or(gt(R('in.ira'), lit(0)), gt(R('in.spouseIra'), lit(0)));
+    q({ id: 'fed.iraMagi', label: 'MAGI for IRA Deduction', unit: 'usd', category: 'adjustments', appliesWhen: anyIra,
         expr: add(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed'), R('fed.rentalAllowed'), R('fed.taxableSSBeforeIra'), R('in.alimonyReceived'), R('in.tips')), R('fed.adjustmentsExIraSli')), R('fed.feie')) });
     const iraCatch = or(and(hasAges, gte(R('fed.taxpayerAge'), num(50))), and(not(hasAges), flag('fed.iraCatchUp', 'age 50+ (checked)', 'under 50', 'check-ira-catchup')));
     q({ id: 'fed.iraContributionLimit', label: 'IRA Contribution Limit', unit: 'usd', display: 'inline',
@@ -367,14 +385,23 @@ function defineQuantities(g, year) {
     const coveredT = gt(count('w2', 'retirementPlanTaxpayer'), num(0));
     const coveredS = gt(count('w2', 'retirementPlanSpouse'), num(0));
     // Reduced limit = limit × (1 − (MAGI − start) ÷ range), rounded up to the next $10, and at least $200 if not fully phased out.
-    const reduced = (start, range) => {
-        const raw = mul(R('fed.iraContributionLimit'), sub(rate(1), div(atLeast0(sub(R('fed.iraMagi'), start)), range)));
+    const reduced = (start, range, limit = R('fed.iraContributionLimit')) => {
+        const raw = mul(limit, sub(rate(1), div(atLeast0(sub(R('fed.iraMagi'), start)), range)));
         return when(lte(raw, lit(0)), lit(0), max(lit(200), mul(ceil(div(raw, lit(10))), lit(10))));
     };
-    q({ id: 'fed.iraDeductibleLimit', label: 'Deductible IRA Limit', unit: 'usd', category: 'adjustments', appliesWhen: gt(R('in.ira'), lit(0)),
+    q({ id: 'fed.iraDeductibleLimit', label: 'Deductible IRA Limit', unit: 'usd', category: 'adjustments', appliesWhen: anyIra,
         expr: when(coveredT, min(R('fed.iraContributionLimit'), reduced(P('fed.iraPhaseStartCovered'), P('fed.iraPhaseRangeCovered'))), when(and(flag('fed.jointReturn', 'married filing jointly', 'not a joint return'), coveredS), min(R('fed.iraContributionLimit'), reduced(P('fed.iraPhaseStartSpouse'), lit(10000))), R('fed.iraContributionLimit'))) });
+    q({ id: 'fed.taxpayerIraDeduction', label: "Taxpayer's IRA Deduction", unit: 'usd', category: 'adjustments', optional: true, appliesWhen: gt(R('in.spouseIra'), lit(0)),
+        expr: min(R('in.ira'), R('fed.iraDeductibleLimit')) });
+    // Spouse's IRA (joint returns, IRC §219(c)): own $7,000 (+$1,000 at 50+) limit, within combined compensation less the
+    // taxpayer's contribution; phase-out uses the covered-worker range if the spouse is covered, else the spouse-covered range.
+    const spouseCatch = and(quietly(gt(R('in.spouseBirthYear'), num(0))), gte(R('fed.spouseAge'), num(50)));
+    q({ id: 'fed.spouseIraContributionLimit', label: "Spouse's IRA Contribution Limit", unit: 'usd', category: 'adjustments', appliesWhen: gt(R('in.spouseIra'), lit(0)),
+        expr: atLeast0(min(add(P('fed.iraLimit'), when(spouseCatch, lit(1000), lit(0))), sub(R('fed.earnedIncome'), min(R('in.ira'), R('fed.iraContributionLimit'))))) });
+    q({ id: 'fed.spouseIraDeduction', label: "Spouse's IRA Deduction", unit: 'usd', category: 'adjustments', optional: true, appliesWhen: gt(R('in.spouseIra'), lit(0)),
+        expr: min(R('in.spouseIra'), when(coveredS, min(R('fed.spouseIraContributionLimit'), reduced(P('fed.iraPhaseStartCovered'), P('fed.iraPhaseRangeCovered'), R('fed.spouseIraContributionLimit'))), when(coveredT, min(R('fed.spouseIraContributionLimit'), reduced(P('fed.iraPhaseStartSpouse'), lit(10000), R('fed.spouseIraContributionLimit'))), R('fed.spouseIraContributionLimit')))) });
     q({ id: 'fed.iraDeduction', label: 'IRA Deduction', unit: 'usd', form: 'Schedule 1 Line 20', category: 'adjustments', optional: true,
-        presentIf: gt(R('in.ira'), lit(0)), expr: min(R('in.ira'), R('fed.iraDeductibleLimit')) });
+        presentIf: anyIra, expr: add(R('fed.taxpayerIraDeduction'), R('fed.spouseIraDeduction')) });
     q({ id: 'fed.otherAdjustments', label: 'Adjustments Other Than Student Loan Interest', unit: 'usd', display: 'inline',
         expr: add(R('fed.iraDeduction'), R('fed.adjustmentsExIraSli')) });
     // Pub. 970 Student Loan Interest Deduction Worksheet: MAGI = income − other adjustments + excluded foreign income.
@@ -557,8 +584,8 @@ function defineQuantities(g, year) {
     q({ id: 'fed.depCareTaxable', label: 'Taxable Dependent Care Benefits', unit: 'usd', form: 'Form 1040 Line 1e', category: 'wages', optional: true,
         expr: sub(R('fed.depCareBenefits'), R('fed.depCareExcluded')) });
     // Form 2441 lines 4–6: expenses are limited to earned income (the lower-earning spouse's on a joint return).
-    q({ id: 'fed.taxpayerEarnedIncome', label: "Taxpayer's Earned Income", unit: 'usd', display: 'inline', expr: add(each('w2', 'box1', 'isTaxpayer'), atLeast0(R('fed.businessProfit'))) });
-    q({ id: 'fed.spouseEarnedIncome', label: "Spouse's Earned Income", unit: 'usd', display: 'inline', expr: each('w2', 'box1', 'isSpouse') });
+    q({ id: 'fed.taxpayerEarnedIncome', label: "Taxpayer's Earned Income", unit: 'usd', display: 'inline', expr: add(each('w2', 'box1', 'isTaxpayer'), atLeast0(R('fed.taxpayerBusinessProfit'))) });
+    q({ id: 'fed.spouseEarnedIncome', label: "Spouse's Earned Income", unit: 'usd', display: 'inline', expr: add(each('w2', 'box1', 'isSpouse'), atLeast0(R('fed.spouseBusinessProfit'))) });
     q({ id: 'fed.careEarnedIncomeLimit', label: 'Earned Income Limit for Care Expenses', unit: 'usd', category: 'credits', optional: true,
         appliesWhen: gt(R('in.childCare'), lit(0)),
         expr: when(flag('fed.jointReturn', 'married filing jointly', 'not a joint return'), min(R('fed.taxpayerEarnedIncome'), R('fed.spouseEarnedIncome')), R('fed.taxpayerEarnedIncome')) });
@@ -581,7 +608,7 @@ function defineQuantities(g, year) {
         expr: when(lte(R('fed.agi'), P('fed.saversT50')), rate(0.5), when(lte(R('fed.agi'), P('fed.saversT20')), rate(0.2), when(lte(R('fed.agi'), P('fed.saversT10')), rate(0.1), rate(0)))) });
     // Form 8880: IRA contributions plus elective deferrals (W-2 box 12), up to $2,000 per person; not for dependents.
     q({ id: 'fed.saversContributions', label: "Saver's Credit Contributions", unit: 'usd', category: 'credits', optional: true,
-        expr: add(min(lit(2000), add(R('in.ira'), each('w2', 'deferrals', 'isTaxpayer'))), min(lit(2000), each('w2', 'deferrals', 'isSpouse'))) });
+        expr: add(min(lit(2000), add(R('in.ira'), each('w2', 'deferrals', 'isTaxpayer'))), min(lit(2000), add(R('in.spouseIra'), each('w2', 'deferrals', 'isSpouse')))) });
     q({ id: 'fed.saversCredit', label: "Saver's Credit", unit: 'usd', form: 'Form 8880', category: 'credits', optional: true,
         presentIf: gt(R('fed.saversContributions'), lit(0)),
         expr: when(flag('fed.claimedAsDependent', 'someone can claim you as a dependent', 'no one can claim you as a dependent', 'check-claimed-as-dependent'), lit(0), round(mul(min(P('fed.saversMax'), R('fed.saversContributions')), R('fed.saversRate')))) });
@@ -721,10 +748,11 @@ export function federalContext(state) {
     const w2s = state.w2s || [];
     const sources = state.otherIncome?.sources || [];
     const n = (v) => Number(v) || 0;
+    const joint = normalizeFilingStatus(state.filingStatus || 'single') === 'married_joint' && state.filingStatus !== 'qualifying_surviving_spouse';
     const collections = {
         w2: w2s.map(w => {
             // Ownership only matters on a joint return; otherwise every W-2 is the taxpayer's.
-            const spouse = w.owner === 'spouse' && normalizeFilingStatus(state.filingStatus || 'single') === 'married_joint' && state.filingStatus !== 'qualifying_surviving_spouse';
+            const spouse = w.owner === 'spouse' && joint;
             // Box 12 entries by code (data extraction from the four code/amount pairs).
             const box12 = ['a', 'b', 'c', 'd'].map(k => ({
                 code: String(w[`box12${k}Code`] ?? (k === 'a' ? w.box12Code ?? '' : '')).trim().toUpperCase(),
@@ -769,7 +797,8 @@ export function federalContext(state) {
                     penaltyException: n(s.penaltyExceptionAmount),
                     fedWithheld: n(s.federalTaxWithheld),
                     penalty: r.early && !r.rollover ? 1 : 0,
-                    simple: r.early && r.simple && !r.rollover ? 1 : 0
+                    simple: r.early && r.simple && !r.rollover ? 1 : 0,
+                    isSpouse: joint && s.owner === 'spouse' ? 1 : 0
                 }
             };
         });
@@ -815,6 +844,7 @@ export function federalContext(state) {
             'in.tips': n(o.unreportedTips),
             'in.studentLoan': n(a.studentLoan),
             'in.ira': n(a.ira),
+            'in.spouseIra': joint ? n(a.spouseIra) : 0,
             'in.hsa': n(a.hsa),
             'in.educator': n(a.educatorExpenses),
             'in.seRetirement': n(a.seRetirement),
@@ -870,7 +900,7 @@ export const FEDERAL_BLOCKS = [
     { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',
         quantities: ['fed.interestTotal', 'fed.taxExemptInterest', 'fed.dividends', 'fed.qualifiedDividends', 'fed.businessProfit', 'fed.retirement',
             'fed.gambling', 'fed.otherSourceIncome', 'fed.taxableStateRefund', 'fed.ssaGross', 'fed.provisionalIncome', 'fed.taxableSS',
-            'fed.depCareTaxable', { id: 'fed.totalIncome', show: 'always' }, 'fed.seRetirementLimit', 'fed.seRetirementDeduction', 'fed.seHealthDeduction', 'fed.hsaLimit', 'fed.hsaDeduction', 'fed.iraMagi', 'fed.iraDeductibleLimit', 'fed.iraDeduction',
+            'fed.depCareTaxable', { id: 'fed.totalIncome', show: 'always' }, 'fed.seRetirementLimit', 'fed.seRetirementDeduction', 'fed.seHealthDeduction', 'fed.hsaLimit', 'fed.hsaDeduction', 'fed.iraMagi', 'fed.iraDeductibleLimit', 'fed.taxpayerIraDeduction', 'fed.spouseIraContributionLimit', 'fed.spouseIraDeduction', 'fed.iraDeduction',
             'fed.studentLoanMagi', 'fed.studentLoanDeduction', { id: 'fed.adjustments', show: 'always' },
             { id: 'fed.agi', show: 'always' }] },
     { id: 'calc-itemized-deductions', stepLabel: 'Step 4a • Schedule A Itemized Deductions', title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',

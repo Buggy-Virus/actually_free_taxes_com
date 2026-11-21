@@ -937,6 +937,7 @@ class TaxApp {
             priorItemizedExcess: Number(src?.priorItemizedExcess) || 0,
             taxableAmount: src?.taxableAmount === undefined || src?.taxableAmount === null || src?.taxableAmount === '' ? undefined : Number(src.taxableAmount) || 0,
             rollover: Boolean(src?.rollover),
+            owner: src?.owner === 'spouse' ? 'spouse' : undefined,
             distributionCode: src?.distributionCode ? String(src.distributionCode).toUpperCase().slice(0, 2) : undefined,
             capitalGainDistributions: Number(src?.capitalGainDistributions) || 0,
             penaltyExceptionAmount: Number(src?.penaltyExceptionAmount) || 0,
@@ -973,6 +974,7 @@ class TaxApp {
                 hsaCoverage: parsed.adjustments?.hsaCoverage === 'family' ? 'family' : 'self',
                 hsaCatchUp: Boolean(parsed.adjustments?.hsaCatchUp),
                 iraCatchUp: Boolean(parsed.adjustments?.iraCatchUp),
+                spouseIra: Number(parsed.adjustments?.spouseIra) || 0,
                 bothEducators: Boolean(parsed.adjustments?.bothEducators),
                 studentLoan: Number(parsed.adjustments?.studentLoan) || 0,
                 ira: Number(parsed.adjustments?.ira) || 0,
@@ -4184,6 +4186,7 @@ class TaxApp {
           </div>
         </div>
         ${extraInputs}
+        ${this.state.filingStatus === 'married_joint' ? `<div><label class="panel-input-label">Whose Form?</label><select class="w2-input" style="padding-left:0.5rem;" id="input-source-${src.id}-owner" data-src-id="${src.id}" data-src-field="owner"><option value="taxpayer" ${src.owner !== 'spouse' ? 'selected' : ''}>Taxpayer</option><option value="spouse" ${src.owner === 'spouse' ? 'selected' : ''}>Spouse</option></select></div>` : ''}
         <div>
           <label class="panel-input-label">Federal Tax Withheld</label>
           <div class="w2-input-wrapper">
@@ -4209,6 +4212,7 @@ class TaxApp {
                 case 'input-sched-e-depreciation': return Number(this.state.otherIncome?.scheduleERental?.depreciation) || 0;
                 case 'input-adj-student-loan': return Number(this.state.adjustments?.studentLoan) || 0;
                 case 'input-adj-ira': return Number(this.state.adjustments?.ira) || 0;
+                case 'input-adj-spouse-ira': return Number(this.state.adjustments?.spouseIra) || 0;
                 case 'input-adj-hsa': return Number(this.state.adjustments?.hsa) || 0;
                 case 'input-adj-educator': return Number(this.state.adjustments?.educatorExpenses) || 0;
                 case 'input-adj-se-retirement': return Number(this.state.adjustments?.seRetirement) || 0;
@@ -4359,6 +4363,7 @@ class TaxApp {
             inputsHtml = `<div class="panel-multi-inputs">
         ${numBox('input-adj-ira', 'Traditional IRA Contributions')}
         <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-ira-catchup" ${this.state.adjustments?.iraCatchUp ? 'checked' : ''}> Age 50+ catch-up</label>
+        ${this.state.filingStatus === 'married_joint' ? numBox('input-adj-spouse-ira', "Spouse's Traditional IRA Contributions") : ''}
       </div>`;
         }
         else if (entry.key === 'cred-children' || entry.key === 'cred-other-dependents' || entry.key === 'cred-age-blind' || entry.key === 'sched1a-senior') {
@@ -4445,6 +4450,7 @@ class TaxApp {
         const iraCatch = document.getElementById('check-ira-catchup');
         if (iraCatch)
             iraCatch.addEventListener('change', () => { this.state.adjustments.iraCatchUp = iraCatch.checked; this.recalculateAndRender(); });
+        bindNum('input-adj-spouse-ira', v => this.state.adjustments.spouseIra = v);
         bindNum('input-prior-year-tax', v => this.state.priorYearTax = v);
         bindNum('input-prior-year-agi', v => this.state.priorYearAgi = v);
         bindNum('input-sched1a-tips', v => this.state.adjustments.qualifiedTips = v);

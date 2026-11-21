@@ -876,6 +876,43 @@ const CASES: Golden[] = [
     state: ret({ year: 2024, filingStatus: 'single', residentState: 'IA', w2s: [w2(40000, { state: 'IA' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1965 } }),
     expect: [['IA exclusion', st('IA', 'retirementSubtraction'), 30000]]
   },
+  // ---------------- Federal: per-person ownership (A4) ----------------
+  {
+    name: "Spouse's Schedule SE uses the spouse's own wage base",
+    source: "Schedule SE (one per spouse): taxpayer's W-2 at the wage base doesn't reduce the spouse's — $40,000 × 92.35% = $36,940 × 15.3% = $5,651.82",
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(170000)], otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 40000, { owner: 'spouse' })] } }),
+    expect: [['SE tax', fed('fed.seTax'), 5651.82]]
+  },
+  {
+    name: "The same 1099-NEC owned by the taxpayer only owes the Medicare part",
+    source: 'Schedule SE line 8: the taxpayer\'s $168,600 SS wages use up the wage base → 2.9% × $36,940 = $1,071.26',
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(170000)], otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 40000)] } }),
+    expect: [['SE tax', fed('fed.seTax'), 1071.26]]
+  },
+  {
+    name: 'Each spouse under $400 of SE earnings owes no SE tax',
+    source: 'Schedule SE: the $400 test applies per person — $300 each',
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(30000)], otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 300), src(2, '1099-NEC', 300, { owner: 'spouse' })] } }),
+    expect: [['SE tax', fed('fed.seTax'), 0]]
+  },
+  {
+    name: 'Spousal IRA: a non-working spouse gets their own limit (catch-up at 50+)',
+    source: 'Pub. 590-A Kay Bailey Hutchison Spousal IRA: $7,000 + spouse age 52 $8,000 = $15,000 deduction (neither covered by a plan)',
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(60000)], spouse: { birthYear: 1972 }, adjustments: { studentLoan: 0, ira: 7000, hsa: 0, spouseIra: 8000 } }),
+    expect: [['IRA deduction', fed('fed.iraDeduction'), 15000]]
+  },
+  {
+    name: "Spousal IRA: the covered taxpayer is phased out, the uncovered spouse uses the $230,000 range",
+    source: 'Pub. 590-A Table 1-2 (2024): covered MFJ phase-out $123,000–$143,000 → $0; spouse not covered, MAGI $150,000 < $230,000 → $7,000',
+    state: ret({ filingStatus: 'married_joint', w2s: [{ ...w2(150000), box13Retirement: true }], adjustments: { studentLoan: 0, ira: 7000, hsa: 0, spouseIra: 7000 } }),
+    expect: [['IRA deduction', fed('fed.iraDeduction'), 7000]]
+  },
+  {
+    name: 'Spousal IRA: combined contributions are limited to combined compensation',
+    source: 'IRC §219(c): $10,000 compensation − $7,000 taxpayer contribution → spouse limit $3,000',
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(10000)], adjustments: { studentLoan: 0, ira: 7000, hsa: 0, spouseIra: 7000 } }),
+    expect: [['IRA deduction', fed('fed.iraDeduction'), 10000]]
+  },
 ];
 
 let passed = 0, gaps = 0;

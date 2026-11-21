@@ -514,7 +514,10 @@ export class Evaluation {
                 if (plugged) {
                     // Show the branch that ran, plus why (unless the reason is an unset user choice).
                     const body = this.render(n.children[0], true, nested, vars);
-                    return this.isQuiet(n.cond) ? body : [...body, text('  ⟨since '), ...this.explainCond(n.cond, vars), text('⟩')];
+                    if (this.isQuiet(n.cond))
+                        return body;
+                    const why = this.explainCond(n.cond, vars);
+                    return why.some(t => t.type === 'var' || String(t.text ?? '').trim() !== '') ? [...body, text('  ⟨since '), ...why, text('⟩')] : body;
                 }
                 // General form shows both branches; the untaken branch is rendered from the raw Expr.
                 const thenT = n.branch === 'then' ? this.render(n.children[0], false, true, vars) : this.renderRaw(e.then);

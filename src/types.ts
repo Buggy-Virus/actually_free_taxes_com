@@ -93,6 +93,8 @@ export interface IncomeSource {
   rollover?: boolean; // 1099-R distribution code G/H direct rollover (not taxable)
   /** 1099-R box 7 distribution code(s), e.g. '7', '1', '2', 'G', '1B', 'Q', 'S'. When set it decides rollover / early / Roth treatment. */
   distributionCode?: string;
+  /** Whose document this is on a joint return (Schedule SE per person, spouse earned income). Default taxpayer. */
+  owner?: 'taxpayer' | 'spouse';
   capitalGainDistributions?: number; // 1099-DIV Box 2a total capital gain distributions (long-term)
   penaltyExceptionAmount?: number; // 1099-R: part of an early distribution that meets a Form 5329 exception
   state?: string;
@@ -155,6 +157,7 @@ export interface Adjustments {
   bothEducators?: boolean; // MFJ: both spouses are eligible educators ($300 each)
   hsaCatchUp?: boolean; // Form 8889: age 55+ additional $1,000
   iraCatchUp?: boolean; // IRA: age 50+ additional $1,000
+  spouseIra?: number; // Spouse's traditional IRA contributions (own limit and phase-out; joint returns)
   qualifiedTips?: number; // 2025-2028 Schedule 1-A: qualified tips (P.L. 119-21)
   qualifiedOvertime?: number; // 2025-2028 Schedule 1-A: qualified overtime premium pay
   carLoanInterest?: number; // 2025-2028 Schedule 1-A: interest on a new US-assembled personal vehicle loan
