@@ -199,6 +199,10 @@ function getOfficialIrsMailingAddress(stateCode, isRefund) {
         }
     }
 }
+/** Escape user-controlled text before it is placed in HTML (names, payers, labels built from them). */
+function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
 /** Copy every numeric (or numeric-string) property of an imported object, coercing to numbers. */
 function numericFields(obj) {
     if (!obj || typeof obj !== 'object')
@@ -590,7 +594,7 @@ class TaxApp {
                 btn.type = 'button';
                 btn.className = `menu-item ${draft.id === this.draftsStore.activeId ? 'active-draft-item' : ''}`;
                 btn.setAttribute('role', 'menuitem');
-                btn.innerHTML = `<span>${draft.name}</span>${draft.id === this.draftsStore.activeId ? '<span>✓</span>' : ''}`;
+                btn.innerHTML = `<span>${esc(draft.name)}</span>${draft.id === this.draftsStore.activeId ? '<span>✓</span>' : ''}`;
                 btn.addEventListener('click', () => {
                     this.switchDraft(draft.id);
                     document.querySelectorAll('.menu-dropdown.open').forEach(el => el.classList.remove('open'));
@@ -2298,7 +2302,7 @@ class TaxApp {
         </div>
 
         <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-          <input type="text" class="w2-input" id="input-income-payer-${src.id}" value="${src.payer}" placeholder="Payer / Client Name" style="flex: 2; text-align: left;">
+          <input type="text" class="w2-input" id="input-income-payer-${src.id}" value="${esc(src.payer)}" placeholder="Payer / Client Name" style="flex: 2; text-align: left;">
           <select class="w2-input" id="select-income-state-${src.id}" style="flex: 1;" title="State where this income was earned">
             <option value="">Default (Home State)</option>
             ${US_STATES.map(s => `<option value="${s.code}" ${src.state === s.code ? 'selected' : ''}>${s.code} - ${s.name}</option>`).join('')}
@@ -2878,7 +2882,7 @@ class TaxApp {
           <div class="w2-literal-toolbar">
             <div class="toolbar-left">
               <span class="doc-badge" style="background: rgba(139, 92, 246, 0.25); border-color: rgba(139, 92, 246, 0.5);">State W-2 #${sIdx + 1}</span>
-              <span class="w2-title">${w2.employer || 'Employer'} — ${st.state} State Copy</span>
+              <span class="w2-title">${esc(w2.employer || 'Employer')} — ${st.state} State Copy</span>
             </div>
             <div class="toolbar-right">
               ${w2.states.length > 1 ? `
@@ -2892,16 +2896,16 @@ class TaxApp {
           <div class="w2-literal-scroll">
             <div class="w2-literal-container" id="w2-${w2.id}-state-${st.id}-doc-canvas">
               <div class="w2-overlay-box box-a">
-                <input type="text" class="w2-overlay-input" value="${w2.employeeSsn || ''}" placeholder="***-**-1234" data-w2-field="employeeSsn" data-w2-id="${w2.id}">
+                <input type="text" class="w2-overlay-input" value="${esc(w2.employeeSsn)}" placeholder="***-**-1234" data-w2-field="employeeSsn" data-w2-id="${w2.id}">
               </div>
               <div class="w2-overlay-box box-b">
-                <input type="text" class="w2-overlay-input" value="${w2.ein}" placeholder="00-0000000" data-w2-field="ein" data-w2-id="${w2.id}">
+                <input type="text" class="w2-overlay-input" value="${esc(w2.ein)}" placeholder="00-0000000" data-w2-field="ein" data-w2-id="${w2.id}">
               </div>
               <div class="w2-overlay-box box-c">
-                <textarea class="w2-overlay-textarea" data-w2-field="employer" data-w2-id="${w2.id}" placeholder="Employer Name, Address, City, State ZIP">${w2.employer}</textarea>
+                <textarea class="w2-overlay-textarea" data-w2-field="employer" data-w2-id="${w2.id}" placeholder="Employer Name, Address, City, State ZIP">${esc(w2.employer)}</textarea>
               </div>
               <div class="w2-overlay-box box-e">
-                <input type="text" class="w2-overlay-input" placeholder="Employee Name" value="${w2.employeeName || ''}" data-w2-field="employeeName" data-w2-id="${w2.id}">
+                <input type="text" class="w2-overlay-input" placeholder="Employee Name" value="${esc(w2.employeeName)}" data-w2-field="employeeName" data-w2-id="${w2.id}">
               </div>
 
               <!-- State Row 1: Boxes 15-20 for this State W-2 -->
@@ -2948,7 +2952,7 @@ class TaxApp {
         <div class="w2-employer-header">
           <div class="w2-employer-title-wrap">
             <h3 style="margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a;">
-              Employer #${index + 1}: ${w2.employer || 'New Employer'}
+              Employer #${index + 1}: ${esc(w2.employer || 'New Employer')}
             </h3>
             ${renderW2HeaderCircles()}
           </div>
@@ -2974,7 +2978,7 @@ class TaxApp {
           <div class="w2-literal-toolbar">
             <div class="toolbar-left">
               <span class="doc-badge">Federal Form W-2</span>
-              <span class="w2-title">${w2.employer || 'Employer'} — Federal Copy</span>
+              <span class="w2-title">${esc(w2.employer || 'Employer')} — Federal Copy</span>
             </div>
           </div>
 
@@ -2982,32 +2986,32 @@ class TaxApp {
             <div class="w2-literal-container" id="w2-${w2.id}-doc-canvas">
               <!-- Box a: Employee's SSN (Editable) -->
               <div class="w2-overlay-box box-a">
-                <input type="text" class="w2-overlay-input" value="${w2.employeeSsn || ''}" placeholder="***-**-1234" data-w2-field="employeeSsn" data-w2-id="${w2.id}">
+                <input type="text" class="w2-overlay-input" value="${esc(w2.employeeSsn)}" placeholder="***-**-1234" data-w2-field="employeeSsn" data-w2-id="${w2.id}">
               </div>
 
               <!-- Box b: Employer Identification Number (EIN) -->
               <div class="w2-overlay-box box-b">
-                <input type="text" class="w2-overlay-input" value="${w2.ein}" data-w2-field="ein" data-w2-id="${w2.id}" placeholder="00-0000000">
+                <input type="text" class="w2-overlay-input" value="${esc(w2.ein)}" data-w2-field="ein" data-w2-id="${w2.id}" placeholder="00-0000000">
               </div>
 
               <!-- Box c: Employer's name, address, and ZIP code -->
               <div class="w2-overlay-box box-c">
-                <textarea class="w2-overlay-textarea" data-w2-field="employer" data-w2-id="${w2.id}" placeholder="Employer Name, Address, City, State ZIP">${w2.employer}</textarea>
+                <textarea class="w2-overlay-textarea" data-w2-field="employer" data-w2-id="${w2.id}" placeholder="Employer Name, Address, City, State ZIP">${esc(w2.employer)}</textarea>
               </div>
 
               <!-- Box d: Control number -->
               <div class="w2-overlay-box box-d">
-                <input type="text" class="w2-overlay-input" placeholder="Control No." value="${w2.controlNumber || ''}" data-w2-field="controlNumber" data-w2-id="${w2.id}">
+                <input type="text" class="w2-overlay-input" placeholder="Control No." value="${esc(w2.controlNumber)}" data-w2-field="controlNumber" data-w2-id="${w2.id}">
               </div>
 
               <!-- Box e: Employee's name -->
               <div class="w2-overlay-box box-e">
-                <input type="text" class="w2-overlay-input" placeholder="Employee Name" value="${w2.employeeName || ''}" data-w2-field="employeeName" data-w2-id="${w2.id}">
+                <input type="text" class="w2-overlay-input" placeholder="Employee Name" value="${esc(w2.employeeName)}" data-w2-field="employeeName" data-w2-id="${w2.id}">
               </div>
 
               <!-- Box f: Employee's address and ZIP code (multi-line to right of label) -->
               <div class="w2-overlay-box box-f">
-                <textarea class="w2-overlay-textarea" placeholder="Employee Address&#10;City, State ZIP" data-w2-field="employeeAddress" data-w2-id="${w2.id}">${w2.employeeAddress || ''}</textarea>
+                <textarea class="w2-overlay-textarea" placeholder="Employee Address&#10;City, State ZIP" data-w2-field="employeeAddress" data-w2-id="${w2.id}">${esc(w2.employeeAddress)}</textarea>
               </div>
 
               <!-- Box 1: Wages, tips, other compensation -->
@@ -3143,11 +3147,11 @@ class TaxApp {
               <div class="w2-overlay-box box-14">
                 <div class="box-14-rows">
                   <div class="box-14-row-a">
-                    <input type="text" class="w2-overlay-input" placeholder="14 Other (e.g. CA SDI)" value="${w2.box14 || ''}" data-w2-field="box14" data-w2-id="${w2.id}">
+                    <input type="text" class="w2-overlay-input" placeholder="14 Other (e.g. CA SDI)" value="${esc(w2.box14)}" data-w2-field="box14" data-w2-id="${w2.id}">
                   </div>
                   <div class="box-14-row-b">
-                    <input type="text" class="w2-overlay-input" placeholder="14b Left" value="${w2.box14bLeft || ''}" data-w2-field="box14bLeft" data-w2-id="${w2.id}">
-                    <input type="text" class="w2-overlay-input" placeholder="14b Right" value="${w2.box14bRight || ''}" data-w2-field="box14bRight" data-w2-id="${w2.id}">
+                    <input type="text" class="w2-overlay-input" placeholder="14b Left" value="${esc(w2.box14bLeft)}" data-w2-field="box14bLeft" data-w2-id="${w2.id}">
+                    <input type="text" class="w2-overlay-input" placeholder="14b Right" value="${esc(w2.box14bRight)}" data-w2-field="box14bRight" data-w2-id="${w2.id}">
                   </div>
                 </div>
               </div>
@@ -3640,9 +3644,9 @@ class TaxApp {
                 const empName = w2.employer ? (w2.employer.length > 13 ? w2.employer.substring(0, 13) + '…' : w2.employer) : `W-2 #${index + 1}`;
                 link.innerHTML = `
           <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            W-2 #${index + 1}: ${empName}
+            W-2 #${index + 1}: ${esc(empName)}
           </span>
-          <span class="toc-badge">${statesLabel}</span>
+          <span class="toc-badge">${esc(statesLabel)}</span>
         `;
                 link.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -4075,7 +4079,7 @@ class TaxApp {
       <div class="panel-multi-inputs">
         <div>
           <label class="panel-input-label">Payer Name</label>
-          <input type="text" class="w2-input" style="padding-left:0.65rem;" data-src-id="${src.id}" data-src-field="payer" value="${src.payer || ''}" placeholder="${entry.title} Payer">
+          <input type="text" class="w2-input" style="padding-left:0.65rem;" data-src-id="${src.id}" data-src-field="payer" value="${esc(src.payer)}" placeholder="${entry.title} Payer">
         </div>
         <div>
           <label class="panel-input-label">Amount</label>
@@ -4496,7 +4500,7 @@ class TaxApp {
         </div>
         <div class="panel-official-title">${item.officialTitle}</div>
         <div class="auto-panel-amount-display">${formatCurrencyExact(item.amount)}</div>
-        <div class="auto-panel-formula">${item.formulaSummary}</div>
+        <div class="auto-panel-formula">${esc(item.formulaSummary)}</div>
         <div class="panel-short-desc">${item.shortExplanation}</div>
       </div>
     `;
@@ -4732,11 +4736,11 @@ class TaxApp {
     renderTokensHtml(tokens, blockId) {
         return tokens.map(tok => {
             if (tok.type === 'text') {
-                return `<span>${tok.text || ''}</span>`;
+                return `<span>${esc(tok.text)}</span>`;
             }
             const emptyClass = tok.isEmpty ? 'var-empty' : '';
             const display = tok.valueFormatted || tok.label || '';
-            return `<span class="formula-var ${emptyClass}" data-block-id="${blockId}" data-var-id="${tok.varId}" role="button" tabindex="0" title="Click to view contributing inputs">${display}</span>`;
+            return `<span class="formula-var ${emptyClass}" data-block-id="${esc(blockId)}" data-var-id="${esc(tok.varId)}" role="button" tabindex="0" title="Click to view contributing inputs">${esc(display)}</span>`;
         }).join('');
     }
     renderCalculationBlocks(taxData) {
@@ -4849,7 +4853,7 @@ class TaxApp {
             const signClass = c.sign === '-' ? 'sign-minus' : (c.sign === 'info' ? 'sign-info' : 'sign-plus');
             row.innerHTML = `
         <span class="var-contrib-sign ${signClass}">${c.sign === 'info' ? '•' : c.sign}</span>
-        <span class="var-contrib-label">${c.label}</span>
+        <span class="var-contrib-label">${esc(c.label)}</span>
         <span class="var-contrib-amt">${c.amountFormatted}</span>
       `;
             row.addEventListener('click', () => {
