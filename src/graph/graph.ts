@@ -889,7 +889,11 @@ export class Evaluation {
       const e = n.expr;
       if (e.k === 'ref') {
         const input = this.graph.inputs.get(e.id);
-        if (input) { out.add(input.domId); return; }
+        if (input) {
+          // An optional input left at 0 contributes nothing (and its panel may not be on screen).
+          if (!(input.optional && n.value === 0)) out.add(input.domId);
+          return;
+        }
         const q = this.graph.quantities.get(e.id)!;
         if (q.display === 'inline') walk(this.node(e.id));
         else out.add(lineDomId(e.id));
