@@ -383,6 +383,24 @@ const CASES: Golden[] = [
     expect: [['GA tax', st('GA', 'totalTax'), 2491.2]]
   },
   {
+    name: 'New York retiree — Social Security is exempt from NY tax',
+    source: 'IT-201 line 27: taxable Social Security included in federal AGI is subtracted in full',
+    state: ret({ filingStatus: 'married_joint', residentState: 'NY', otherIncome: { interest: 5000, sources: [src(1, 'SSA-1099', 24000), src(2, '1099-R', 30000)] } }),
+    expect: [['taxable Social Security (federal)', fed('fed.taxableSS'), 8550], ['NY income', st('NY', 'agi'), 35000]]
+  },
+  {
+    name: 'Illinois retiree — retirement income and Social Security are exempt',
+    source: 'IL-1040 line 5: federally taxed retirement income and Social Security subtracted',
+    state: ret({ filingStatus: 'married_joint', residentState: 'IL', otherIncome: { interest: 5000, sources: [src(1, 'SSA-1099', 24000), src(2, '1099-R', 30000)] } }),
+    expect: [['IL income', st('IL', 'agi'), 5000]]
+  },
+  {
+    name: 'California — unemployment compensation is exempt',
+    source: 'Schedule CA (540) line 7: unemployment compensation subtracted',
+    state: ret({ residentState: 'CA', w2s: [w2(30000, { state: 'CA' })], otherIncome: { interest: 0, sources: [src(1, '1099-G', 8000)] } }),
+    expect: [['AGI', fed('fed.agi'), 38000], ['CA income', st('CA', 'agi'), 30000]]
+  },
+  {
     name: 'Texas resident — no state income tax',
     source: 'Texas has no personal income tax',
     state: ret({ residentState: 'TX', w2s: [w2(90000, { state: 'TX' })] }),

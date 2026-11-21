@@ -55,10 +55,10 @@ Required template additions:
 | **US Treasury / federal obligation interest is exempt in every income-tax state** (subtraction) | ✅ | `st.<code>.treasurySubtraction` from 1099-INT box 3; golden test |
 | **Out-of-state municipal bond interest is taxable in most states** (addition); in-state munis exempt | ❌ | Not in old docs |
 | State income tax refunds subtraction (federally taxable 1099-G box 2 is not taxable by the state) | ❌ | |
-| Social Security: exempt in most states; taxed with phase-outs in CO, CT, MN, MT, NM, RI, UT, VT, WV (2025 status varies) | ❌ | Engine taxes SS where federal does |
-| Retirement income exclusions (PA, IL, MS full; NY $20k; NJ; GA; MI phase-in; CO; etc.) | ❌ | Detailed in the old gaps doc §5 |
+| Social Security: exempt in most states; taxed with phase-outs in CO, CT, MN, MT, NM, RI, UT, VT, WV (2025 status varies) | ⚠️ | ✅ full exemption in all other income-tax states (`st.<code>.ssSubtraction`); ❌ the nine states' partial exemptions |
+| Retirement income exclusions (PA, IL, MS full; NY $20k; NJ; GA; MI phase-in; CO; etc.) | ⚠️ | ✅ IL, MS, PA (`retirementSubtraction`); ❌ age-based exclusions (NY, NJ, GA, CO, MI…) need taxpayer ages |
 | Military pay exclusions (most states exempt active-duty pay of residents or nonresidents; military retirement exclusions) | ❌ | |
-| Unemployment compensation (exempt in CA, NJ, PA, VA, MT, others) | ❌ | |
+| Unemployment compensation (exempt in CA, NJ, PA, VA, MT, others) | ⚠️ | ✅ CA, NJ, PA, VA (`unemploymentSubtraction`) |
 | Capital gains: state LTCG exclusions (AZ 25%, AR 50%, ND 40%, NM 40%, SC 44%, VT 40% up to $5k, WI 30%); MA 8.5% short-term rate; WA excise | ⚠️ | ✅ listed exclusions; ⚠️ MA modeled as a 3.5% surtax |
 | 529 plan deductions/credits (30+ states) and recapture of nonqualified withdrawals | ⚠️ | Deductions via state panels with caps; no recapture |
 | Part-year residency (move dates, income allocated by residency period, prorated deductions/exemptions) | ❌ | **Major gap**: one full-year resident state only |

@@ -299,6 +299,10 @@ const STATE_EITC_MULTIPLIERS: Record<string, number> = {
 };
 const LTCG_EXCLUSION: Record<string, number> = { SC: 0.44, NM: 0.40, ND: 0.40, WI: 0.30, AR: 0.50, AZ: 0.25, VT: 0.40 };
 const LOCAL_PASSTHROUGH = ['PA', 'OH', 'IN', 'KY', 'MI', 'MO', 'DE', 'AL', 'OR'];
+/** States that tax some Social Security benefits (each with its own exemptions — not yet modeled). */
+const SS_TAXING_STATES = ['CO', 'CT', 'MN', 'MT', 'NM', 'RI', 'UT', 'VT', 'WV'];
+/** States that exempt unemployment compensation. */
+const UI_EXEMPT_STATES = ['CA', 'NJ', 'PA', 'VA'];
 /** States whose starting point is federal taxable income. */
 const FTI_STATES = ['CO', 'ND', 'SC'];
 /** State EITCs that can only offset tax (all other modeled state EITCs are refundable). */
@@ -377,6 +381,25 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
     q('ltcgExclusion', { label: `${code} Capital Gain Exclusion (${LTCG_EXCLUSION[code] * 100}%)`, unit: 'usd', category: 'capital', optional: true,
       expr: code === 'VT' ? min(lit(5000), base) : base });
     subtractions.push(R(S('ltcgExclusion')));
+  }
+  // Social Security benefits are exempt in every income-tax state except the few that tax them (modeled as taxed for now).
+  if (!SS_TAXING_STATES.includes(code)) {
+    q('ssSubtraction', { label: `${code} Social Security Exemption`, unit: 'usd', category: 'state', optional: true, expr: R('fed.taxableSS') });
+    subtractions.push(R(S('ssSubtraction')));
+  }
+  // Retirement income exclusions: IL and MS exempt qualified retirement income; PA exempts distributions after retirement.
+  if (code === 'IL' || code === 'MS') {
+    q('retirementSubtraction', { label: `${code} Retirement Income Exclusion`, unit: 'usd', category: 'state', optional: true, expr: R('fed.retirement') });
+    subtractions.push(R(S('retirementSubtraction')));
+  } else if (code === 'PA') {
+    q('retirementSubtraction', { label: 'PA Retirement Income Exclusion (non-early distributions)', unit: 'usd', category: 'state', optional: true,
+      expr: atLeast0(sub(R('fed.retirement'), R('fed.earlyDistributions'))) });
+    subtractions.push(R(S('retirementSubtraction')));
+  }
+  // Unemployment compensation (1099-G) is not taxed by CA, NJ, PA or VA.
+  if (UI_EXEMPT_STATES.includes(code)) {
+    q('unemploymentSubtraction', { label: `${code} Unemployment Compensation Exclusion`, unit: 'usd', category: 'state', optional: true, expr: each('src.g', 'amount') });
+    subtractions.push(R(S('unemploymentSubtraction')));
   }
   // Interest on US obligations (Treasury bills/notes/bonds, savings bonds) is exempt from state income tax everywhere.
   q('treasurySubtraction', { label: 'US Government Interest Subtraction', unit: 'usd', category: 'state', optional: true, expr: R('fed.treasuryInterest') });
@@ -648,7 +671,7 @@ export function stateBlocks(plan: ReturnPlan, code: string, g: FormulaGraph): Bl
     const blocks: BlockSpec[] = [
       { id: `calc-state-${lc}-taxable`, stepLabel: `${name} • Step 1: Income, Deductions & Taxable Income`, title: `${code} Deductions & Taxable Income`,
         quantities: [S('w2Wages'), S('documentIncome'), { id: S('startingPoint'), show: 'always' },
-          ...pick('hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
+          ...pick('hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ssSubtraction', 'retirementSubtraction', 'unemploymentSubtraction', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
           { id: S('agi'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'), { id: S('baseStdDeduction'), show: 'always' },
           ...pick('itemized'), S('panelItem'), S('deduction'), ...pick('personalExemption', 'dependentExemption', 'childDeduction'), S('exemptions'),
           { id: S('taxable'), show: 'always' }] },

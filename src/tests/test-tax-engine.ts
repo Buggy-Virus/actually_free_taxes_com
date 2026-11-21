@@ -868,8 +868,10 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
   assert.ok(res14A.withholdingCalc.pluggedFormula.includes('$1,000.00'), 'Includes 1099 Box 4 withholding');
   assert.ok(res14A.withholdingCalc.pluggedFormula.includes('$1,500.00'), 'Includes Form 1040-ES estimated payments');
   const scRet = res14A.stateReturnsCalc.find(s => s.state === 'SC')!;
-  // SC starts from federal taxable income (SC1040 line 1) and excludes 44% of $10,000 LTCG ($4,400)
-  assert.strictEqual(scRet.stateWages, res14A.taxableIncomeCalc.result - 4400, 'SC applies 44% net long-term capital gain exclusion ($4,400)');
+  // SC starts from federal taxable income (SC1040 line 1), exempts Social Security, and excludes 44% of $10,000 LTCG ($4,400)
+  const taxableSS14A = res14A.federalEval!.value('fed.taxableSS');
+  assert.ok(taxableSS14A > 0, 'scenario has taxable Social Security');
+  assert.strictEqual(scRet.stateWages, Math.round((res14A.taxableIncomeCalc.result - taxableSS14A - 4400) * 100) / 100, 'SC applies 44% net long-term capital gain exclusion ($4,400) and exempts Social Security');
 
   // 14B: Washington 7% Long-Term Capital Gains Excise Tax (> $270,000) & New Hampshire 3% Interest & Dividends Tax (Form DP-10)
   const stateWA: TaxAppState = {
