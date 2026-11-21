@@ -65,7 +65,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B33 | P2 | Adoption credit MAGI phase-out and refundable part (2025+) | Capped amount, nonrefundable | | ✅ Form 8839 MAGI phase-out ($252,150 / $259,190 + $40,000), 2025 refundable part up to $5,000; one child, no carryforward |
 | B34 | P2 | Schedule R elderly/disabled credit computed | Entered amount | From A1 | ✅ Schedule R from ages: $5,000 / $7,500 / $3,750 initial amounts, nontaxable SS and ½ AGI over $7,500 / $10,000 / $5,000; under-65 disability uses the entered amount |
 | B35 | P2 | Education credits per student, 4-year AOTC limit | One student | From A2 (students) | ⬜ |
-| B36 | P2 | Schedule H household employment taxes computed | Entered amount | Cash wages paid | ⬜ |
+| B36 | P2 | Schedule H household employment taxes computed | Entered amount | Cash wages paid | ✅ Cash wages → 15.3% FICA at $2,700 / $2,800 threshold + 0.6% FUTA on first $7,000; entered amount still accepted; one employee, no credit-reduction states |
 | B37 | P2 | AMT preferences (ISO spread, PAB interest), Form 8801 credit | Basic AMT | | ⬜ |
 | B38 | P2 | NIIT on passive K-1 and royalties | | From B23 | ⬜ |
 | B39 | P2 | MFS: spouse itemizes → standard deduction $0 | | Checkbox | ✅ "MFS: spouse itemizes" checkbox |

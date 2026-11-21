@@ -183,6 +183,7 @@ function defineInputs(g: FormulaGraph): void {
   io('in.elderly', 'Elderly / Disabled Credit', 'input-elderly-credit', 'cred-elderly-sched-r', 'credits', { optional: true });
   io('in.ptc', 'Net Premium Tax Credit', 'input-ptc-credit', 'cred-ptc-8962', 'credits', { optional: true });
   io('in.householdTax', 'Household Employment Taxes', 'input-household-tax', 'sched-h-household', 'credits', { optional: true });
+  io('in.householdWages', 'Cash Wages Paid to Household Employee', 'input-household-wages', 'sched-h-household', 'credits', { optional: true });
   io('in.estimatedPayments', 'Estimated Tax Payments', 'input-estimated-payments', 'cred-estimated-payments', 'credits', { optional: true });
 }
 
@@ -242,6 +243,7 @@ function defineParams(g: FormulaGraph): void {
   p('fed.saversT50', "Saver's Credit 50% AGI Limit", 'usd', c => byStatus(savers(c.year).t50)(c.status), 'Form 8880', YEAR_STATUS);
   p('fed.saversT20', "Saver's Credit 20% AGI Limit", 'usd', c => byStatus(savers(c.year).t20)(c.status), 'Form 8880', YEAR_STATUS);
   p('fed.saversT10', "Saver's Credit 10% AGI Limit", 'usd', c => byStatus(savers(c.year).t10)(c.status), 'Form 8880', YEAR_STATUS);
+  p('fed.householdWageThreshold', 'Household Employee FICA Threshold', 'usd', c => (c.year >= 2025 ? 2800 : 2700), 'Schedule H line A; SSA', ['select-tax-year']);
   p('fed.adoptionCap', 'Adoption Credit Limit', 'usd', c => (c.year === 2025 ? 17280 : 16810), 'Form 8839', ['select-tax-year']);
   p('fed.adoptionPhaseStart', 'Adoption Credit Phase-Out Start (MAGI)', 'usd', c => (c.year === 2025 ? 259190 : 252150), 'Form 8839 line 7; Rev. Proc. 2023-34 / 2024-40', ['select-tax-year']);
   p('fed.adoptionRefundableMax', 'Refundable Adoption Credit Limit', 'usd', c => (c.year >= 2025 ? 5000 : 0), 'P.L. 119-21 §70402', ['select-tax-year']);
@@ -820,9 +822,18 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: round(mul(R('fed.hsaExcess'), rate(0.06))) });
   q({ id: 'fed.tipsFica', label: 'Unreported Tips FICA', unit: 'usd', form: 'Form 4137', category: 'tax', optional: true,
     expr: round(mul(R('in.tips'), rate(0.0765))) });
+  // Schedule H: Social Security + Medicare (15.3%) on cash wages once they reach the threshold (Part I), and FUTA at 0.6% of the
+  // first $7,000 when $1,000+ was paid in a calendar quarter (Part II; assumed when total wages are $1,000+, no credit-reduction state).
+  q({ id: 'fed.householdFica', label: 'Household Employee Social Security & Medicare', unit: 'usd', form: 'Schedule H Lines 2–6', category: 'tax', optional: true,
+    expr: when(gte(R('in.householdWages'), P('fed.householdWageThreshold')),
+      round(add(mul(min(R('in.householdWages'), P('fed.ssWageBase')), rate(0.124)), mul(R('in.householdWages'), rate(0.029)))), lit(0)) });
+  q({ id: 'fed.householdFuta', label: 'Household Employee FUTA Tax', unit: 'usd', form: 'Schedule H Line 16', category: 'tax', optional: true,
+    expr: when(gte(R('in.householdWages'), lit(1000)), round(mul(min(R('in.householdWages'), lit(7000)), rate(0.006))), lit(0)) });
+  q({ id: 'fed.householdTax', label: 'Household Employment Taxes', unit: 'usd', form: 'Schedule 2 Line 9', category: 'tax', optional: true,
+    expr: when(gt(R('in.householdWages'), lit(0)), add(R('fed.householdFica'), R('fed.householdFuta')), R('in.householdTax')) });
   q({ id: 'fed.otherTaxes', label: 'Other Taxes', unit: 'usd', form: 'Form 1040 Line 23', category: 'tax', optional: true,
     expr: round(add(R('fed.seTax'), R('fed.additionalMedicareTax'), R('fed.niit'), R('fed.amt'), R('fed.earlyDistributionPenalty'),
-      R('fed.tipsFica'), R('fed.hsaExcise'), R('in.householdTax'))) });
+      R('fed.tipsFica'), R('fed.hsaExcise'), R('fed.householdTax'))) });
 
   // ---------- Bottom line ----------
   q({ id: 'fed.totalTax', label: 'Total Tax', unit: 'usd', form: 'Form 1040 Line 24', category: 'tax',
@@ -1023,6 +1034,7 @@ export function federalContext(state: TaxAppState): GraphContext {
       'in.elderly': n(d.elderlyDisabledCredit),
       'in.ptc': n(d.premiumTaxCredit),
       'in.householdTax': n(d.householdEmploymentTax),
+      'in.householdWages': n(d.householdWages),
       'in.estimatedPayments': n(d.estimatedTaxPayments)
     }
   };
@@ -1057,7 +1069,7 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
       'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
   { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',
     quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',
-      'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.hsaExcise', 'fed.tipsFica', 'fed.otherTaxes', 'fed.excessSS'] },
+      'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.hsaExcise', 'fed.tipsFica', 'fed.householdFica', 'fed.householdFuta', 'fed.householdTax', 'fed.otherTaxes', 'fed.excessSS'] },
   { id: 'calc-final-verdict', stepLabel: 'Step 8 • Federal Bottom Line', title: 'Total Tax, Payments & Federal Refund / Owed', isOutput: true,
     quantities: [{ id: 'fed.totalTax', show: 'always' }, 'fed.addlMedicareWithheld', { id: 'fed.payments', show: 'always' }, 'fed.requiredAnnualPayment', 'fed.estimatedTaxShortfall', { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
 ];

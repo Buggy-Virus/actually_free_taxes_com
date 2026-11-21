@@ -976,6 +976,25 @@ const CASES: Golden[] = [
     state: ret({ filingStatus: 'married_separate', taxpayer: { birthYear: 1950 }, otherIncome: { interest: 0, sources: [src(1, '1099-R', 6000, { distributionCode: '7' })] } }),
     expect: [['Schedule R credit', fed('fed.elderlyCredit'), 0]]
   },
+  // ---------------- Federal: Schedule H (B36) ----------------
+  {
+    name: 'Schedule H: $20,000 nanny wages — 15.3% FICA and 0.6% FUTA on $7,000',
+    source: 'Schedule H (2024): $20,000 ≥ $2,700 → 15.3% × $20,000 = $3,060; FUTA 0.6% × $7,000 = $42; total $3,102',
+    state: ret({ w2s: [w2(90000)], dependents: { childrenCount: 0, householdWages: 20000 } }),
+    expect: [['FICA', fed('fed.householdFica'), 3060], ['FUTA', fed('fed.householdFuta'), 42], ['household tax', fed('fed.householdTax'), 3102]]
+  },
+  {
+    name: 'Schedule H: wages under the FICA threshold still owe FUTA if $1,000+ in a quarter',
+    source: 'Schedule H (2024): $2,500 < $2,700 → no FICA; FUTA 0.6% × $2,500 = $15',
+    state: ret({ w2s: [w2(90000)], dependents: { childrenCount: 0, householdWages: 2500 } }),
+    expect: [['household tax', fed('fed.householdTax'), 15]]
+  },
+  {
+    name: 'Schedule H 2025: FICA threshold is $2,800',
+    source: 'SSA 2025 domestic employee coverage threshold $2,800: $2,750 → FUTA only, $16.50',
+    state: ret({ year: 2025, w2s: [w2(90000)], dependents: { childrenCount: 0, householdWages: 2750 } }),
+    expect: [['household tax', fed('fed.householdTax'), 16.5]]
+  },
 ];
 
 let passed = 0, gaps = 0;

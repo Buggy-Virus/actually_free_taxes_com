@@ -4002,6 +4002,7 @@ class TaxApp {
         ensure('cred-other-dependents', (Number(this.state.dependents?.otherDependentsCount) || 0) > 0);
         ensure('cred-age-blind', (Number(this.state.dependents?.age65OrBlindCount) || 0) > 0);
         ensure('cred-child-care', (Number(this.state.dependents?.childCareExpenses) || 0) > 0);
+        ensure('sched-h-household', (Number(this.state.dependents?.householdWages) || 0) > 0 || (Number(this.state.dependents?.householdEmploymentTax) || 0) > 0);
         ensure('cred-aotc', (Number(this.state.dependents?.educationExpensesAotc) || 0) > 0);
         ensure('cred-llc', (Number(this.state.dependents?.educationExpensesLlc) || 0) > 0);
         ensure('cred-foreign-tax', (Number(this.state.dependents?.foreignTaxCredit) || 0) > 0);
@@ -4260,6 +4261,7 @@ class TaxApp {
                 case 'input-ptc-credit': return Number(this.state.dependents?.premiumTaxCredit) || 0;
                 case 'input-elderly-credit': return Number(this.state.dependents?.elderlyDisabledCredit) || 0;
                 case 'input-household-tax': return Number(this.state.dependents?.householdEmploymentTax) || 0;
+                case 'input-household-wages': return Number(this.state.dependents?.householdWages) || 0;
                 default: return 0;
             }
         };
@@ -4370,6 +4372,12 @@ class TaxApp {
         ${numBox('input-home-sale-gain', 'Gain (sale price − selling costs − basis)')}
         <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-home-sale-qualifies" ${cap?.homeSaleQualifies ? 'checked' : ''}> Owned and lived in it 2 of the last 5 years (no exclusion in the past 2 years)</label>
         ${this.state.filingStatus === 'married_joint' ? `<label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-home-sale-spouse" ${cap?.homeSaleSpouseQualifies ? 'checked' : ''}> Spouse also lived there 2 of 5 years</label>` : ''}
+      </div>`;
+        }
+        else if (entry.key === 'sched-h-household') {
+            inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-household-wages', 'Cash Wages Paid (Schedule H computes the tax)')}
+        ${numBox('input-household-tax', 'Or: Tax Amount From Your Own Schedule H')}
       </div>`;
         }
         else if (entry.key === 'adj-ira') {
@@ -4492,6 +4500,7 @@ class TaxApp {
         bindNum('input-ptc-credit', v => this.state.dependents.premiumTaxCredit = v);
         bindNum('input-elderly-credit', v => this.state.dependents.elderlyDisabledCredit = v);
         bindNum('input-household-tax', v => this.state.dependents.householdEmploymentTax = v);
+        bindNum('input-household-wages', v => this.state.dependents.householdWages = v);
         bindNum('input-estimated-payments', v => this.state.dependents.estimatedTaxPayments = v);
         bindNum('input-itemized-medical', v => getItemized().medicalExpenses = v);
         bindNum('input-itemized-real-estate', v => getItemized().realEstateTax = v);
@@ -4740,6 +4749,7 @@ class TaxApp {
                 break;
             case 'sched-h-household':
                 this.state.dependents.householdEmploymentTax = 0;
+                this.state.dependents.householdWages = 0;
                 break;
         }
     }

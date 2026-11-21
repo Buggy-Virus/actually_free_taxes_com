@@ -557,7 +557,7 @@ export const PANEL_CATALOG = [
         shortExplanation: 'FICA & FUTA taxes owed for a nanny, housekeeper, or household employee.',
         ratingKey: 'credits-child-care',
         size: 'sm',
-        inputIds: ['input-household-tax']
+        inputIds: ['input-household-wages', 'input-household-tax']
     }
 ];
 export function getPanelCatalogEntry(key) {

@@ -202,7 +202,8 @@ export interface Dependents {
   adoptionCredit?: number; // Form 8839 Adoption Credit
   premiumTaxCredit?: number; // Form 8962 Net Premium Tax Credit (Refundable)
   elderlyDisabledCredit?: number; // Schedule R Credit for the Elderly or Disabled
-  householdEmploymentTax?: number; // Schedule H Household Employment Taxes
+  householdEmploymentTax?: number; // Schedule H Household Employment Taxes (entered; used when no wages are entered)
+  householdWages?: number; // Schedule H: cash wages paid to a household employee
   estimatedTaxPayments?: number; // Form 1040-ES quarterly estimated payments
 }
 
