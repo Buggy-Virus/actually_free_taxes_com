@@ -35,7 +35,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B4 | P1 | Filing status eligibility checks (HOH qualifying person, QSS timing) | No validation | Warnings from A2 | ✅ HOH needs a person who lived with you > 6 months; QSS needs a child who lived with you all year (Review card) |
 | B5 | P1 | Form 1040 line 1e: W-2 box 10 dependent care benefits over $5,000 taxable; reduce Form 2441 limit | Ignored | Box 10 already entered | ✅ `fed.depCareExcluded`, `fed.depCareTaxable` |
 | B6 | P1 | Form 5329 exceptions to the 10% early-distribution tax | 10% on all code-1 distributions | Exception amount input on 1099-R | ✅ 1099-R exception amount |
-| B7 | P1 | 1099-R distribution codes beyond G/H and 1 (2, 3, 4, 7, J, Q, T, B) | Rollover + code 1 checkbox | Code select per 1099-R | ⬜ |
+| B7 | P1 | 1099-R distribution codes beyond G/H and 1 (2, 3, 4, 7, J, Q, T, B) | Rollover + code 1 checkbox | Code select per 1099-R | ✅ Box 7 code select (1, 2, 3, 4, 7, G, H, Q, T, J, S, B, two-character codes); S = 25%; golden cases |
 | B8 | P1 | State/local refund (1099-G box 2) tax-benefit rule | Pooled into taxable other income | Box 2 field + prior-year itemized flag | ✅ 1099-G box 2 + last year's itemized excess; state subtraction |
 | B9 | P1 | 2026: charitable deduction for non-itemizers ($1,000 / $2,000) | — | Needs A3 | ⬜ |
 | B10 | P1 | 2026: 0.5%-of-AGI floor on itemized charity; 37%-bracket itemized limitation | — | Needs A3 | ⬜ |

@@ -85,7 +85,8 @@ function defineInputs(g) {
                 nonRollover: f(`${c.label} Not Rolled Over`),
                 penaltyException: f(`${c.label} Amount Excepted From 10% Tax`, false, true),
                 fedWithheld: f(`${c.label} Federal Tax Withheld`, false, true),
-                penalty: f(`${c.label} Early Distribution (Code 1)`)
+                penalty: f(`${c.label} Early Distribution (Code 1)`),
+                simple: f(`${c.label} SIMPLE IRA First 2 Years (Code S)`)
             }
         });
     });
@@ -651,8 +652,11 @@ function defineQuantities(g, year) {
         expr: round(add(when(lte(R('fed.amtOrdinaryBase'), P('fed.amt28Breakpoint')), mul(R('fed.amtOrdinaryBase'), rate(0.26)), add(mul(P('fed.amt28Breakpoint'), rate(0.26)), mul(sub(R('fed.amtOrdinaryBase'), P('fed.amt28Breakpoint')), rate(0.28)))), R('fed.preferentialTax'))) });
     q({ id: 'fed.amt', label: 'Alternative Minimum Tax', unit: 'usd', form: 'Form 6251 Line 11', category: 'tax', optional: true,
         expr: when(gt(R('fed.amti'), P('fed.amtExemption')), atLeast0(round(sub(R('fed.tentativeMinimumTax'), R('fed.tax')))), lit(0)) });
+    // Form 5329 line 4: 10%, or 25% for SIMPLE IRA distributions in the first 2 years of participation (code S).
+    q({ id: 'fed.earlySimpleDistributions', label: 'Early SIMPLE IRA Distributions (First 2 Years)', unit: 'usd', display: 'inline', optional: true,
+        expr: atLeast0(sub(each('src.r', 'taxable', 'simple'), each('src.r', 'penaltyException', 'simple'))) });
     q({ id: 'fed.earlyDistributionPenalty', label: 'Early Distribution Penalty', unit: 'usd', form: 'Form 5329', category: 'tax', optional: true,
-        expr: round(mul(R('fed.earlyDistributions'), rate(0.1))) });
+        expr: round(add(mul(R('fed.earlyDistributions'), rate(0.1)), mul(R('fed.earlySimpleDistributions'), rate(0.15)))) });
     q({ id: 'fed.hsaExcise', label: '6% Excise on Excess HSA Contributions', unit: 'usd', form: 'Form 5329 Part VII', category: 'tax', optional: true,
         expr: round(mul(R('fed.hsaExcess'), rate(0.06))) });
     q({ id: 'fed.tipsFica', label: 'Unreported Tips FICA', unit: 'usd', form: 'Form 4137', category: 'tax', optional: true,
@@ -680,6 +684,20 @@ function defineQuantities(g, year) {
         expr: atLeast0(round(sub(R('fed.requiredAnnualPayment'), add(R('fed.w2Withholding'), R('fed.extraWithholding'), R('fed.addlMedicareWithheld'), R('in.estimatedPayments'), R('fed.excessSS'))))) });
     q({ id: 'fed.effectiveRate', label: 'Effective Tax Rate', unit: 'rate', category: 'tax',
         expr: when(gt(R('fed.totalIncome'), lit(0)), div(R('fed.totalTax'), R('fed.totalIncome')), rate(0)) });
+}
+/**
+ * 1099-R box 7 codes (IRS Instructions for Forms 1099-R and 5329). A box can hold two codes ("1B", "7D").
+ *  G, H — direct rollover: not taxable.   Q — qualified Roth distribution: not taxable.
+ *  1, J, S — early distribution with no known exception: 10% additional tax (S: 25% from a SIMPLE IRA in its first 2 years).
+ *  2, 3, 4, 7, T, B alone — exception applies / normal distribution: no additional tax.
+ * Without a code, the rollover and Code 1 checkboxes decide.
+ */
+export function distributionCodeTreatment(s) {
+    const codes = String(s.distributionCode || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    if (!codes)
+        return { rollover: Boolean(s.rollover), early: Boolean(s.earlyDistributionPenalty), simple: false, qualifiedRoth: false };
+    const has = (c) => codes.includes(c);
+    return { rollover: has('G') || has('H'), early: has('1') || has('J') || has('S'), simple: has('S'), qualifiedRoth: has('Q') };
 }
 /** Add every federal input, param and quantity to a graph. */
 export function defineFederal(g, year) {
@@ -730,27 +748,31 @@ export function federalContext(state) {
             student: dp.student ? 1 : 0, disabled: dp.disabled ? 1 : 0, hasSsn: dp.hasSsn === false ? 0 : 1 }
     })))(state.dependents || {});
     SOURCE_COLLECTIONS.forEach(c => {
-        collections[c.id] = sources.filter(s => c.type.includes(s.type)).map(s => ({
-            id: s.id,
-            name: s.payer,
-            values: {
-                amount: n(s.amount),
-                accrued: n(s.accruedInterestPaid),
-                taxExempt: n(s.taxExemptInterest),
-                treasury: n(s.usTreasuryInterest),
-                inStateExempt: n(s.inStateTaxExemptInterest),
-                stateRefund: n(s.stateRefund),
-                priorItemizedExcess: n(s.priorItemizedExcess),
-                qdiv: n(s.qualifiedDividends),
-                capGainDist: n(s.capitalGainDistributions),
-                // 1099-R: box 2a taxable amount (box 1 gross if not determined); rollovers are not taxable.
-                taxable: s.taxableAmount !== undefined && s.taxableAmount !== null && String(s.taxableAmount) !== '' ? n(s.taxableAmount) : n(s.amount),
-                nonRollover: s.rollover ? 0 : 1,
-                penaltyException: n(s.penaltyExceptionAmount),
-                fedWithheld: n(s.federalTaxWithheld),
-                penalty: s.earlyDistributionPenalty && !s.rollover ? 1 : 0
-            }
-        }));
+        collections[c.id] = sources.filter(s => c.type.includes(s.type)).map(s => {
+            const r = distributionCodeTreatment(s);
+            return {
+                id: s.id,
+                name: s.payer,
+                values: {
+                    amount: n(s.amount),
+                    accrued: n(s.accruedInterestPaid),
+                    taxExempt: n(s.taxExemptInterest),
+                    treasury: n(s.usTreasuryInterest),
+                    inStateExempt: n(s.inStateTaxExemptInterest),
+                    stateRefund: n(s.stateRefund),
+                    priorItemizedExcess: n(s.priorItemizedExcess),
+                    qdiv: n(s.qualifiedDividends),
+                    capGainDist: n(s.capitalGainDistributions),
+                    // 1099-R: box 2a taxable amount (box 1 gross if not determined); rollovers are not taxable.
+                    taxable: r.qualifiedRoth ? 0 : s.taxableAmount !== undefined && s.taxableAmount !== null && String(s.taxableAmount) !== '' ? n(s.taxableAmount) : n(s.amount),
+                    nonRollover: r.rollover ? 0 : 1,
+                    penaltyException: n(s.penaltyExceptionAmount),
+                    fedWithheld: n(s.federalTaxWithheld),
+                    penalty: r.early && !r.rollover ? 1 : 0,
+                    simple: r.early && r.simple && !r.rollover ? 1 : 0
+                }
+            };
+        });
     });
     const o = state.otherIncome || {};
     const a = state.adjustments || {};

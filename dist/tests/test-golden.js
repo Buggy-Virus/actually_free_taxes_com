@@ -420,6 +420,36 @@ const CASES = [
         expect: [['early distribution tax', fed('fed.earlyDistributionPenalty'), 1200]]
     },
     {
+        name: '1099-R code 1 is an early distribution subject to 10%',
+        source: 'Form 5329 line 1 / 1099-R instructions box 7 code 1: $10,000 × 10% = $1,000',
+        state: ret({ w2s: [w2(40000)], otherIncome: { interest: 0, sources: [src(1, '1099-R', 10000, { distributionCode: '1' })] } }),
+        expect: [['taxable retirement income', fed('fed.retirement'), 10000], ['early distribution tax', fed('fed.earlyDistributionPenalty'), 1000]]
+    },
+    {
+        name: '1099-R code 2 (exception applies) and code 7 (normal) have no additional tax',
+        source: '1099-R box 7 codes 2 and 7: taxable, but not subject to the Form 5329 additional tax',
+        state: ret({ w2s: [w2(40000)], otherIncome: { interest: 0, sources: [src(1, '1099-R', 10000, { distributionCode: '2', earlyDistributionPenalty: true }), src(2, '1099-R', 6000, { distributionCode: '7' })] } }),
+        expect: [['taxable retirement income', fed('fed.retirement'), 16000], ['early distribution tax', fed('fed.earlyDistributionPenalty'), 0]]
+    },
+    {
+        name: '1099-R code S: SIMPLE IRA in first 2 years is taxed at 25%',
+        source: 'Form 5329 line 4 instructions: 25% instead of 10% for SIMPLE IRA distributions within 2 years — $8,000 × 25% = $2,000',
+        state: ret({ w2s: [w2(40000)], otherIncome: { interest: 0, sources: [src(1, '1099-R', 8000, { distributionCode: 'S' })] } }),
+        expect: [['early distribution tax', fed('fed.earlyDistributionPenalty'), 2000]]
+    },
+    {
+        name: '1099-R code Q (qualified Roth) and code H (rollover to Roth) are not taxable',
+        source: '1099-R box 7 code Q: qualified distribution from a Roth IRA; code H: direct rollover of a designated Roth account',
+        state: ret({ w2s: [w2(40000)], otherIncome: { interest: 0, sources: [src(1, '1099-R', 25000, { distributionCode: 'Q' }), src(2, '1099-R', 15000, { distributionCode: 'H' })] } }),
+        expect: [['taxable retirement income', fed('fed.retirement'), 0], ['AGI', fed('fed.agi'), 40000]]
+    },
+    {
+        name: '1099-R two-character code 1B (early designated Roth) uses box 2a',
+        source: '1099-R box 7 "1B": early nonqualified distribution from a designated Roth account; only box 2a earnings are taxable — 10% × $3,000',
+        state: ret({ w2s: [w2(40000)], otherIncome: { interest: 0, sources: [src(1, '1099-R', 12000, { distributionCode: '1B', taxableAmount: 3000 })] } }),
+        expect: [['taxable retirement income', fed('fed.retirement'), 3000], ['early distribution tax', fed('fed.earlyDistributionPenalty'), 300]]
+    },
+    {
         name: 'Casualty loss reduced by $100 and 10% of AGI',
         source: 'Form 4684: $12,000 − $100 − 10% × $50,000 = $6,900',
         state: ret({ w2s: [w2(50000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 0, charity: 0, casualtyLoss: 12000 } }),

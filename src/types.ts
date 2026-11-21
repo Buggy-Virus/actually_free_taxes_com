@@ -91,6 +91,8 @@ export interface IncomeSource {
   priorItemizedExcess?: number; // Last year's itemized deductions above the standard deduction (0 if you took the standard deduction)
   taxableAmount?: number; // 1099-R Box 2a taxable amount (defaults to Box 1 gross when blank)
   rollover?: boolean; // 1099-R distribution code G/H direct rollover (not taxable)
+  /** 1099-R box 7 distribution code(s), e.g. '7', '1', '2', 'G', '1B', 'Q', 'S'. When set it decides rollover / early / Roth treatment. */
+  distributionCode?: string;
   capitalGainDistributions?: number; // 1099-DIV Box 2a total capital gain distributions (long-term)
   penaltyExceptionAmount?: number; // 1099-R: part of an early distribution that meets a Form 5329 exception
   state?: string;

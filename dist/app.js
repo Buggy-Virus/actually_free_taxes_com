@@ -937,6 +937,7 @@ class TaxApp {
             priorItemizedExcess: Number(src?.priorItemizedExcess) || 0,
             taxableAmount: src?.taxableAmount === undefined || src?.taxableAmount === null || src?.taxableAmount === '' ? undefined : Number(src.taxableAmount) || 0,
             rollover: Boolean(src?.rollover),
+            distributionCode: src?.distributionCode ? String(src.distributionCode).toUpperCase().slice(0, 2) : undefined,
             capitalGainDistributions: Number(src?.capitalGainDistributions) || 0,
             penaltyExceptionAmount: Number(src?.penaltyExceptionAmount) || 0,
             state: src?.state ? String(src.state).toUpperCase().trim() : ''
@@ -4140,13 +4141,26 @@ class TaxApp {
     createSourcePanelElement(entry, src) {
         const money = (label, field, value, placeholder = '0') => `<div><label class="panel-input-label">${label}</label><div class="w2-input-wrapper"><span class="currency-symbol">$</span><input type="number" step="any" class="w2-input" data-src-id="${src.id}" data-src-field="${String(field)}" value="${value ?? ''}" placeholder="${placeholder}"></div></div>`;
         const check = (label, field, checked, text) => `<div><label class="panel-input-label">${label}</label><label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;margin-top:0.35rem;"><input type="checkbox" data-src-id="${src.id}" data-src-field="${String(field)}" ${checked ? 'checked' : ''}><span>${text}</span></label></div>`;
+        const distributionCodeSelect = () => {
+            const codes = [
+                ['', '— Not set (use checkboxes) —'], ['7', '7 — Normal distribution'], ['1', '1 — Early, no known exception (10%)'],
+                ['2', '2 — Early, exception applies'], ['3', '3 — Disability'], ['4', '4 — Death'], ['G', 'G — Direct rollover'],
+                ['H', 'H — Direct rollover to Roth'], ['Q', 'Q — Qualified Roth distribution'], ['T', 'T — Roth, exception applies'],
+                ['J', 'J — Early Roth IRA distribution'], ['S', 'S — SIMPLE IRA, first 2 years (25%)'], ['B', 'B — Designated Roth account'],
+                ['1B', '1B — Early, designated Roth'], ['7B', '7B — Normal, designated Roth']
+            ];
+            const cur = (src.distributionCode || '').toUpperCase();
+            const known = codes.some(([v]) => v === cur);
+            return `<div><label class="panel-input-label">Distribution Code (Box 7)</label><select class="w2-input" style="padding-left:0.5rem;" id="input-source-${src.id}-code" data-src-id="${src.id}" data-src-field="distributionCode">${(known ? codes : [...codes, [cur, cur]]).map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+        };
         const extraInputs = src.type === '1099-DIV'
             ? money('Qualified Dividends (Box 1b)', 'qualifiedDividends', src.qualifiedDividends || 0)
                 + money('Capital Gain Distributions (Box 2a)', 'capitalGainDistributions', src.capitalGainDistributions || 0)
             : src.type === '1099-R'
                 ? money('Taxable Amount (Box 2a)', 'taxableAmount', src.taxableAmount, 'Same as Box 1')
-                    + check('Rollover (Code G / H)', 'rollover', src.rollover, 'Rolled over — not taxable')
-                    + check('Early Withdrawal (10% Penalty)', 'earlyDistributionPenalty', src.earlyDistributionPenalty, 'Code 1 Early Distribution')
+                    + distributionCodeSelect()
+                    + (src.distributionCode ? '' : check('Rollover (Code G / H)', 'rollover', src.rollover, 'Rolled over — not taxable')
+                        + check('Early Withdrawal (10% Penalty)', 'earlyDistributionPenalty', src.earlyDistributionPenalty, 'Code 1 Early Distribution'))
                     + money('Amount Meeting a 10% Exception (Form 5329)', 'penaltyExceptionAmount', src.penaltyExceptionAmount || 0)
                 : src.type === '1099-G'
                     ? money('State/Local Tax Refund (Box 2)', 'stateRefund', src.stateRefund || 0)
@@ -4518,8 +4532,11 @@ class TaxApp {
                     src[field] = el.value === '' && field === 'taxableAmount' ? undefined : (Number(el.value) || 0);
                 }
                 else {
-                    src[field] = el.value;
+                    src[field] = field === 'distributionCode' ? (el.value || undefined) : el.value;
                 }
+                // The box 7 code replaces the rollover / Code 1 checkboxes, so redraw the panel when it changes.
+                if (field === 'distributionCode')
+                    this.renderFederalPanelSections();
                 this.recalculateAndRender();
             });
         });
