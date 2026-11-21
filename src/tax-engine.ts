@@ -508,7 +508,7 @@ export function stateReturnsFromGraph(
     return out;
   };
 
-  const allStateReturns = [plan.resident, ...plan.nonresidents].map(build);
+  const allStateReturns = [plan.resident, ...plan.nonresidents].filter(Boolean).map(build);
 
   const lines: UnifiedTaxJurisdictionLine[] = [{
     jurisdiction: 'United States (Federal)',

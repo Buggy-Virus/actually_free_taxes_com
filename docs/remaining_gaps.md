@@ -80,11 +80,11 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | :-- | :-: | :-- | :-- | :-- | :-: |
 | C1 | P0 | **Part-year residency** (move dates, income by period, prorated deductions) | Full-year resident only | Residency periods per state; reuse nonresident ratio machinery | ⬜ |
 | C2 | P0 | Year-keyed rate tables for all states (2024, 2025, 2026) and correct HOH/MFJ brackets (29 states use synthesized "1.4 × single" HOH) | Overrides for 6 states | Verify every state from DOR instructions | ⬜ |
-| C3 | P0 | Resident state required (no silent default to CA) | Defaults to CA | Validation + prompt | ⬜ |
+| C3 | P0 | Resident state required (no silent default to CA) | Defaults to CA | Validation + prompt | ✅ "— Select your state —"; no resident return without a state |
 | C4 | P1 | State estimated / extension payments and prior-year overpayment | W-2 withholding only | Per-state payments input | ✅ "State Estimated & Extension Payments" panel in every state |
 | C5 | P1 | Partial Social Security taxation in CO, CT, MN, MT, NM, RI, UT, VT, WV | Taxed in full | Per-state rules (+ A1 ages) | ⬜ |
 | C6 | P1 | Age-based retirement exclusions (NY $20k, NJ, GA, CO, MI, SC, etc.) | IL/MS/PA only | Needs A1 | ⬜ |
-| C7 | P1 | Out-of-state municipal bond interest addition | Not added back | "In-state portion" of 1099-INT box 8 | ⬜ |
+| C7 | P1 | Out-of-state municipal bond interest addition | Not added back | "In-state portion" of 1099-INT box 8 | ✅ `st.<code>.muniAddBack` from 1099-INT box 8 minus in-state portion (IN, UT simplified as exempt) |
 | C8 | P1 | Refundable state child credits computed per law (CA YCTC, NY Empire State, MN, CO, NJ, MD, IL, OR) | Several flat amounts | Needs A2 ages | ⬜ |
 | C9 | P1 | Own-formula state EITCs (CA CalEITC table, MN WFC) | % of federal | | ⬜ |
 | C10 | P1 | State itemized deductions for remaining states (AL, AZ, AR, GA, HI, ID, KS, KY, ME, MN, MS, MO, NE, NC, OK, OR, SC, WI credit…) | NY, CA, DC, MD, VA only | Per-state Schedule A rules | ⬜ |

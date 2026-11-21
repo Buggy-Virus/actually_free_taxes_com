@@ -31,11 +31,12 @@ function residentOf(state) {
     if (state.residentState && state.residentState.trim())
         return state.residentState.toUpperCase().trim();
     const first = state.w2s?.[0]?.states?.[0]?.state;
-    return first && first.trim() ? first.toUpperCase().trim() : 'CA';
+    // No resident state chosen and no W-2 state: no resident state return (never silently assume one).
+    return first && first.trim() ? first.toUpperCase().trim() : '';
 }
 export function planFromState(state) {
     const resident = residentOf(state);
-    const codes = new Set([resident]);
+    const codes = new Set(resident ? [resident] : []);
     (state.w2s || []).forEach(w => (w.states || []).forEach(s => { const c = (s.state || '').toUpperCase().trim(); if (c)
         codes.add(c); }));
     (state.otherIncome?.sources || []).forEach(s => { const c = (s.state || '').toUpperCase().trim(); if (c)
@@ -76,7 +77,8 @@ export function returnGraph(plan) {
         g = new FormulaGraph();
         defineFederal(g, plan.year);
         defineShared(g);
-        defineResident(g, plan);
+        if (plan.resident)
+            defineResident(g, plan);
         plan.nonresidents.forEach(code => defineNonresident(g, plan, code));
         defineReturnTotals(g, plan);
         graphCache.set(key, g);
@@ -91,7 +93,7 @@ function catalogKeyFor(code, itemKey) {
 export function returnContext(state, plan) {
     const ctx = federalContext(state);
     const n = (v) => Number(v) || 0;
-    const codes = [plan.resident, ...plan.nonresidents];
+    const codes = [plan.resident, ...plan.nonresidents].filter(Boolean);
     codes.forEach(code => {
         const lc = code.toLowerCase();
         ctx.collections[`st.${lc}.w2`] = (state.w2s || []).flatMap(w => (w.states || [])
@@ -140,6 +142,8 @@ function defineShared(g) {
     g.quantity({ id: 'ret.dependents', label: 'Dependents', unit: 'count', display: 'inline', expr: add(R('fed.ctcChildren'), R('fed.odcDependents')) });
     g.quantity({ id: 'ret.netLtcg', label: 'Net Long-Term Capital Gain (State)', unit: 'usd', category: 'capital',
         expr: atLeast0(add(R('fed.longTermGain'), min(lit(0), R('in.stGain')))) });
+    g.quantity({ id: 'ret.outOfStateMuniInterest', label: 'Tax-Exempt Interest From Other States\' Bonds', unit: 'usd', category: 'state', optional: true,
+        expr: atLeast0(sub(each('src.int', 'taxExempt'), each('src.int', 'inStateExempt'))) });
     g.quantity({ id: 'ret.interestDividends', label: 'Interest & Dividends', unit: 'usd', category: 'wages',
         expr: add(R('in.interest'), R('fed.interest1099'), R('fed.dividends')) });
 }
@@ -285,6 +289,8 @@ const STATE_EITC_MULTIPLIERS = {
 };
 const LTCG_EXCLUSION = { SC: 0.44, NM: 0.40, ND: 0.40, WI: 0.30, AR: 0.50, AZ: 0.25, VT: 0.40 };
 const LOCAL_PASSTHROUGH = ['PA', 'OH', 'IN', 'KY', 'MI', 'MO', 'DE', 'AL', 'OR'];
+/** States that do not add back (all) other states' municipal bond interest — simplified: IN taxes only bonds bought after 2011, UT only bonds of states that tax UT bonds. */
+const MUNI_ADDBACK_EXEMPT = ['IN', 'UT'];
 /** States that compute nonresident tax as (tax on all income as a resident) × (state-source share). */
 const NONRESIDENT_RATIO_METHOD = ['AR', 'CA', 'CO', 'CT', 'IA', 'KS', 'ME', 'MN', 'MO', 'MT', 'NE', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'RI', 'UT', 'VT', 'WV'];
 /** States that tax some Social Security benefits (each with its own exemptions — not yet modeled). */
@@ -340,6 +346,11 @@ function defineResident(g, plan) {
         unit: 'usd', category: 'state', expr: startsFromFti ? R('fed.taxableIncome') : R('fed.agi') });
     const additions = [];
     const subtractions = [];
+    // Municipal bond interest from other states is federally exempt but taxable on most state returns.
+    if (!MUNI_ADDBACK_EXEMPT.includes(code)) {
+        q('muniAddBack', { label: `${code} Addition: Other States' Municipal Bond Interest`, unit: 'usd', category: 'state', optional: true, expr: R('ret.outOfStateMuniInterest') });
+        additions.push(R(S('muniAddBack')));
+    }
     if (code === 'CA' || code === 'NJ') {
         q('hsaAddBack', { label: `${code} HSA Add-Back`, unit: 'usd', category: 'state', optional: true, expr: R('fed.hsaDeduction') });
         additions.push(R(S('hsaAddBack')));
@@ -680,8 +691,8 @@ function defineNonresident(g, plan, code) {
 }
 // ---------- unified totals ----------
 function defineReturnTotals(g, plan) {
-    const codes = [plan.resident, ...plan.nonresidents];
-    g.quantity({ id: 'ret.stateNet', label: 'All States Refund / (Owed)', unit: 'usd', category: 'state', expr: round(add(...codes.map(c => R(sid(c, 'net'))))) });
+    const codes = [plan.resident, ...plan.nonresidents].filter(Boolean);
+    g.quantity({ id: 'ret.stateNet', label: 'All States Refund / (Owed)', unit: 'usd', category: 'state', expr: codes.length ? round(add(...codes.map(c => R(sid(c, 'net'))))) : lit(0) });
     g.quantity({ id: 'ret.grandTotal', label: 'Total Refund / (Owed)', unit: 'usd', category: 'refund', expr: round(add(R('fed.netResult'), R('ret.stateNet'))) });
 }
 // ---------- presentation: state calculation cards ----------
@@ -702,7 +713,7 @@ export function stateBlocks(plan, code, g) {
         const blocks = [
             { id: `calc-state-${lc}-taxable`, stepLabel: `${name} • Step 1: Income, Deductions & Taxable Income`, title: `${code} Deductions & Taxable Income`,
                 quantities: [S('w2Wages'), S('documentIncome'), { id: S('startingPoint'), show: 'always' },
-                    ...pick('hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ssSubtraction', 'retirementSubtraction', 'unemploymentSubtraction', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
+                    ...pick('muniAddBack', 'hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ssSubtraction', 'retirementSubtraction', 'unemploymentSubtraction', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
                     { id: S('agi'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'), { id: S('baseStdDeduction'), show: 'always' },
                     ...pick('itemized'), S('panelItem'), S('deduction'), ...pick('personalExemption', 'dependentExemption', 'childDeduction'), S('exemptions'),
                     { id: S('taxable'), show: 'always' }] },

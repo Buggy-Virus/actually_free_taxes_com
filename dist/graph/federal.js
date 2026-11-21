@@ -76,6 +76,7 @@ function defineInputs(g) {
                 accrued: f(`${c.label} Accrued Interest Paid`, false, true),
                 taxExempt: f(`${c.label} Tax-Exempt Interest`, false, true),
                 treasury: f(`${c.label} US Treasury Interest (Box 3)`, false, true),
+                inStateExempt: f(`${c.label} Tax-Exempt Interest From Own State's Bonds`, false, true),
                 qdiv: f(`${c.label} Qualified Dividends`),
                 capGainDist: f(`${c.label} Capital Gain Distributions (Box 2a)`, false, true),
                 taxable: f(`${c.label} Taxable Amount (Box 2a)`),
@@ -707,6 +708,7 @@ export function federalContext(state) {
                 accrued: n(s.accruedInterestPaid),
                 taxExempt: n(s.taxExemptInterest),
                 treasury: n(s.usTreasuryInterest),
+                inStateExempt: n(s.inStateTaxExemptInterest),
                 qdiv: n(s.qualifiedDividends),
                 capGainDist: n(s.capitalGainDistributions),
                 // 1099-R: box 2a taxable amount (box 1 gross if not determined); rollovers are not taxable.

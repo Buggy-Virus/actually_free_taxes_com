@@ -931,6 +931,7 @@ class TaxApp {
             earlyDistributionPenalty: Boolean(src?.earlyDistributionPenalty),
             federalTaxWithheld: Number(src?.federalTaxWithheld) || 0,
             usTreasuryInterest: Number(src?.usTreasuryInterest) || 0,
+            inStateTaxExemptInterest: Number(src?.inStateTaxExemptInterest) || 0,
             taxableAmount: src?.taxableAmount === undefined || src?.taxableAmount === null || src?.taxableAmount === '' ? undefined : Number(src.taxableAmount) || 0,
             rollover: Boolean(src?.rollover),
             capitalGainDistributions: Number(src?.capitalGainDistributions) || 0,
@@ -940,7 +941,7 @@ class TaxApp {
         return {
             year: validYear,
             filingStatus: validStatus,
-            residentState: String(parsed.residentState ?? base.residentState).toUpperCase().trim() || 'CA',
+            residentState: String(parsed.residentState ?? base.residentState).toUpperCase().trim(),
             w2s: normalizedW2s,
             otherIncome: {
                 interest: Number(parsed.otherIncome?.interest) || 0,
@@ -1183,7 +1184,7 @@ class TaxApp {
             statusSelect.value = this.state.filingStatus;
         const resSelect = document.getElementById('select-resident-state');
         if (resSelect)
-            resSelect.value = this.state.residentState || 'CA';
+            resSelect.value = this.state.residentState || '';
         const dedSelect = document.getElementById('select-deduction-method');
         if (dedSelect)
             dedSelect.value = this.state.deductionMethod || 'auto';
@@ -1353,7 +1354,7 @@ class TaxApp {
         }
         const resStateSelect = document.getElementById('select-resident-state');
         if (resStateSelect) {
-            resStateSelect.value = this.state.residentState || 'CA';
+            resStateSelect.value = this.state.residentState || '';
             resStateSelect.addEventListener('change', (e) => {
                 this.state.residentState = e.target.value;
                 this.recalculateAndRender();
@@ -4126,6 +4127,7 @@ class TaxApp {
                 : src.type === '1099-INT'
                     ? money('US Treasury Interest (Box 3)', 'usTreasuryInterest', src.usTreasuryInterest || 0)
                         + money('Tax-Exempt Interest (Box 8)', 'taxExemptInterest', src.taxExemptInterest || 0)
+                        + money("…of which from your own state's bonds", 'inStateTaxExemptInterest', src.inStateTaxExemptInterest || 0)
                     : '';
         const inputsHtml = `
       <div class="panel-multi-inputs">

@@ -746,7 +746,7 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
                 { id: 1, type: 'SSA-1099', payer: 'Social Security Admin', amount: 24000 },
                 { id: 2, type: '1099-R', payer: 'Fidelity IRA Early Dist', amount: 10000, earlyDistributionPenalty: true, federalTaxWithheld: 1000 },
                 { id: 3, type: 'Schedule K-1', payer: 'Palmetto Partners LP', amount: 15000 },
-                { id: 4, type: '1099-INT', payer: 'SC Muni Bonds', amount: 200, taxExemptInterest: 4000 }
+                { id: 4, type: '1099-INT', payer: 'SC Muni Bonds', amount: 200, taxExemptInterest: 4000, inStateTaxExemptInterest: 4000 }
             ],
             capitalGains: {
                 shortTerm: 0,

@@ -620,6 +620,12 @@ const CASES: Golden[] = [
     expect: [['CA payments', st('CA', 'totalWithholding'), 4000]]
   },
   {
+    name: 'NY resident — other states\' municipal bond interest is added back',
+    source: 'IT-225 A-101: $5,000 box 8 tax-exempt interest, $2,000 from NY bonds → $3,000 NY addition',
+    state: ret({ residentState: 'NY', w2s: [w2(60000, { state: 'NY' })], otherIncome: { interest: 0, sources: [src(1, '1099-INT', 0, { taxExemptInterest: 5000, inStateTaxExemptInterest: 2000 })] } }),
+    expect: [['AGI', fed('fed.agi'), 60000], ['NY addition', st('NY', 'muniAddBack'), 3000], ['NY income', st('NY', 'agi'), 63000]]
+  },
+  {
     name: 'Texas resident — no state income tax',
     source: 'Texas has no personal income tax',
     state: ret({ residentState: 'TX', w2s: [w2(90000, { state: 'TX' })] }),

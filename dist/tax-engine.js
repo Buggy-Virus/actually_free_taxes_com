@@ -441,7 +441,7 @@ export function stateReturnsFromGraph(ev, plan, state) {
         }
         return out;
     };
-    const allStateReturns = [plan.resident, ...plan.nonresidents].map(build);
+    const allStateReturns = [plan.resident, ...plan.nonresidents].filter(Boolean).map(build);
     const lines = [{
             jurisdiction: 'United States (Federal)',
             formName: 'IRS Form 1040',

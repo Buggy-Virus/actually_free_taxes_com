@@ -37,7 +37,7 @@ Required template additions:
 | Requirement | Status |
 | :-- | :--: |
 | Separate **nonrefundable** and **refundable** credit slots (refundable credits can create a refund) | ✅ |
-| `payments` slot: withholding + estimated payments + extension payment + prior-year overpayment applied | ❌ |
+| `payments` slot: withholding + estimated payments + extension payment + prior-year overpayment applied | ✅ (`st.<code>.estimatedPayments`) |
 | `useTax` slot (most income-tax states put use tax on the income tax return) | ❌ |
 | `stateAmt` slot (CA, CO, CT, MN) | ❌ |
 | `penalty` slot (state underpayment penalties) | ❌ |
@@ -50,11 +50,11 @@ Required template additions:
 
 | Rule | Status | Notes |
 | :-- | :--: | :-- |
-| Resident state selection; no state selected | ⚠️ | Defaults silently to **CA**. Should require a choice |
+| Resident state selection; no state selected | ✅ | No default; no resident return until a state is chosen or a W-2 state exists |
 | Federal starting point per state (AGI vs taxable income vs own gross income) | ✅ | See §1 |
 | IRC conformity date (rolling vs static, e.g. CA conforms to 2015 IRC) and decoupling from bonus depreciation, §179, QBI (no state allows QBI except a few), HSA (CA, NJ), student loan forgiveness, FEIE | ⚠️ | HSA add-back for CA/NJ only |
 | **US Treasury / federal obligation interest is exempt in every income-tax state** (subtraction) | ✅ | `st.<code>.treasurySubtraction` from 1099-INT box 3; golden test |
-| **Out-of-state municipal bond interest is taxable in most states** (addition); in-state munis exempt | ❌ | Not in old docs |
+| **Out-of-state municipal bond interest is taxable in most states** (addition); in-state munis exempt | ⚠️ | ✅ addition in all income-tax states except IN/UT (simplified) |
 | State income tax refunds subtraction (federally taxable 1099-G box 2 is not taxable by the state) | ❌ | |
 | Social Security: exempt in most states; taxed with phase-outs in CO, CT, MN, MT, NM, RI, UT, VT, WV (2025 status varies) | ⚠️ | ✅ full exemption in all other income-tax states (`st.<code>.ssSubtraction`); ❌ the nine states' partial exemptions |
 | Retirement income exclusions (PA, IL, MS full; NY $20k; NJ; GA; MI phase-in; CO; etc.) | ⚠️ | ✅ IL, MS, PA (`retirementSubtraction`); ❌ age-based exclusions (NY, NJ, GA, CO, MI…) need taxpayer ages |
@@ -74,7 +74,7 @@ Required template additions:
 | Child tax credits (CA YCTC, NY Empire State, MN, CO, NJ, MA, VT, NM, OR, UT, MD, IL, etc.) | ⚠️ | Several modeled as nonrefundable flat amounts |
 | Property tax / renter credits (circuit breakers, many filed on separate forms: MN M1PR, MI 1040CR, WI Schedule H, NJ ANCHOR) | ⚠️ | IL 5% credit, NJ deduction, some panels |
 | State paid family leave / disability payroll contributions (CA SDI, NY PFL, NJ, RI, HI, WA, MA, CT, CO, OR, MD) and excess-withholding refunds with multiple employers | ❌ | CA SDI is also deductible as SALT federally |
-| Estimated tax and extension payments, underpayment penalties | ❌ | |
+| Estimated tax and extension payments, underpayment penalties | ⚠️ | ✅ payments; ❌ penalties |
 | Use tax reporting | ❌ | Not in old docs |
 | State filing thresholds (must I file?) and "return not required" handling | ⚠️ | No-tax states only |
 | State forms output (PDFs) and e-file (state MeF, direct portals) | ❌ | See [state_filing_reference.md](./state_filing_reference.md) |
