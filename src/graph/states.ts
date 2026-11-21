@@ -329,6 +329,87 @@ const NONRESIDENT_RATIO_METHOD = ['AR', 'CA', 'CO', 'CT', 'IA', 'KS', 'ME', 'MN'
 const MFS = statusIs('married_separate');
 const taxpayerAgeKnown = quietly(gt(R('in.taxpayerBirthYear'), num(0)));
 
+const spouseAgeKnown = quietly(and(MFJ, gt(R('in.spouseBirthYear'), num(0))));
+/** A per-person amount by age tier: tiers are [minimum age, amount], highest first; `base` applies below every tier or when the age is unknown. */
+function byAge(age: Expr, known: Cond, tiers: Array<[number, number]>, base: number): Expr {
+  return tiers.reduceRight<Expr>((rest, [minAge, amount]) => when(and(known, gte(age, num(minAge))), lit(amount), rest), lit(base));
+}
+/** Taxpayer's amount plus the spouse's on a joint return. */
+function perPerson(tiers: Array<[number, number]>, base = 0): Expr {
+  return add(byAge(R('fed.taxpayerAge'), taxpayerAgeKnown, tiers, base), when(MFJ, byAge(R('fed.spouseAge'), spouseAgeKnown, tiers, base), lit(0)));
+}
+const nonEarlyRetirement = (): Expr => atLeast0(sub(R('fed.retirement'), R('fed.earlyDistributions')));
+
+interface RetirementRule {
+  label: string;
+  /** Set when the exclusion depends on state income before the exclusion (computed as its own line). */
+  incomeTest?: string;
+  expr: (incomeTest: Expr) => Expr;
+  ageDeduction?: { label: string; expr: (retirementDeduction: Expr) => Expr };
+}
+
+/**
+ * State retirement-income exclusions and age deductions (2024/2025 law):
+ *  IL, MS, IA (55+), PA — qualified retirement income fully excluded.
+ *  NY IT-201 line 29: $20,000 per person 59½+ (age 60+ by year end used: no birth month is collected).
+ *  NJ-1040 line 28a: 62+; NJ gross income ≤ $100,000 → up to $100,000 MFJ / $75,000 / $50,000 MFS;
+ *    $100,001–$125,000 → 50% / 37.5% / 25% of pension income; $125,001–$150,000 → 25% / 18.75% / 12.5%; above → none.
+ *  GA IT-RET: $35,000 at 62–64, $65,000 at 65+, per person (retirement, interest, dividends, net capital gain).
+ *  SC §12-6-1170: retirement deduction $3,000 (under 65) / $10,000 (65+) per person; age-65 deduction $15,000 less the retirement deduction.
+ *  CO §39-22-104(4)(f): pension/annuity subtraction $20,000 at 55–64, $24,000 at 65+, per person (includes SS not already subtracted).
+ *  KY §141.010(10): $31,110 per person.   AR §26-51-307: $6,000 per person.   AL §40-18-19: first $6,000 per person 65+.
+ *  DE §1106(b)(4): pension exclusion $12,500 at 60+, $2,000 under 60, per person.
+ *  VA §58.1-322.03: age deduction $12,000 per person 65+, less $1 per $1 of AGI (excluding SS) over $50,000 single / $75,000 married.
+ */
+function retirementExclusion(code: string): RetirementRule | null {
+  const ret = nonEarlyRetirement();
+  const capped = (cap: Expr, income: Expr = ret) => min(income, cap);
+  switch (code) {
+    case 'IL': case 'MS':
+      return { label: `${code} Retirement Income Exclusion`, expr: () => R('fed.retirement') };
+    case 'PA':
+      return { label: 'PA Retirement Income Exclusion (non-early distributions)', expr: () => ret };
+    case 'IA':
+      return { label: 'IA Retirement Income Exclusion (age 55+)', expr: () => when(gt(perPerson([[55, 1]]), num(0)), ret, lit(0)) };
+    case 'NY':
+      return { label: 'NY Pension & Annuity Exclusion ($20,000 per person 59½+)', expr: () => capped(perPerson([[60, 20000]])) };
+    case 'NJ': {
+      const eligible = gt(perPerson([[62, 1]]), num(0));
+      const pick3 = (mfj: number, single: number, mfs: number) => when(MFJ, lit(mfj), when(MFS, lit(mfs), lit(single)));
+      return {
+        label: 'NJ Pension Exclusion (age 62+)', incomeTest: 'NJ Gross Income Before Pension Exclusion',
+        expr: (gross) => when(eligible,
+          when(lte(gross, lit(100000)), capped(pick3(100000, 75000, 50000)),
+            when(lte(gross, lit(125000)), round(mul(ret, pick3(0.5, 0.375, 0.25))),
+              when(lte(gross, lit(150000)), round(mul(ret, pick3(0.25, 0.1875, 0.125))), lit(0)))), lit(0))
+      };
+    }
+    case 'GA':
+      return { label: 'GA Retirement Income Exclusion (62–64: $35,000 · 65+: $65,000)',
+        expr: () => capped(perPerson([[65, 65000], [62, 35000]]), add(ret, R('fed.interestTotal'), R('fed.dividends'), atLeast0(R('fed.capNet')))) };
+    case 'SC':
+      return { label: 'SC Retirement Deduction ($3,000 · 65+: $10,000)', expr: () => capped(perPerson([[65, 10000]], 3000)),
+        ageDeduction: { label: 'SC Age 65+ Deduction ($15,000 less retirement deduction)',
+          expr: (retDed) => atLeast0(sub(perPerson([[65, 15000]]), min(retDed, perPerson([[65, 10000]])))) } };
+    case 'CO':
+      return { label: 'CO Pension & Annuity Subtraction (55–64: $20,000 · 65+: $24,000)',
+        expr: () => capped(perPerson([[65, 24000], [55, 20000]]), add(ret, atLeast0(sub(R('fed.taxableSS'), R(sid(code, 'ssSubtraction')))))) };
+    case 'KY':
+      return { label: 'KY Pension Income Exclusion ($31,110 per person)', expr: () => capped(perPerson([], 31110)) };
+    case 'AR':
+      return { label: 'AR Retirement Income Exclusion ($6,000 per person)', expr: () => capped(perPerson([], 6000)) };
+    case 'AL':
+      return { label: 'AL Retirement Income Exclusion ($6,000 per person 65+)', expr: () => capped(perPerson([[65, 6000]])) };
+    case 'DE':
+      return { label: 'DE Pension Exclusion (under 60: $2,000 · 60+: $12,500)', expr: () => capped(perPerson([[60, 12500]], 2000)) };
+    case 'VA':
+      return { label: 'VA Age Deduction ($12,000 per person 65+, income-tested)',
+        expr: () => atLeast0(sub(perPerson([[65, 12000]]), atLeast0(sub(sub(R('fed.agi'), R('fed.taxableSS')), when(MFJ, lit(75000), lit(50000)))))) };
+    default:
+      return null;
+  }
+}
+
 /**
  * Subtraction for federally taxable Social Security (null = fully taxed, i.e. no subtraction line).
  * Sources: CT Schedule 1 SS worksheet; NM §7-2-5.14 (2022+); MN §290.0132 subd. 26 (House Research 2024/2025
@@ -460,14 +541,18 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
     q('ssSubtraction', { label: `${code} Social Security Exemption`, unit: 'usd', category: 'state', optional: true, expr: ssExempt });
     subtractions.push(R(S('ssSubtraction')));
   }
-  // Retirement income exclusions: IL and MS exempt qualified retirement income; PA exempts distributions after retirement.
-  if (code === 'IL' || code === 'MS') {
-    q('retirementSubtraction', { label: `${code} Retirement Income Exclusion`, unit: 'usd', category: 'state', optional: true, expr: R('fed.retirement') });
+  // Retirement income exclusions (C6). Pension income is pooled across spouses until 1099-R ownership exists (A4),
+  // so a joint return gets each qualifying spouse's cap against the combined amount.
+  const retirement = retirementExclusion(code);
+  if (retirement) {
+    if (retirement.incomeTest) q('retirementIncomeTest', { label: retirement.incomeTest, unit: 'usd', display: 'inline',
+      expr: atLeast0(sub(add(R(S('startingPoint')), ...additions), ...subtractions)) });
+    q('retirementSubtraction', { label: retirement.label, unit: 'usd', category: 'state', optional: true, expr: retirement.expr(R(S('retirementIncomeTest'))) });
     subtractions.push(R(S('retirementSubtraction')));
-  } else if (code === 'PA') {
-    q('retirementSubtraction', { label: 'PA Retirement Income Exclusion (non-early distributions)', unit: 'usd', category: 'state', optional: true,
-      expr: atLeast0(sub(R('fed.retirement'), R('fed.earlyDistributions'))) });
-    subtractions.push(R(S('retirementSubtraction')));
+    if (retirement.ageDeduction) {
+      q('ageDeduction', { label: retirement.ageDeduction.label, unit: 'usd', category: 'state', optional: true, expr: retirement.ageDeduction.expr(R(S('retirementSubtraction'))) });
+      subtractions.push(R(S('ageDeduction')));
+    }
   }
   // Unemployment compensation (1099-G) is not taxed by CA, NJ, PA or VA.
   if (UI_EXEMPT_STATES.includes(code)) {
@@ -805,7 +890,7 @@ export function stateBlocks(plan: ReturnPlan, code: string, g: FormulaGraph): Bl
     const blocks: BlockSpec[] = [
       { id: `calc-state-${lc}-taxable`, stepLabel: `${name} • Step 1: Income, Deductions & Taxable Income`, title: `${code} Deductions & Taxable Income`,
         quantities: [S('w2Wages'), S('documentIncome'), { id: S('startingPoint'), show: 'always' },
-          ...pick('muniAddBack', 'refundSubtraction', 'hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ssSubtraction', 'retirementSubtraction', 'unemploymentSubtraction', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
+          ...pick('muniAddBack', 'refundSubtraction', 'hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ssSubtraction', 'retirementIncomeTest', 'retirementSubtraction', 'ageDeduction', 'unemploymentSubtraction', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
           { id: S('agi'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'), { id: S('baseStdDeduction'), show: 'always' },
           ...pick('itemized'), S('panelItem'), S('deduction'), ...pick('personalExemption', 'dependentExemption', 'childDeduction'), S('exemptions'),
           { id: S('taxable'), show: 'always' }] },

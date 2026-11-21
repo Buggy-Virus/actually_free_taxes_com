@@ -84,7 +84,8 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | C4 | P1 | State estimated / extension payments and prior-year overpayment | W-2 withholding only | Per-state payments input | ✅ "State Estimated & Extension Payments" panel in every state |
 | C5 | P1 | Partial Social Security taxation in CO, CT, MN, MT, NM, RI, UT, VT, WV | Taxed in full | Per-state rules (+ A1 ages) | ✅ CT (25% cap above $75k/$100k), NM cliff, MN 10%/$4,000 phase-out (2024/2025 thresholds), VT $10k phase-out (2025 +$5k), WV 35%/65%, CO 65+ (2025: 55–64 under $75k/$95k), UT credit (TC-40 code AH); MT taxes as federal. RI → C5a; MN simplified-method alternative not modeled |
 | C5a | P1 | Rhode Island Social Security modification (full retirement age + AGI limit) | Taxed in full | Needs 2024/2025 thresholds from the RI-1040 worksheet | ⬜ |
-| C6 | P1 | Age-based retirement exclusions (NY $20k, NJ, GA, CO, MI, SC, etc.) | IL/MS/PA only | Needs A1 | ⬜ |
+| C6 | P1 | Age-based retirement exclusions (NY $20k, NJ, GA, CO, MI, SC, etc.) | IL/MS/PA only | Needs A1 | ✅ NY, NJ, GA, SC, CO, KY, AR, AL, DE, VA, IA; spouses' pensions pooled until A4; NY uses age 60 (no birth month) |
+| C6a | P2 | Remaining retirement exclusions: MI birth-year tiers, MD $39,500+ pension exclusion, ME $35k (less SS), MT, OK $10k, HI/government-pension-only rules, military retirement | — | Pension type (government / private / military) per 1099-R | ⬜ |
 | C7 | P1 | Out-of-state municipal bond interest addition | Not added back | "In-state portion" of 1099-INT box 8 | ✅ `st.<code>.muniAddBack` from 1099-INT box 8 minus in-state portion (IN, UT simplified as exempt) |
 | C8 | P1 | Refundable state child credits computed per law (CA YCTC, NY Empire State, MN, CO, NJ, MD, IL, OR) | Several flat amounts | Needs A2 ages | ⬜ |
 | C9 | P1 | Own-formula state EITCs (CA CalEITC table, MN WFC) | % of federal | | ⬜ |

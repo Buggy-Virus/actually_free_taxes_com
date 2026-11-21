@@ -57,7 +57,7 @@ Required template additions:
 | **Out-of-state municipal bond interest is taxable in most states** (addition); in-state munis exempt | ⚠️ | ✅ addition in all income-tax states except IN/UT (simplified) |
 | State income tax refunds subtraction (federally taxable 1099-G box 2 is not taxable by the state) | ❌ | |
 | Social Security: exempt in most states; taxed with phase-outs in CO, CT, MN, MT, NM, RI, UT, VT, WV (2025 status varies) | ⚠️ | ✅ full exemption in all other income-tax states (`st.<code>.ssSubtraction`); ✅ CT, NM, MN, VT, WV, CO partial/age rules and the UT credit (`st.ut.ssCredit`); MT taxed as federal; ❌ RI modification |
-| Retirement income exclusions (PA, IL, MS full; NY $20k; NJ; GA; MI phase-in; CO; etc.) | ⚠️ | ✅ IL, MS, PA (`retirementSubtraction`); ❌ age-based exclusions (NY, NJ, GA, CO, MI…) need taxpayer ages |
+| Retirement income exclusions (PA, IL, MS full; NY $20k; NJ; GA; MI phase-in; CO; etc.) | ⚠️ | ✅ IL, MS, PA, IA 55+, NY $20k, NJ income-tiered, GA $35k/$65k, SC retirement + age-65 deductions, CO $20k/$24k, KY $31,110, AR $6k, AL $6k 65+, DE $2k/$12.5k, VA age deduction (`retirementSubtraction`, `ageDeduction`); ❌ MI (birth-year tiers), MD, ME, MT, OK, HI, government-pension-only exclusions |
 | Military pay exclusions (most states exempt active-duty pay of residents or nonresidents; military retirement exclusions) | ❌ | |
 | Unemployment compensation (exempt in CA, NJ, PA, VA, MT, others) | ⚠️ | ✅ CA, NJ, PA, VA (`unemploymentSubtraction`) |
 | Capital gains: state LTCG exclusions (AZ 25%, AR 50%, ND 40%, NM 40%, SC 44%, VT 40% up to $5k, WI 30%); MA 8.5% short-term rate; WA excise | ⚠️ | ✅ listed exclusions; ⚠️ MA modeled as a 3.5% surtax |

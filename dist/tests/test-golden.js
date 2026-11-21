@@ -768,6 +768,85 @@ const CASES = [
         state: ret({ year: 2024, filingStatus: 'single', residentState: 'UT', w2s: [w2(50000, { state: 'UT' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
         expect: [['UT SS credit', st('UT', 'ssCredit'), 0]]
     },
+    // ---------------- State: retirement income exclusions (C6) ----------------
+    {
+        name: 'NY: $20,000 pension exclusion for a taxpayer over 59½',
+        source: 'IT-201 line 29 instructions: up to $20,000 of private pension income for those 59½ or older (age 66 in 2024)',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'NY', w2s: [w2(40000, { state: 'NY' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1958 } }),
+        expect: [['NY exclusion', st('NY', 'retirementSubtraction'), 20000]]
+    },
+    {
+        name: 'NY: no pension exclusion under 59½',
+        source: 'IT-201 line 29: the exclusion starts at 59½ (age 50 in 2024)',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'NY', w2s: [w2(40000, { state: 'NY' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1974 } }),
+        expect: [['NY exclusion', st('NY', 'retirementSubtraction'), 0]]
+    },
+    {
+        name: 'NJ: full pension exclusion up to $75,000 single when gross income ≤ $100,000',
+        source: 'NJ-1040 line 28a worksheet: age 62+, NJ gross income $70,000 → exclude all $30,000',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'NJ', w2s: [w2(40000, { state: 'NJ' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1958 } }),
+        expect: [['NJ exclusion', st('NJ', 'retirementSubtraction'), 30000]]
+    },
+    {
+        name: 'NJ: 37.5% of pension income excluded at $100,001–$125,000 (single)',
+        source: 'NJ-1040 line 28a: gross income $110,000 single → 37.5% × $30,000 = $11,250',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'NJ', w2s: [w2(80000, { state: 'NJ' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1958 } }),
+        expect: [['NJ gross income', st('NJ', 'retirementIncomeTest'), 110000], ['NJ exclusion', st('NJ', 'retirementSubtraction'), 11250]]
+    },
+    {
+        name: 'GA: $65,000 retirement exclusion at 65+ covers pension and interest',
+        source: 'GA IT-RET: 65+ exclusion up to $65,000 of retirement income incl. interest — $30,000 pension + $5,000 interest',
+        state: ret({ residentState: 'GA', w2s: [w2(40000, { state: 'GA' })], taxpayer: { birthYear: 1955 }, otherIncome: { interest: 5000, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] } }),
+        expect: [['GA exclusion', st('GA', 'retirementSubtraction'), 35000]]
+    },
+    {
+        name: 'GA: $35,000 cap at ages 62–64',
+        source: 'GA IT-RET: ages 62–64 up to $35,000 — $50,000 pension → $35,000',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'GA', w2s: [w2(40000, { state: 'GA' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 50000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1961 } }),
+        expect: [['GA exclusion', st('GA', 'retirementSubtraction'), 35000]]
+    },
+    {
+        name: 'SC: 65+ gets the $10,000 retirement deduction and $5,000 of the age deduction',
+        source: 'SC1040 lines w/x: retirement deduction $10,000 (65+); age-65 deduction $15,000 − $10,000 = $5,000',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'SC', w2s: [w2(40000, { state: 'SC' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1955 } }),
+        expect: [['SC retirement deduction', st('SC', 'retirementSubtraction'), 10000], ['SC age deduction', st('SC', 'ageDeduction'), 5000]]
+    },
+    {
+        name: 'SC: under 65, $3,000 per person (MFJ, both with pensions pooled)',
+        source: 'SC1040 line w: $3,000 each under 65 → $6,000',
+        state: ret({ year: 2024, filingStatus: 'married_joint', residentState: 'SC', w2s: [w2(40000, { state: 'SC' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] } }),
+        expect: [['SC retirement deduction', st('SC', 'retirementSubtraction'), 6000], ['SC age deduction', st('SC', 'ageDeduction'), 0]]
+    },
+    {
+        name: 'CO: $24,000 pension subtraction at 65+',
+        source: 'CO DR 0104AD: 65+ pension/annuity subtraction up to $24,000 — $30,000 pension',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'CO', w2s: [w2(40000, { state: 'CO' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1955 } }),
+        expect: [['CO pension subtraction', st('CO', 'retirementSubtraction'), 24000]]
+    },
+    {
+        name: 'KY: $31,110 pension exclusion per person regardless of age',
+        source: 'KY Schedule P: up to $31,110 — $40,000 pension',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'KY', w2s: [w2(40000, { state: 'KY' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 40000, { distributionCode: '7' })] } }),
+        expect: [['KY exclusion', st('KY', 'retirementSubtraction'), 31110]]
+    },
+    {
+        name: 'VA: age deduction reduced dollar-for-dollar over $50,000',
+        source: 'VA age deduction worksheet: $12,000 − ($55,000 AGI − $50,000) = $7,000 (age 70, born after 1/1/1939)',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'VA', w2s: [w2(25000, { state: 'VA' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1954 } }),
+        expect: [['VA age deduction', st('VA', 'retirementSubtraction'), 7000]]
+    },
+    {
+        name: 'DE: $12,500 pension exclusion at 60+',
+        source: 'DE PIT-RES pension exclusion: $12,500 for age 60+',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'DE', w2s: [w2(40000, { state: 'DE' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1960 } }),
+        expect: [['DE exclusion', st('DE', 'retirementSubtraction'), 12500]]
+    },
+    {
+        name: 'IA: retirement income fully excluded at 55+',
+        source: 'IA 2023+ retirement income exclusion for those 55 or older',
+        state: ret({ year: 2024, filingStatus: 'single', residentState: 'IA', w2s: [w2(40000, { state: 'IA' })], otherIncome: { interest: 0, sources: [src(1, '1099-R', 30000, { distributionCode: '7' })] }, taxpayer: { birthYear: 1965 } }),
+        expect: [['IA exclusion', st('IA', 'retirementSubtraction'), 30000]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];
