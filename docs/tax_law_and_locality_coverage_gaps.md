@@ -1,5 +1,7 @@
 # Tax Law & Locality Coverage Gaps — Exhaustive Line-Item Reference
 
+> **Status tracking has moved:** see [federal_tax_logic.md](./federal_tax_logic.md) and [state_local_tax_logic.md](./state_local_tax_logic.md) for the complete requirements list with implementation status. This document remains the detailed per-state reference.
+
 This document provides an exhaustive, line-by-line inventory of every tax law approximation, unmodeled local/municipal tax, part-year residency rule, state-by-state itemized/SALT divergence, niche state credit/carryover, and Federal unenforced limit in [`src/tax-engine.ts`](../src/tax-engine.ts).
 
 ---

@@ -1,5 +1,7 @@
 # Tax Law & Locality Coverage — Implementation Checklist
 
+> **Status tracking has moved:** see [federal_tax_logic.md](./federal_tax_logic.md) and [state_local_tax_logic.md](./state_local_tax_logic.md) for the complete requirements list with implementation status. This document remains the detailed per-state reference.
+
 Checklist derived from [tax_law_and_locality_coverage_gaps.md](./tax_law_and_locality_coverage_gaps.md) for tracking implementation progress.
 
 > **Official Authority Directory:** See Section 1 of [tax_law_and_locality_coverage_gaps.md](./tax_law_and_locality_coverage_gaps.md) for the full list of Federal (`irs.gov`, `dol.gov`), 50-state + DC, and local revenue authority URLs.
