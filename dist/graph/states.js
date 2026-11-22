@@ -18,7 +18,7 @@
 import { normalizeFilingStatus } from '../tax-constants.js';
 import { NYC_LOCAL_BRACKETS, getStateTaxRule, stateExemptionForYear } from '../state-rules.js';
 import { STATE_PANEL_CATALOG } from '../state-panel-catalog.js';
-import { add, and, atLeast0, brackets, ceil, div, each, field, gt, gte, lit, lt, lte, max, min, mul, neg, not, num, or, param, quietly, rate, ref, round, statusIs, sub, sumOver, when, flag } from './expr.js';
+import { add, and, atLeast0, brackets, ceil, div, each, field, gt, gte, lit, lt, lte, max, min, mul, neg, not, num, or, param, quietly, rate, ref, round, statusIs, sub, sumOver, when, flag, floor } from './expr.js';
 import { FormulaGraph } from './graph.js';
 import { defineFederal, federalContext, federalGraph } from './federal.js';
 const R = ref, P = param;
@@ -777,14 +777,37 @@ function defineResident(g, plan) {
             exLabel = 'MA Child & Family Credit';
             exCredit = mul(deps, lit(440));
             break;
-        case 'NY':
-            exLabel = 'NY Empire State Child Credit';
-            exCredit = when(lte(adj, when(MFJ, lit(110000), lit(75000))), mul(kids, lit(330)), lit(0));
+        case 'NY': {
+            exLabel = 'NY Empire State Child Credit (IT-213)';
+            const nyThr = when(MFJ, lit(110000), when(MFS, lit(55000), lit(75000)));
+            if (year >= 2025) {
+                // 2025+: $1,000 per child under 4, $330 per child 4–16, less $16.50 per $1,000 of FAGI (rounded down) over the threshold.
+                const underFour = min(kids, sumOver('dep', when(and(lt(sub(P('fed.taxYear'), field('birthYear')), num(4)), gt(field('isChild'), num(0)), gt(field('monthsLived'), num(6))), num(1), num(0))));
+                exCredit = atLeast0(sub(add(mul(underFour, lit(1000)), mul(sub(kids, underFour), lit(330))), mul(div(atLeast0(sub(mul(floor(div(R('fed.agi'), lit(1000))), lit(1000)), nyThr)), lit(1000)), lit(16.5))));
+            }
+            else {
+                // 2024 Worksheet A/B: 2017-rule federal credit ($1,000 per child, less 5% of FAGI over the threshold rounded up to
+                // $1,000), limited to federal tax plus the 2017 refundable part (15% of earned income over $3,000);
+                // the credit is the greater of 33% of that or $100 per child.
+                const line8 = atLeast0(sub(mul(kids, lit(1000)), mul(mul(ceil(div(atLeast0(sub(R('fed.agi'), nyThr)), lit(1000))), lit(1000)), rate(0.05))));
+                const used2017 = min(line8, add(R('fed.tax'), atLeast0(mul(sub(R('fed.earnedIncome'), lit(3000)), rate(0.15)))));
+                exCredit = when(gt(line8, lit(0)), round(max(mul(used2017, rate(0.33)), mul(kids, lit(100)))), lit(0));
+            }
             break;
-        case 'MN':
-            exLabel = 'MN Child Tax Credit';
-            exCredit = when(lte(adj, lit(35000)), mul(kids, lit(1750)), lit(0));
+        }
+        case 'MN': {
+            // Schedule M1CWFC: Working Family Credit (4% of earned income up to a cap, plus older-child amounts) plus $1,750 per
+            // child, reduced by 12% (9% with only older children) of the greater of AGI or earned income over the threshold.
+            exLabel = 'MN Working Family & Child Tax Credit (M1CWFC)';
+            const y24 = year < 2025;
+            const older = min(num(3), atLeast0(sub(R('fed.eitcChildren'), kids)));
+            const olderAmt = when(gte(older, num(3)), lit(y24 ? 2630 : 2710), when(gte(older, num(2)), lit(y24 ? 2210 : 2270), when(gte(older, num(1)), lit(y24 ? 970 : 1000), lit(0))));
+            const wfc = add(mul(min(R('fed.earnedIncome'), lit(y24 ? 9220 : 9480)), rate(0.04)), olderAmt);
+            const mnThr = when(MFJ, lit(y24 ? 36880 : 37910), lit(y24 ? 31090 : 31950));
+            const phaseRate = when(and(gt(older, num(0)), lte(kids, num(0))), rate(0.09), rate(0.12));
+            exCredit = round(atLeast0(sub(add(wfc, mul(kids, lit(1750))), mul(atLeast0(sub(max(R('fed.agi'), R('fed.earnedIncome')), mnThr)), phaseRate))), 'dollar');
             break;
+        }
         case 'NM':
             exLabel = 'NM Child Income Tax Credit';
             exCredit = when(lte(adj, lit(75000)), mul(kids, lit(600)), lit(0));

@@ -1288,6 +1288,32 @@ const CASES = [
         state: ret({ residentState: 'KY', w2s: [w2(90000, { state: 'KY' })], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 4000, mortgageInterest: 10000, charity: 1000 } }),
         expect: [['KY itemized', st('KY', 'itemized'), 11000]]
     },
+    // ---------------- State: refundable child credits (C8) ----------------
+    {
+        name: 'MN 2025: Working Family + Child Tax Credit with phase-out',
+        source: 'MN Schedule M1CWFC (2025): 4% × $9,480 = $379.20 + 2 × $1,750 − 12% × ($40,000 − $31,950) = $2,913.20 → $2,913 (whole dollars)',
+        state: ret({ year: 2025, filingStatus: 'head_of_household', residentState: 'MN', w2s: [w2(40000, { state: 'MN' })], dependents: { childrenCount: 2 } }),
+        expect: [['MN credit', st('MN', 'exemptionCredit'), 2913]]
+    },
+    {
+        name: 'MN 2024: thresholds $36,880 joint / $31,090 other',
+        source: 'MN Schedule M1CWFC (2024): 4% × $9,220 = $368.80 + $1,750 − 12% × ($40,000 − $36,880) = $1,744.40 → $1,744 (MFJ, 1 child)',
+        state: ret({ filingStatus: 'married_joint', residentState: 'MN', w2s: [w2(40000, { state: 'MN' })], dependents: { childrenCount: 1 } }),
+        expect: [['MN credit', st('MN', 'exemptionCredit'), 1744]]
+    },
+    {
+        name: 'NY 2025: Empire State Child Credit $1,000 under age 4, $330 ages 4–16',
+        source: 'NY IT-213 instructions (2025): children aged 2 and 8, FAGI $80,000 single/HOH → $1,330 − $16.50 × 5 = $1,247.50',
+        state: ret({ year: 2025, filingStatus: 'head_of_household', residentState: 'NY', w2s: [w2(80000, { state: 'NY' })],
+            dependents: { childrenCount: 0, list: [{ id: 1, name: 'A', birthYear: 2023, relationship: 'child', monthsLived: 12 }, { id: 2, name: 'B', birthYear: 2017, relationship: 'child', monthsLived: 12 }] } }),
+        expect: [['NY ESCC', st('NY', 'exemptionCredit'), 1247.5]]
+    },
+    {
+        name: 'NY 2024: Empire State Child Credit is 33% of the 2017-rule federal credit',
+        source: 'NY IT-213 Worksheet A (2024): 2 × $1,000 under the $110,000 MFJ threshold, fully usable → 33% × $2,000 = $660',
+        state: ret({ filingStatus: 'married_joint', residentState: 'NY', w2s: [w2(90000, { state: 'NY' })], dependents: { childrenCount: 2 } }),
+        expect: [['NY ESCC', st('NY', 'exemptionCredit'), 660]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];
