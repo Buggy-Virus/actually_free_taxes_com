@@ -1476,6 +1476,14 @@ const CASES: Golden[] = [
     state: ret({ w2s: [w2(100000)], priorYearTax: 10000, priorYearAgi: 90000 }),
     expect: [['shortfall', fed('fed.estimatedTaxShortfall'), 10000], ['penalty', fed('fed.estimatedTaxPenalty'), 503]]
   },
+  {
+    name: 'AOTC per student with the 4-year limit',
+    source: 'Form 8863 Part III: student A $4,000 expenses (1 prior year) → $2,500; student B already claimed 4 years → $0',
+    state: ret({ filingStatus: 'married_joint', w2s: [w2(60000)], dependents: { childrenCount: 0, list: [
+      { id: 1, name: 'A', birthYear: 2005, relationship: 'child', monthsLived: 12, student: true, educationExpenses: 4000, aotcYearsClaimed: 1 },
+      { id: 2, name: 'B', birthYear: 2003, relationship: 'child', monthsLived: 12, student: true, educationExpenses: 3000, aotcYearsClaimed: 4 }] } }),
+    expect: [['AOTC', fed('fed.aotcTotal'), 2500], ['refundable part', fed('fed.aotcRefundable'), 1000]]
+  },
 ];
 
 let passed = 0, gaps = 0;

@@ -195,7 +195,9 @@ function defineInputs(g) {
             monthsLived: { label: 'Months Lived With You', unit: 'count', domId: depDom },
             student: { label: 'Full-Time Student', unit: 'count', domId: depDom },
             disabled: { label: 'Permanently Disabled', unit: 'count', domId: depDom },
-            hasSsn: { label: 'Has SSN Valid for Work', unit: 'count', domId: depDom }
+            hasSsn: { label: 'Has SSN Valid for Work', unit: 'count', domId: depDom },
+            eduExpenses: { label: 'Student Education Expenses', unit: 'usd', optional: true, domId: (it) => `dep-${it.id}-edu` },
+            aotcYears: { label: 'Years AOTC Already Claimed', unit: 'count', optional: true, domId: (it) => `dep-${it.id}-aotc-years` }
         }
     });
     io('in.priorYearTax', "Last Year's Total Tax", 'input-prior-year-tax', 'cred-prior-year-safe-harbor', 'credits', { optional: true });
@@ -820,14 +822,15 @@ function defineQuantities(g, year) {
     q({ id: 'fed.eduPhaseFactor', label: 'Education Credit Phase Factor', unit: 'rate', display: 'inline',
         expr: when(statusIs('married_separate'), rate(0), max(rate(0), min(rate(1), sub(rate(1), div(atLeast0(sub(R('fed.agi'), P('fed.eduPhaseStart'))), P('fed.eduPhaseSpan')))))) });
     q({ id: 'fed.aotcTotal', label: 'American Opportunity Credit', unit: 'usd', category: 'credits', optional: true,
-        expr: mul(add(min(lit(2000), R('in.aotc')), mul(atLeast0(sub(min(lit(4000), R('in.aotc')), lit(2000))), rate(0.25))), R('fed.eduPhaseFactor')) });
+        // Form 8863 Part III per student: 100% of the first $2,000 + 25% of the next $2,000, only for the first 4 years claimed.
+        expr: mul(add(add(min(lit(2000), R('in.aotc')), mul(atLeast0(sub(min(lit(4000), R('in.aotc')), lit(2000))), rate(0.25))), sumOver('dep', when(lt(field('aotcYears'), num(4)), add(min(lit(2000), field('eduExpenses')), mul(atLeast0(sub(min(lit(4000), field('eduExpenses')), lit(2000))), rate(0.25))), lit(0)))), R('fed.eduPhaseFactor')) });
     q({ id: 'fed.aotcRefundable', label: 'Refundable AOTC (40%)', unit: 'usd', form: 'Form 1040 Line 29', category: 'credits', optional: true,
         expr: round(mul(R('fed.aotcTotal'), rate(0.4))) });
     q({ id: 'fed.aotcNonrefundable', label: 'Nonrefundable AOTC (60%)', unit: 'usd', display: 'inline', optional: true, expr: round(mul(R('fed.aotcTotal'), rate(0.6))) });
     q({ id: 'fed.llc', label: 'Lifetime Learning Credit', unit: 'usd', display: 'inline', optional: true,
         expr: round(mul(mul(min(lit(10000), R('in.llc')), rate(0.2)), R('fed.eduPhaseFactor'))) });
     q({ id: 'fed.educationNonrefundable', label: 'Nonrefundable Education Credits', unit: 'usd', form: 'Form 8863 Line 19', category: 'credits', optional: true,
-        presentIf: gt(add(R('in.aotc'), R('in.llc')), lit(0)),
+        presentIf: gt(add(R('in.aotc'), R('in.llc'), each('dep', 'eduExpenses')), lit(0)),
         expr: add(R('fed.aotcNonrefundable'), R('fed.llc')) });
     q({ id: 'fed.saversRate', label: "Saver's Credit Rate", unit: 'rate', display: 'inline',
         expr: when(lte(R('fed.agi'), P('fed.saversT50')), rate(0.5), when(lte(R('fed.agi'), P('fed.saversT20')), rate(0.2), when(lte(R('fed.agi'), P('fed.saversT10')), rate(0.1), rate(0)))) });
@@ -1076,7 +1079,8 @@ export function federalContext(state) {
     collections.dep = (d0 => (d0.list || []).map(dp => ({
         id: dp.id, name: dp.name,
         values: { birthYear: n(dp.birthYear), isChild: dp.relationship === 'relative' ? 0 : 1, monthsLived: n(dp.monthsLived),
-            student: dp.student ? 1 : 0, disabled: dp.disabled ? 1 : 0, hasSsn: dp.hasSsn === false ? 0 : 1 }
+            student: dp.student ? 1 : 0, disabled: dp.disabled ? 1 : 0, hasSsn: dp.hasSsn === false ? 0 : 1,
+            eduExpenses: n(dp.educationExpenses), aotcYears: n(dp.aotcYearsClaimed) }
     })))(state.dependents || {});
     collections.biz = (state.businesses || []).map(b => ({ id: b.id, name: b.name, values: {
             receipts: n(b.receipts), advertising: n(b.advertising), supplies: n(b.supplies), insurance: n(b.insurance), utilities: n(b.utilities),

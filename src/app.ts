@@ -1069,7 +1069,8 @@ class TaxApp {
           ? parsed.dependents.list.map((d: any, i: number) => ({
               id: typeof d?.id === 'number' ? d.id : i + 1, name: String(d?.name ?? `Dependent ${i + 1}`), birthYear: Number(d?.birthYear) || 0,
               relationship: d?.relationship === 'relative' ? 'relative' : 'child', monthsLived: d?.monthsLived === undefined ? 12 : Number(d.monthsLived) || 0,
-              student: Boolean(d?.student), disabled: Boolean(d?.disabled), hasSsn: d?.hasSsn !== false
+              student: Boolean(d?.student), disabled: Boolean(d?.disabled), hasSsn: d?.hasSsn !== false,
+              educationExpenses: Number(d?.educationExpenses) || 0, aotcYearsClaimed: Number(d?.aotcYearsClaimed) || 0
             }))
           : [],
         childrenCount: Number(parsed.dependents?.childrenCount) || 0,
@@ -4635,6 +4636,8 @@ class TaxApp {
             <label><input type="checkbox" data-dep-id="${d.id}" data-dep-field="student" ${d.student ? 'checked' : ''}> Full-time student</label>
             <label><input type="checkbox" data-dep-id="${d.id}" data-dep-field="disabled" ${d.disabled ? 'checked' : ''}> Permanently disabled</label>
             <label><input type="checkbox" data-dep-id="${d.id}" data-dep-field="hasSsn" ${d.hasSsn !== false ? 'checked' : ''}> Has SSN valid for work</label>
+            ${d.student ? `<label>College expenses $<input type="number" step="any" class="w2-input" style="width:6.5rem;display:inline-block;padding-left:0.4rem;" id="dep-${d.id}-edu" data-dep-id="${d.id}" data-dep-field="educationExpenses" value="${d.educationExpenses || ''}"></label>
+            <label>AOTC years already claimed <input type="number" step="1" min="0" max="4" class="w2-input" style="width:3.5rem;display:inline-block;padding-left:0.4rem;" id="dep-${d.id}-aotc-years" data-dep-id="${d.id}" data-dep-field="aotcYearsClaimed" value="${d.aotcYearsClaimed ?? ''}"></label>` : ''}
           </div>
         </div>`;
       inputsHtml = `<div>${deps.map(row).join('')}
@@ -4876,6 +4879,7 @@ class TaxApp {
         if (el instanceof HTMLInputElement && el.type === 'checkbox') (dep as any)[field] = el.checked;
         else if (el instanceof HTMLInputElement && el.type === 'number') (dep as any)[field] = Number(el.value) || 0;
         else (dep as any)[field] = el.value;
+        if (field === 'student') this.renderFederalPanelSections(); // shows the student's education fields
         this.recalculateAndRender();
       };
       el.addEventListener(el instanceof HTMLSelectElement || (el as HTMLInputElement).type === 'checkbox' ? 'change' : 'input', handler);

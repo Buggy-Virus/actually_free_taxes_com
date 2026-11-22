@@ -285,6 +285,10 @@ export interface DependentRecord {
   disabled?: boolean;
   /** Has an SSN valid for employment (CTC and EITC require one). */
   hasSsn?: boolean;
+  /** Qualified education expenses for this student (Form 8863, American opportunity credit). */
+  educationExpenses?: number;
+  /** Years the AOTC was already claimed for this student (limit 4). */
+  aotcYearsClaimed?: number;
 }
 
 export interface Dependents {
