@@ -30,6 +30,7 @@ import { calculateTaxes, buildCalculationBlocks, buildStateCalcBlocks, buildAuto
 import { ArrowEngine } from './arrow-engine.js';
 import { GraphBlock } from './graph/graph.js';
 import { reviewReturn } from './validation.js';
+import { RECORD_KINDS, RecordKind, recordDomId } from './record-kinds.js';
 import { renderRatingPill, renderRatingCardHtml, getFieldRating, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
 import { PANEL_CATALOG, PanelCatalogEntry, getPanelCatalogEntry } from './panel-catalog.js';
 import { getStateCatalogForSection, getStateCatalogEntry } from './state-panel-catalog.js';
@@ -1004,6 +1005,9 @@ class TaxApp {
       distributionCode: src?.distributionCode ? String(src.distributionCode).toUpperCase().slice(0, 2) : undefined,
       capitalGainDistributions: Number(src?.capitalGainDistributions) || 0,
       penaltyExceptionAmount: Number(src?.penaltyExceptionAmount) || 0,
+      ...Object.fromEntries(['k1Rental', 'k1Guaranteed', 'k1Interest', 'k1Dividends', 'k1QualifiedDividends', 'k1ShortTermGain', 'k1LongTermGain', 'k1SeEarnings']
+        .filter(k => src?.[k] !== undefined).map(k => [k, Number(src[k]) || 0])),
+      passive: Boolean(src?.passive),
       state: src?.state ? String(src.state).toUpperCase().trim() : ''
     }));
 
@@ -1086,6 +1090,18 @@ class TaxApp {
       livedApartFromSpouse: Boolean(parsed.livedApartFromSpouse),
       spouseItemizes: Boolean(parsed.spouseItemizes),
       partYear: parsed.partYear && typeof parsed.partYear.priorState === 'string' && parsed.partYear.priorState ? { priorState: String(parsed.partYear.priorState).toUpperCase(), moveMonth: Number(parsed.partYear.moveMonth) || 7 } : undefined,
+      businesses: Array.isArray(parsed.businesses) ? parsed.businesses.map((b: any, i: number) => ({ ...numericFields(b), id: typeof b?.id === 'number' ? b.id : i + 1,
+        name: String(b?.name ?? `Business ${i + 1}`), owner: b?.owner === 'spouse' ? 'spouse' : undefined })) : [],
+      capitalTransactions: Array.isArray(parsed.capitalTransactions) ? parsed.capitalTransactions.map((t: any, i: number) => ({ ...numericFields(t), id: typeof t?.id === 'number' ? t.id : i + 1,
+        description: String(t?.description ?? ''), term: t?.term === 'short' ? 'short' : 'long', box: typeof t?.box === 'string' ? t.box.slice(0, 1).toUpperCase() : undefined,
+        proceeds: Number(t?.proceeds) || 0, basis: Number(t?.basis) || 0 })) : [],
+      rentalProperties: Array.isArray(parsed.rentalProperties) ? parsed.rentalProperties.map((r: any, i: number) => ({ ...numericFields(r), id: typeof r?.id === 'number' ? r.id : i + 1,
+        name: String(r?.name ?? `Property ${i + 1}`), rents: Number(r?.rents) || 0, expenses: Number(r?.expenses) || 0 })) : [],
+      marketplacePolicies: Array.isArray(parsed.marketplacePolicies) ? parsed.marketplacePolicies.map((m: any, i: number) => ({ id: typeof m?.id === 'number' ? m.id : i + 1,
+        premiums: Number(m?.premiums) || 0, slcsp: Number(m?.slcsp) || 0, advancePtc: Number(m?.advancePtc) || 0 })) : [],
+      ptcHouseholdSize: Number(parsed.ptcHouseholdSize) || undefined,
+      ptcRegion: parsed.ptcRegion === 'AK' || parsed.ptcRegion === 'HI' ? parsed.ptcRegion : undefined,
+      carryovers: numericFields(parsed.carryovers),
       priorYearTax: Number(parsed.priorYearTax) || 0,
       priorYearAgi: Number(parsed.priorYearAgi) || 0,
       statePanels: Array.isArray(parsed.statePanels)
@@ -4177,6 +4193,8 @@ class TaxApp {
 
     ensure('adj-student-loan', (Number(this.state.adjustments?.studentLoan) || 0) !== 0);
     ensure('adj-ira', (Number(this.state.adjustments?.ira) || 0) !== 0);
+    RECORD_KINDS.forEach(k => ensure(k.panelKey, k.list(this.state).length > 0));
+    ensure('prior-year-carryovers', Object.values(this.state.carryovers || {}).some(v => Number(v) !== 0));
     ensure('home-sale-121', (Number(this.state.otherIncome?.capitalGains?.homeSaleGain) || 0) !== 0);
     ensure('adj-hsa', (Number(this.state.adjustments?.hsa) || 0) !== 0);
     ensure('adj-educator', (Number(this.state.adjustments?.educatorExpenses) || 0) !== 0);
@@ -4362,6 +4380,16 @@ class TaxApp {
           + (src.distributionCode ? '' : check('Rollover (Code G / H)', 'rollover', src.rollover, 'Rolled over — not taxable')
             + check('Early Withdrawal (10% Penalty)', 'earlyDistributionPenalty', src.earlyDistributionPenalty, 'Code 1 Early Distribution'))
           + money('Amount Meeting a 10% Exception (Form 5329)', 'penaltyExceptionAmount', src.penaltyExceptionAmount || 0)
+        : src.type === 'Schedule K-1'
+          ? money('Box 2 Rental Real Estate', 'k1Rental', src.k1Rental || 0).replace('data-src-field', `id="input-source-${src.id}-k1Rental" data-src-field`)
+            + money('Box 4 Guaranteed Payments', 'k1Guaranteed', src.k1Guaranteed || 0).replace('data-src-field', `id="input-source-${src.id}-k1Guaranteed" data-src-field`)
+            + money('Box 5 Interest', 'k1Interest', src.k1Interest || 0).replace('data-src-field', `id="input-source-${src.id}-k1Interest" data-src-field`)
+            + money('Box 6a Ordinary Dividends', 'k1Dividends', src.k1Dividends || 0).replace('data-src-field', `id="input-source-${src.id}-k1Dividends" data-src-field`)
+            + money('Box 6b Qualified Dividends', 'k1QualifiedDividends', src.k1QualifiedDividends || 0).replace('data-src-field', `id="input-source-${src.id}-k1QualifiedDividends" data-src-field`)
+            + money('Box 8 Short-Term Gain (Loss)', 'k1ShortTermGain', src.k1ShortTermGain || 0).replace('data-src-field', `id="input-source-${src.id}-k1ShortTermGain" data-src-field`)
+            + money('Box 9a Long-Term Gain (Loss)', 'k1LongTermGain', src.k1LongTermGain || 0).replace('data-src-field', `id="input-source-${src.id}-k1LongTermGain" data-src-field`)
+            + money('Box 14 Code A SE Earnings', 'k1SeEarnings', src.k1SeEarnings || 0).replace('data-src-field', `id="input-source-${src.id}-k1SeEarnings" data-src-field`)
+            + check('Passive Activity', 'passive', src.passive, 'I did not materially participate').replace('data-src-field', `id="input-source-${src.id}-passive" data-src-field`)
         : src.type === '1099-G'
           ? money('State/Local Tax Refund (Box 2)', 'stateRefund', src.stateRefund || 0)
             + money("Last Year's Itemized Deductions Above the Standard Deduction", 'priorItemizedExcess', src.priorItemizedExcess || 0)
@@ -4458,6 +4486,7 @@ class TaxApp {
         case 'input-elderly-credit': return Number(this.state.dependents?.elderlyDisabledCredit) || 0;
         case 'input-household-tax': return Number(this.state.dependents?.householdEmploymentTax) || 0;
         case 'input-household-wages': return Number(this.state.dependents?.householdWages) || 0;
+        case 'input-ptc-household-size': return Number(this.state.ptcHouseholdSize) || 0;
         default: return 0;
       }
     };
@@ -4562,6 +4591,28 @@ class TaxApp {
         <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-home-sale-qualifies" ${cap?.homeSaleQualifies ? 'checked' : ''}> Owned and lived in it 2 of the last 5 years (no exclusion in the past 2 years)</label>
         ${this.state.filingStatus === 'married_joint' ? `<label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-home-sale-spouse" ${cap?.homeSaleSpouseQualifies ? 'checked' : ''}> Spouse also lived there 2 of 5 years</label>` : ''}
       </div>`;
+    } else if (RECORD_KINDS.some(k => k.panelKey === entry.key)) {
+      const kind = RECORD_KINDS.find(k => k.panelKey === entry.key)!;
+      inputsHtml = this.renderRecordList(kind);
+      if (entry.key === 'cred-1095a') {
+        inputsHtml += `<div class="panel-multi-inputs" style="margin-top:0.5rem;">
+          ${numBox('input-ptc-household-size', 'Family Size (blank = you, spouse & dependents)', true)}
+          <div><label class="panel-input-label">Poverty-Line Table</label><select class="w2-input" id="select-ptc-region">
+            <option value="contiguous" ${!this.state.ptcRegion || this.state.ptcRegion === 'contiguous' ? 'selected' : ''}>48 states & DC</option>
+            <option value="AK" ${this.state.ptcRegion === 'AK' ? 'selected' : ''}>Alaska</option>
+            <option value="HI" ${this.state.ptcRegion === 'HI' ? 'selected' : ''}>Hawaii</option></select></div>
+        </div>`;
+      }
+    } else if (entry.key === 'prior-year-carryovers') {
+      const carry = (this.state.carryovers || {}) as Record<string, number | undefined>;
+      const dom: Record<string, string> = {"shortTermCapitalLoss": "st-capital", "longTermCapitalLoss": "lt-capital", "passiveLoss": "passive", "charity": "charity", "investmentInterest": "investment-interest", "nol": "nol", "amtCredit": "amt-credit", "foreignTax": "foreign-tax", "qbiLoss": "qbi-loss", "section179": "section-179"};
+      inputsHtml = `<div class="panel-multi-inputs">${([
+      ['shortTermCapitalLoss', 'Short-Term Capital Loss Carryover'], ['longTermCapitalLoss', 'Long-Term Capital Loss Carryover'],
+      ['passiveLoss', 'Unallowed Passive (Rental) Loss'], ['charity', 'Charitable Contribution Carryover'],
+      ['investmentInterest', 'Investment Interest Carryover'], ['nol', 'Net Operating Loss (post-2017)'],
+      ['amtCredit', 'Minimum Tax Credit (Form 8801)'], ['foreignTax', 'Foreign Tax Credit Carryover'],
+      ['qbiLoss', 'Qualified Business Loss Carryforward'], ['section179', 'Section 179 Carryover']] as Array<[string, string]>).map(([k, label]) =>
+        `<div><label class="panel-input-label">${label}</label><div class="w2-input-wrapper"><span class="currency-symbol">$</span><input type="number" step="any" class="w2-input" id="input-carryover-${dom[k]}" data-carry-field="${k}" value="${carry[k] || ''}" placeholder="0"></div></div>`).join('')}</div>`;
     } else if (entry.key === 'cred-foreign-tax') {
       inputsHtml = `<div class="panel-multi-inputs">
         ${numBox('input-foreign-tax-credit', 'Foreign Taxes Paid (1099-DIV box 7 / 1099-INT box 6)')}
@@ -4740,6 +4791,53 @@ class TaxApp {
       });
     });
 
+    // Repeating records (record-kinds.ts)
+    document.querySelectorAll<HTMLInputElement>('[data-rec-kind]').forEach(el => {
+      const kind = RECORD_KINDS.find(k => k.kind === el.dataset.recKind);
+      const id = parseInt(el.dataset.recId || '', 10);
+      const key = el.dataset.recField || '';
+      if (!kind || !key) return;
+      const fieldDef = kind.fields.find(f => f.key === key);
+      el.addEventListener('input', () => {
+        const item = kind.list(this.state).find((r: { id: number }) => r.id === id);
+        if (!item) return;
+        item[key] = fieldDef?.type === 'checkbox' ? el.checked : fieldDef?.type === 'money' || fieldDef?.type === 'number' ? (el.value === '' ? undefined : Number(el.value) || 0) : el.value;
+        this.recalculateAndRender();
+      });
+    });
+    document.querySelectorAll<HTMLElement>('[data-rec-add]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const kind = RECORD_KINDS.find(k => k.kind === btn.dataset.recAdd);
+        if (!kind) return;
+        const list = kind.list(this.state);
+        const nextId = list.reduce((m: number, r: { id: number }) => Math.max(m, r.id), 0) + 1;
+        kind.setList(this.state, [...list, kind.create(nextId, this.state)]);
+        this.renderFederalPanelSections();
+        this.recalculateAndRender();
+      });
+    });
+    document.querySelectorAll<HTMLElement>('[data-rec-remove]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const [kindId, idStr] = (btn.dataset.recRemove || '').split(':');
+        const kind = RECORD_KINDS.find(k => k.kind === kindId);
+        if (!kind) return;
+        kind.setList(this.state, kind.list(this.state).filter((r: { id: number }) => r.id !== parseInt(idStr, 10)));
+        this.renderFederalPanelSections();
+        this.recalculateAndRender();
+      });
+    });
+    document.querySelectorAll<HTMLInputElement>('[data-carry-field]').forEach(el => {
+      el.addEventListener('input', () => {
+        const carry = (this.state.carryovers ??= {}) as Record<string, number>;
+        carry[el.dataset.carryField || ''] = Number(el.value) || 0;
+        this.recalculateAndRender();
+      });
+    });
+    const ptcSize = document.getElementById('input-ptc-household-size') as HTMLInputElement | null;
+    if (ptcSize) ptcSize.addEventListener('input', () => { this.state.ptcHouseholdSize = Number(ptcSize.value) || undefined; this.recalculateAndRender(); });
+    const ptcRegion = document.getElementById('select-ptc-region') as HTMLSelectElement | null;
+    if (ptcRegion) ptcRegion.addEventListener('change', () => { this.state.ptcRegion = ptcRegion.value as TaxAppState['ptcRegion']; this.recalculateAndRender(); });
+
     // Dynamic 1099 sources
     document.querySelectorAll<HTMLInputElement>('[data-src-id]').forEach(el => {
       const id = parseInt(el.dataset.srcId || '', 10);
@@ -4803,6 +4901,11 @@ class TaxApp {
       case 'schedule-e-rental': this.state.otherIncome.scheduleERental = { grossRents: 0, expenses: 0, depreciation: 0, propertyState: '' }; break;
       case 'adj-student-loan': this.state.adjustments.studentLoan = 0; break;
       case 'adj-ira': this.state.adjustments.ira = 0; break;
+      case 'sched-c-businesses': this.state.businesses = []; break;
+      case 'form-8949-transactions': this.state.capitalTransactions = []; break;
+      case 'rental-properties': this.state.rentalProperties = []; break;
+      case 'cred-1095a': this.state.marketplacePolicies = []; this.state.ptcHouseholdSize = undefined; break;
+      case 'prior-year-carryovers': this.state.carryovers = {}; break;
       case 'home-sale-121': if (this.state.otherIncome.capitalGains) Object.assign(this.state.otherIncome.capitalGains, { homeSaleGain: 0, homeSaleQualifies: false, homeSaleSpouseQualifies: false }); break;
       case 'adj-hsa': this.state.adjustments.hsa = 0; break;
       case 'adj-educator': this.state.adjustments.educatorExpenses = 0; break;
@@ -5133,6 +5236,35 @@ class TaxApp {
       const display = tok.valueFormatted || tok.label || '';
       return `<span class="formula-var ${emptyClass}" data-block-id="${esc(blockId)}" data-var-id="${esc(tok.varId)}" role="button" tabindex="0" title="Click to view contributing inputs">${esc(display)}</span>`;
     }).join('');
+  }
+
+  /** List editor for a repeating record kind (businesses, Form 8949 sales, rentals, 1095-A). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private renderRecordList(kind: RecordKind<any>): string {
+    const joint = this.state.filingStatus === 'married_joint';
+    const items = kind.list(this.state);
+    const cell = (item: Record<string, unknown>, f: RecordKind<{ id: number }>['fields'][number]) => {
+      const id = recordDomId(kind.kind, item.id as number, f.key);
+      const attrs = `id="${id}" data-rec-kind="${kind.kind}" data-rec-id="${item.id}" data-rec-field="${f.key}"`;
+      const v = item[f.key];
+      const input = f.type === 'select'
+        ? `<select class="w2-input" ${attrs}>${(f.options || []).map(([ov, ol]) => `<option value="${esc(ov)}" ${String(v ?? f.options![0][0]) === ov ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>`
+        : f.type === 'checkbox'
+          ? `<input type="checkbox" ${attrs} ${v ? 'checked' : ''}>`
+          : f.type === 'text'
+            ? `<input type="text" class="w2-input" style="padding-left:0.5rem;" ${attrs} value="${esc(v ?? '')}">`
+            : `<div class="w2-input-wrapper">${f.type === 'money' ? '<span class="currency-symbol">$</span>' : ''}<input type="number" step="any" class="w2-input" ${f.type === 'number' ? 'style="padding-left:0.5rem;"' : ''} ${attrs} value="${v ?? ''}" placeholder="0"></div>`;
+      return `<div><label class="panel-input-label" for="${id}">${esc(f.label)}</label>${input}</div>`;
+    };
+    const rows = items.map((item: Record<string, unknown>) => `
+      <div class="record-row" style="border:1px solid #e2e8f0;border-radius:8px;padding:0.6rem;margin-bottom:0.6rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;">
+          <strong style="font-size:0.85rem;">${esc(kind.itemNoun)} ${items.indexOf(item) + 1}</strong>
+          <button type="button" class="btn btn-sm" data-rec-remove="${kind.kind}:${item.id}" title="Remove">✕</button>
+        </div>
+        <div class="panel-multi-inputs">${kind.fields.filter(f => joint || !f.jointOnly).map(f => cell(item, f)).join('')}</div>
+      </div>`).join('');
+    return `<div>${rows}<button type="button" class="btn btn-primary btn-sm" data-rec-add="${kind.kind}">+ Add ${esc(kind.itemNoun)}</button></div>`;
   }
 
   /** "Review" card: inconsistent entries and unsupported choices (src/validation.ts). Click a message to jump to the field. */

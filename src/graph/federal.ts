@@ -15,6 +15,7 @@ import {
   max, min, mul, neg, not, num, or, param, rate, ref, round, statusIs, sub, sumOver, when
 } from './expr.js';
 import { BlockSpec, CollectionItem, CoreStatus, FormulaGraph, GraphContext } from './graph.js';
+import { recordDomId } from '../record-kinds.js';
 
 const rules = (year: number): YearTaxRules => TAX_CONSTANTS[year as 2024 | 2025 | 2026] || TAX_CONSTANTS[2024];
 /** Pick a value by tax year (2024, 2025, 2026+). */
@@ -79,6 +80,8 @@ function defineInputs(g: FormulaGraph): void {
 
   // 1099s and other income documents
   SOURCE_COLLECTIONS.forEach(c => {
+    const k1f = (key: string, label: string) => ({ label: `${c.label} ${label}`, unit: 'usd' as const, optional: true, panelKey: c.panelKey, panelSection: 'other-income' as const,
+      domId: (it: CollectionItem) => `input-source-${it.id}-${key}` });
     const f = (label: string, allowNegative = false, optional = false) => ({
       label, unit: 'usd' as const, allowNegative, optional, panelKey: c.panelKey, panelSection: 'other-income' as const,
       domId: (it: CollectionItem) => `input-source-${it.id}-amount`
@@ -102,10 +105,47 @@ function defineInputs(g: FormulaGraph): void {
         fedWithheld: f(`${c.label} Federal Tax Withheld`, false, true),
         penalty: f(`${c.label} Early Distribution (Code 1)`),
         simple: f(`${c.label} SIMPLE IRA First 2 Years (Code S)`),
-        isSpouse: { label: `${c.label} Belongs to Spouse`, unit: 'count' as const, optional: true, domId: (it: CollectionItem) => `input-source-${it.id}-owner` }
+        isSpouse: { label: `${c.label} Belongs to Spouse`, unit: 'count' as const, optional: true, domId: (it: CollectionItem) => `input-source-${it.id}-owner` },
+        k1Rental: { ...k1f('k1Rental', 'Box 2 Rental Real Estate'), allowNegative: true }, k1Guaranteed: k1f('k1Guaranteed', 'Box 4 Guaranteed Payments'),
+        k1Interest: k1f('k1Interest', 'Box 5 Interest'), k1Dividends: k1f('k1Dividends', 'Box 6a Dividends'), k1QualDiv: k1f('k1QualifiedDividends', 'Box 6b Qualified Dividends'),
+        k1St: { ...k1f('k1ShortTermGain', 'Box 8 Short-Term Gain'), allowNegative: true }, k1Lt: { ...k1f('k1LongTermGain', 'Box 9a Long-Term Gain'), allowNegative: true },
+        k1Se: k1f('k1SeEarnings', 'Box 14A SE Earnings'), passive: { label: `${c.label} Passive Activity`, unit: 'count' as const, optional: true, domId: (it: CollectionItem) => `input-source-${it.id}-passive` }
       }
     });
   });
+
+  // Repeating records (businesses, Form 8949 sales, rentals, Form 1095-A)
+  const rf = (kind: string, key: string, label: string, unit: 'usd' | 'count' = 'usd', domKey = key) =>
+    ({ label, unit, optional: true, domId: (it: CollectionItem) => recordDomId(kind, it.id, domKey) });
+  g.collection({ id: 'biz', itemLabel: (_i, it) => `${it.name || 'Business'}:`, fields: {
+    receipts: rf('biz', 'receipts', 'Gross Receipts'), advertising: rf('biz', 'advertising', 'Advertising'), supplies: rf('biz', 'supplies', 'Supplies'),
+    insurance: rf('biz', 'insurance', 'Insurance'), utilities: rf('biz', 'utilities', 'Utilities'), rentLease: rf('biz', 'rentLease', 'Rent / Lease'),
+    legal: rf('biz', 'legalProfessional', 'Legal & Professional'), other: rf('biz', 'otherExpenses', 'Other Expenses'), meals: rf('biz', 'meals', 'Meals'),
+    miles: rf('biz', 'vehicleMiles', 'Business Miles', 'count'), sqft: rf('biz', 'homeOfficeSqFt', 'Home Office Sq Ft', 'count'),
+    isSpouse: rf('biz', 'owner', "Spouse's Business", 'count') } });
+  g.collection({ id: 'tx', itemLabel: (_i, it) => `${it.name || 'Sale'}:`, fields: {
+    proceeds: rf('tx', 'proceeds', 'Proceeds'), basis: rf('tx', 'basis', 'Cost Basis'), adj: { ...rf('tx', 'adjustment', 'Adjustment'), allowNegative: true },
+    isLong: rf('tx', 'term', 'Long-Term', 'count') } });
+  g.collection({ id: 'rent', itemLabel: (_i, it) => `${it.name || 'Property'}:`, fields: {
+    rents: rf('rent', 'rents', 'Rents'), expenses: rf('rent', 'expenses', 'Expenses'), depreciation: rf('rent', 'depreciation', 'Depreciation Entered'),
+    basis: rf('rent', 'buildingBasis', 'Building Basis'), pisYear: rf('rent', 'placedInServiceYear', 'Year Placed in Service', 'count'),
+    pisMonth: rf('rent', 'placedInServiceMonth', 'Month Placed in Service', 'count'), rentalDays: rf('rent', 'rentalDays', 'Days Rented', 'count'),
+    personalDays: rf('rent', 'personalDays', 'Personal-Use Days', 'count') } });
+  g.collection({ id: 'mkt', itemLabel: (i) => `1095-A #${i + 1}:`, fields: {
+    premiums: rf('mkt', 'premiums', 'Enrollment Premiums'), slcsp: rf('mkt', 'slcsp', 'SLCSP Premium'), aptc: rf('mkt', 'advancePtc', 'Advance PTC') } });
+
+  // Carryovers from last year (A5)
+  const co = (id: string, label: string, key: string) => io(id, label, `input-carryover-${key}`, 'prior-year-carryovers', 'other-income', { optional: true });
+  co('in.ltCapCarryover', 'Long-Term Capital Loss Carryover', 'lt-capital');
+  co('in.palCarryover', 'Prior-Year Unallowed Passive (Rental) Loss', 'passive');
+  co('in.charityCarryover', 'Charitable Contribution Carryover', 'charity');
+  co('in.invInterestCarryover', 'Investment Interest Carryover', 'investment-interest');
+  co('in.nolCarryover', 'Net Operating Loss Carryover', 'nol');
+  co('in.amtCreditCarryover', 'Prior-Year Minimum Tax Credit (Form 8801)', 'amt-credit');
+  co('in.ftcCarryover', 'Foreign Tax Credit Carryover', 'foreign-tax');
+  co('in.qbiLossCarryover', 'Qualified Business Loss Carryforward', 'qbi-loss');
+  co('in.sec179Carryover', 'Section 179 Carryover', 'section-179');
+  io('in.ptcHouseholdSize', 'Form 8962 Family Size', 'input-ptc-household-size', 'cred-1095a', 'credits', { unit: 'count', optional: true });
 
   // Other income
   io('in.interest', 'Bank Interest (1099-INT Box 1)', 'input-other-interest', '1099-int', 'other-income', { optional: true });
@@ -250,6 +290,14 @@ function defineParams(g: FormulaGraph): void {
   p('fed.saversT20', "Saver's Credit 20% AGI Limit", 'usd', c => byStatus(savers(c.year).t20)(c.status), 'Form 8880', YEAR_STATUS);
   p('fed.saversT10', "Saver's Credit 10% AGI Limit", 'usd', c => byStatus(savers(c.year).t10)(c.status), 'Form 8880', YEAR_STATUS);
   p('fed.householdWageThreshold', 'Household Employee FICA Threshold', 'usd', c => Y(c.year, 2700, 2800, 3000), 'Schedule H line A; SSA', ['select-tax-year']);
+  p('fed.mileageRate', 'Business Standard Mileage Rate', 'rate', c => Y(c.year, 0.67, 0.70, 0.725), 'Notice 2024-08 / 2025-5 / 2026-10', ['select-tax-year']);
+  // Form 8962 Tables 1-1 to 1-3: the prior year's HHS poverty guidelines (2023 for 2024 returns, 2024 for 2025, 2025 for 2026).
+  p('fed.fplBase', 'Poverty Line, 1 Person (48 States & DC)', 'usd', c => Y(c.year, 14580, 15060, 15650), 'Form 8962 instructions Table 1-1; HHS', ['select-tax-year']);
+  p('fed.fplAdd', 'Poverty Line, Each Additional Person', 'usd', c => Y(c.year, 5140, 5380, 5500), 'Form 8962 instructions Table 1-1; HHS', ['select-tax-year']);
+  p('fed.fplBaseAK', 'Poverty Line, 1 Person (Alaska)', 'usd', c => Y(c.year, 18210, 18810, 19550), 'Form 8962 instructions Table 1-2; HHS', ['select-tax-year']);
+  p('fed.fplAddAK', 'Poverty Line, Each Additional Person (Alaska)', 'usd', c => Y(c.year, 6430, 6730, 6880), 'Form 8962 instructions Table 1-2; HHS', ['select-tax-year']);
+  p('fed.fplBaseHI', 'Poverty Line, 1 Person (Hawaii)', 'usd', c => Y(c.year, 16770, 17310, 17990), 'Form 8962 instructions Table 1-3; HHS', ['select-tax-year']);
+  p('fed.fplAddHI', 'Poverty Line, Each Additional Person (Hawaii)', 'usd', c => Y(c.year, 5910, 6190, 6330), 'Form 8962 instructions Table 1-3; HHS', ['select-tax-year']);
   p('fed.adoptionCap', 'Adoption Credit Limit', 'usd', c => Y(c.year, 16810, 17280, 17670), 'Form 8839', ['select-tax-year']);
   p('fed.adoptionPhaseStart', 'Adoption Credit Phase-Out Start (MAGI)', 'usd', c => Y(c.year, 252150, 259190, 265080), 'Form 8839 line 7; Rev. Proc. 2023-34 / 2024-40 / 2025-32', ['select-tax-year']);
   p('fed.adoptionRefundableMax', 'Refundable Adoption Credit Limit', 'usd', c => Y(c.year, 0, 5000, 5120), 'P.L. 119-21 §70402', ['select-tax-year']);
@@ -337,26 +385,53 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: when(homeQualifies, min(R('in.homeSaleGain'), when(spouseQualifies, lit(500000), lit(250000))), lit(0)) });
   q({ id: 'fed.homeSaleTaxableGain', label: 'Taxable Gain on Home Sale', unit: 'usd', category: 'capital', optional: true,
     presentIf: gt(R('in.homeSaleGain'), lit(0)), expr: atLeast0(sub(R('in.homeSaleGain'), R('fed.homeSaleExclusion'))) });
-  q({ id: 'fed.longTermGain', label: 'Net Long-Term Gain/Loss', unit: 'usd', display: 'inline', expr: add(R('in.ltGain'), R('fed.capGainDistributions'), R('fed.homeSaleTaxableGain')) });
+  // Form 8949 transactions: proceeds − basis + adjustment (wash sale disallowed losses, code W, are entered as positive adjustments).
+  const txGain = add(sub(field('proceeds'), field('basis')), field('adj'));
+  q({ id: 'fed.txShortTerm', label: 'Form 8949 Short-Term Gain/Loss', unit: 'usd', form: 'Form 8949 Part I', category: 'capital', optional: true,
+    expr: sumOver('tx', mul(txGain, sub(num(1), field('isLong')))) });
+  q({ id: 'fed.txLongTerm', label: 'Form 8949 Long-Term Gain/Loss', unit: 'usd', form: 'Form 8949 Part II', category: 'capital', optional: true,
+    expr: sumOver('tx', mul(txGain, field('isLong'))) });
+  q({ id: 'fed.shortTermGain', label: 'Net Short-Term Gain/Loss', unit: 'usd', form: 'Schedule D Line 7', category: 'capital', optional: true,
+    expr: sub(add(R('in.stGain'), R('fed.txShortTerm'), each('src.k1', 'k1St')), R('in.capCarryover')) });
+  q({ id: 'fed.longTermGain', label: 'Net Long-Term Gain/Loss', unit: 'usd', form: 'Schedule D Line 15', display: 'inline',
+    expr: sub(add(R('in.ltGain'), R('fed.txLongTerm'), each('src.k1', 'k1Lt'), R('fed.capGainDistributions'), R('fed.homeSaleTaxableGain')), R('in.ltCapCarryover')) });
   q({ id: 'fed.capNet', label: 'Net Capital Gain/Loss', unit: 'usd', form: 'Schedule D Line 16', category: 'capital',
-    expr: sub(add(R('in.stGain'), R('fed.longTermGain')), R('in.capCarryover')) });
+    expr: add(R('fed.shortTermGain'), R('fed.longTermGain')) });
   q({ id: 'fed.capAllowed', label: 'Capital Gain/Loss on Return', unit: 'usd', form: 'Form 1040 Line 7', category: 'capital', optional: true,
     expr: max(R('fed.capNet'), P('fed.capLossFloor')) });
   q({ id: 'fed.capLossCarryforward', label: 'Capital Loss Carried to Next Year', unit: 'usd', form: 'Capital Loss Carryover Worksheet', category: 'capital', optional: true,
     expr: atLeast0(sub(R('fed.capAllowed'), R('fed.capNet'))) });
 
   // ---------- Business income (Schedule C) ----------
-  q({ id: 'fed.businessGross', label: 'Gross Business Receipts', unit: 'usd', display: 'inline',
+  q({ id: 'fed.business1099Gross', label: '1099-NEC / 1099-K / 1099-F Receipts', unit: 'usd', display: 'inline', optional: true,
     expr: add(each('src.nec', 'amount'), each('src.k', 'amount'), each('src.f', 'amount')) });
+  q({ id: 'fed.businessGross', label: 'Gross Business Receipts', unit: 'usd', display: 'inline',
+    expr: add(R('fed.business1099Gross'), each('biz', 'receipts')) });
+  // Schedule C Part II per business: listed expenses, 50% of meals, business miles at the standard rate.
+  const bizExpenses = add(field('advertising'), field('supplies'), field('insurance'), field('utilities'), field('rentLease'), field('legal'), field('other'),
+    mul(field('meals'), rate(0.5)), mul(field('miles'), P('fed.mileageRate')));
+  q({ id: 'fed.bizExpenses', label: 'Business Expenses (Schedule C Part II)', unit: 'usd', form: 'Schedule C Line 28', category: 'wages', optional: true,
+    expr: round(sumOver('biz', bizExpenses)) });
+  // Simplified home office (Rev. Proc. 2013-13): $5 × up to 300 sq ft, limited to business income after other expenses.
+  q({ id: 'fed.homeOfficeRaw', label: 'Simplified Home Office Amount', unit: 'usd', display: 'inline', optional: true,
+    expr: sumOver('biz', mul(min(field('sqft'), num(300)), lit(5))) });
+  q({ id: 'fed.homeOffice', label: 'Home Office Deduction (simplified)', unit: 'usd', form: 'Schedule C Line 30', category: 'wages', optional: true,
+    expr: min(R('fed.homeOfficeRaw'), atLeast0(sub(R('fed.businessGross'), R('in.schedCExpenses'), R('fed.bizExpenses')))) });
+  q({ id: 'fed.sec179Allowed', label: 'Section 179 Carryover Deducted', unit: 'usd', form: 'Form 4562 Line 10', category: 'wages', optional: true,
+    expr: min(R('in.sec179Carryover'), atLeast0(sub(R('fed.businessGross'), R('in.schedCExpenses'), R('fed.bizExpenses'), R('fed.homeOffice')))) });
   // A Schedule C loss offsets other income (Schedule 1 line 3); SE tax and QBI use only a profit.
   q({ id: 'fed.businessProfit', label: 'Net Business Profit (Loss)', unit: 'usd', form: 'Schedule C Line 31', category: 'wages', optional: true,
-    expr: sub(R('fed.businessGross'), R('in.schedCExpenses')) });
+    expr: sub(R('fed.businessGross'), R('in.schedCExpenses'), R('fed.bizExpenses'), R('fed.homeOffice'), R('fed.sec179Allowed')) });
   // Joint returns: each spouse files their own Schedule C / SE. Pooled expenses are shared in proportion to gross receipts.
-  q({ id: 'fed.spouseBusinessGross', label: "Spouse's Gross Business Receipts", unit: 'usd', display: 'inline', optional: true,
+  q({ id: 'fed.spouse1099Gross', label: "Spouse's 1099 Business Receipts", unit: 'usd', display: 'inline', optional: true,
     expr: add(each('src.nec', 'amount', 'isSpouse'), each('src.k', 'amount', 'isSpouse'), each('src.f', 'amount', 'isSpouse')) });
+  q({ id: 'fed.spouseBusinessGross', label: "Spouse's Gross Business Receipts", unit: 'usd', display: 'inline', optional: true,
+    expr: add(R('fed.spouse1099Gross'), each('biz', 'receipts', 'isSpouse')) });
   q({ id: 'fed.spouseBusinessProfit', label: "Spouse's Business Profit", unit: 'usd', display: 'inline', optional: true,
-    expr: when(gt(R('fed.spouseBusinessGross'), lit(0)),
-      sub(R('fed.spouseBusinessGross'), round(mul(R('in.schedCExpenses'), div(R('fed.spouseBusinessGross'), R('fed.businessGross'))))), lit(0)) });
+    expr: sub(R('fed.spouseBusinessGross'),
+      when(gt(R('fed.business1099Gross'), lit(0)), round(mul(R('in.schedCExpenses'), div(R('fed.spouse1099Gross'), R('fed.business1099Gross')))), lit(0)),
+      round(sumOver('biz', bizExpenses, 'isSpouse')),
+      when(gt(R('fed.homeOfficeRaw'), lit(0)), round(mul(R('fed.homeOffice'), div(sumOver('biz', mul(min(field('sqft'), num(300)), lit(5)), 'isSpouse'), R('fed.homeOfficeRaw')))), lit(0))) });
   q({ id: 'fed.taxpayerBusinessProfit', label: "Taxpayer's Business Profit", unit: 'usd', display: 'inline', optional: true,
     expr: sub(R('fed.businessProfit'), R('fed.spouseBusinessProfit')) });
 
@@ -364,14 +439,24 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   // Schedule B: total 1099-INT interest (box 1 + box 3) minus accrued interest paid on bonds bought between payment dates.
   q({ id: 'fed.treasuryInterest', label: 'US Treasury Interest', unit: 'usd', display: 'inline', optional: true, expr: each('src.int', 'treasury') });
   q({ id: 'fed.interest1099', label: '1099-INT Interest', unit: 'usd', display: 'inline', optional: true,
-    expr: add(sub(each('src.int', 'amount'), each('src.int', 'accrued')), R('fed.treasuryInterest')) });
+    expr: add(sub(each('src.int', 'amount'), each('src.int', 'accrued')), R('fed.treasuryInterest'), each('src.k1', 'k1Interest')) });
   q({ id: 'fed.interestTotal', label: 'Taxable Interest', unit: 'usd', form: 'Form 1040 Line 2b', category: 'wages', optional: true,
     expr: add(R('in.interest'), R('fed.interest1099')) });
   q({ id: 'fed.taxExemptInterest', label: 'Tax-Exempt Interest', unit: 'usd', form: 'Form 1040 Line 2a', optional: true, expr: each('src.int', 'taxExempt') });
-  q({ id: 'fed.dividends', label: 'Ordinary Dividends', unit: 'usd', form: 'Form 1040 Line 3b', category: 'wages', optional: true, expr: each('src.div', 'amount') });
+  q({ id: 'fed.dividends', label: 'Ordinary Dividends', unit: 'usd', form: 'Form 1040 Line 3b', category: 'wages', optional: true, expr: add(each('src.div', 'amount'), each('src.k1', 'k1Dividends')) });
   q({ id: 'fed.qualifiedDividends', label: 'Qualified Dividends', unit: 'usd', form: 'Form 1040 Line 3a', category: 'capital', optional: true,
-    expr: sumOver('src.div', min(field('amount'), field('qdiv'))) });
-  q({ id: 'fed.k1Income', label: 'Schedule K-1 Income', unit: 'usd', form: 'Schedule E Part II', category: 'wages', optional: true, expr: each('src.k1', 'amount') });
+    expr: add(sumOver('src.div', min(field('amount'), field('qdiv'))), sumOver('src.k1', min(field('k1Dividends'), field('k1QualDiv')))) });
+  // Schedule E Part II: nonpassive K-1 income (box 1 + box 2, plus guaranteed payments) counts in full; a passive net loss is
+  // allowed only against passive income (positive rental income) — the rest is suspended (Form 8582, simplified).
+  q({ id: 'fed.k1Guaranteed', label: 'K-1 Guaranteed Payments', unit: 'usd', display: 'inline', optional: true, expr: each('src.k1', 'k1Guaranteed') });
+  q({ id: 'fed.k1Nonpassive', label: 'Nonpassive K-1 Income', unit: 'usd', display: 'inline', optional: true,
+    expr: add(sumOver('src.k1', mul(add(field('amount'), field('k1Rental')), sub(num(1), field('passive')))), R('fed.k1Guaranteed')) });
+  q({ id: 'fed.k1PassiveNet', label: 'Passive K-1 Income (Loss)', unit: 'usd', display: 'inline', optional: true,
+    expr: sumOver('src.k1', mul(add(field('amount'), field('k1Rental')), field('passive'))) });
+  q({ id: 'fed.k1PassiveAllowed', label: 'Passive K-1 Income Allowed', unit: 'usd', form: 'Form 8582', category: 'wages', optional: true,
+    expr: max(R('fed.k1PassiveNet'), neg(atLeast0(R('fed.rentalNet')))) });
+  q({ id: 'fed.k1Income', label: 'Schedule K-1 Income', unit: 'usd', form: 'Schedule E Part II', category: 'wages', optional: true,
+    expr: add(R('fed.k1Nonpassive'), R('fed.k1PassiveAllowed')) });
   q({ id: 'fed.retirement', label: 'Taxable Retirement Distributions', unit: 'usd', form: 'Form 1040 Lines 4b/5b', category: 'wages', optional: true,
     expr: each('src.r', 'taxable', 'nonRollover') });
   // Form 5329 Part I: early distributions minus amounts that meet an exception (age 55 separation, disability, first home, etc.).
@@ -394,9 +479,11 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   // ---------- Self-employment tax (Schedule SE) ----------
   // One Schedule SE per person: each spouse's $400 test and wage base are separate.
   q({ id: 'fed.taxpayerSeEarnings', label: "Taxpayer's Net SE Earnings", unit: 'usd', display: 'inline', optional: true,
-    expr: when(gte(R('fed.taxpayerBusinessProfit'), lit(400)), mul(R('fed.taxpayerBusinessProfit'), rate(0.9235)), lit(0)) });
+    expr: when(gte(add(R('fed.taxpayerBusinessProfit'), sub(each('src.k1', 'k1Se'), each('src.k1', 'k1Se', 'isSpouse'))), lit(400)),
+      mul(add(R('fed.taxpayerBusinessProfit'), sub(each('src.k1', 'k1Se'), each('src.k1', 'k1Se', 'isSpouse'))), rate(0.9235)), lit(0)) });
   q({ id: 'fed.spouseSeEarnings', label: "Spouse's Net SE Earnings", unit: 'usd', display: 'inline', optional: true,
-    expr: when(gte(R('fed.spouseBusinessProfit'), lit(400)), mul(R('fed.spouseBusinessProfit'), rate(0.9235)), lit(0)) });
+    expr: when(gte(add(R('fed.spouseBusinessProfit'), each('src.k1', 'k1Se', 'isSpouse')), lit(400)),
+      mul(add(R('fed.spouseBusinessProfit'), each('src.k1', 'k1Se', 'isSpouse')), rate(0.9235)), lit(0)) });
   q({ id: 'fed.seEarnings', label: 'Net SE Earnings', unit: 'usd', form: 'Schedule SE Line 4a', category: 'tax', optional: true,
     expr: add(R('fed.taxpayerSeEarnings'), R('fed.spouseSeEarnings')) });
   // Schedule SE line 8: only the self-employed person's own W-2 Social Security wages use up the wage base.
@@ -497,8 +584,27 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: round(add(R('fed.studentLoanDeduction'), R('fed.otherAdjustments'))) });
 
   // ---------- Rental real estate (Schedule E / Form 8582) ----------
+  // Per property: depreciation (entered, or residential 27.5-year straight line, mid-month convention) and the §280A
+  // vacation-home rules: rented under 15 days → nothing reported; personal use over the greater of 14 days or 10% of rental
+  // days → expenses allocated by rental days and no loss allowed.
+  const yearsIn = sub(P('fed.taxYear'), field('pisYear'));
+  const sl = div(field('basis'), lit(27.5));
+  const computedDep = when(lte(field('basis'), lit(0)), lit(0),
+    when(lte(field('pisYear'), num(0)), sl,
+      when(lt(yearsIn, num(0)), lit(0),
+        when(lte(yearsIn, num(0)), mul(sl, div(sub(lit(12.5), max(num(1), field('pisMonth'))), lit(12))),
+          when(lte(yearsIn, num(27)), sl, lit(0))))));
+  const dep = round(when(gt(field('depreciation'), lit(0)), field('depreciation'), computedDep));
+  const totalDays = add(field('rentalDays'), field('personalDays'));
+  const personalResidence = and(gt(field('rentalDays'), num(0)), gt(field('personalDays'), max(num(14), mul(field('rentalDays'), rate(0.1)))));
+  q({ id: 'fed.rentalPropertiesDepreciation', label: 'Rental Depreciation (27.5-year)', unit: 'usd', form: 'Form 4562', category: 'wages', optional: true,
+    expr: sumOver('rent', dep) });
+  q({ id: 'fed.rentalPropertiesNet', label: 'Rental Properties Net Income', unit: 'usd', form: 'Schedule E Line 21', category: 'wages', optional: true,
+    expr: round(sumOver('rent', when(and(gt(field('rentalDays'), num(0)), lt(field('rentalDays'), num(15))), lit(0),
+      when(personalResidence, atLeast0(sub(field('rents'), mul(add(field('expenses'), dep), div(field('rentalDays'), totalDays)))),
+        sub(field('rents'), field('expenses'), dep))))) });
   q({ id: 'fed.rentalNet', label: 'Net Rental Income Before Loss Limits', unit: 'usd', form: 'Schedule E Line 26', category: 'wages', optional: true,
-    expr: sub(R('in.rents'), R('in.rentalExpenses'), R('in.rentalDepreciation')) });
+    expr: sub(add(sub(R('in.rents'), R('in.rentalExpenses'), R('in.rentalDepreciation')), R('fed.rentalPropertiesNet')), R('in.palCarryover')) });
   q({ id: 'fed.magiForRental', label: 'MAGI for Rental Loss Allowance', unit: 'usd', category: 'adjustments',
     // Form 8582 MAGI: figured without the IRA and student loan interest deductions or taxable Social Security.
     expr: atLeast0(sub(add(R('fed.wages'), R('in.interest'), R('fed.documentIncome'), R('fed.capAllowed')), R('fed.adjustmentsExIraSli'))) });
@@ -533,8 +639,11 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: round(atLeast0(sub(add(R('fed.wages'), R('fed.depCareTaxable'), R('fed.interestTotal'), R('fed.dividends'), R('fed.businessProfit'), R('fed.k1Income'),
       R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableStateRefund'), R('fed.taxableSS'), R('fed.capAllowed'), R('fed.rentalAllowed'),
       R('in.alimonyReceived'), R('in.tips')), R('fed.feie')))) });
+  q({ id: 'fed.nolDeduction', label: 'Net Operating Loss Deduction', unit: 'usd', form: 'Schedule 1 Line 8a', category: 'adjustments', optional: true,
+    presentIf: gt(R('in.nolCarryover'), lit(0)),
+    expr: round(min(R('in.nolCarryover'), mul(atLeast0(sub(R('fed.totalIncome'), R('fed.adjustments'), P('fed.stdBase'))), rate(0.8)))) });
   q({ id: 'fed.agi', label: 'Adjusted Gross Income', unit: 'usd', form: 'Form 1040 Line 11', category: 'wages',
-    expr: round(atLeast0(sub(R('fed.totalIncome'), R('fed.adjustments')))) });
+    expr: round(atLeast0(sub(R('fed.totalIncome'), R('fed.adjustments'), R('fed.nolDeduction')))) });
 
   // ---------- Deductions ----------
   const claimedAsDependent = flag('fed.claimedAsDependent', 'someone can claim you as a dependent', 'no one can claim you as a dependent', 'check-claimed-as-dependent');
@@ -561,7 +670,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     // P.L. 119-21 §70114: from 2026 only 90% of gambling losses are deductible (still limited to winnings).
     expr: min(R('fed.gambling'), year >= 2026 ? mul(R('in.gamblingLosses'), rate(0.9)) : R('in.gamblingLosses')) });
   q({ id: 'fed.investmentInterestDeduction', label: 'Deductible Investment Interest', unit: 'usd', form: 'Schedule A Line 9', category: 'itemized', optional: true,
-    expr: min(atLeast0(add(R('in.interest'), R('fed.interest1099'), atLeast0(R('fed.capAllowed')))), R('in.investmentInterest')) });
+    expr: min(atLeast0(add(R('in.interest'), R('fed.interest1099'), atLeast0(R('fed.capAllowed')))), add(R('in.investmentInterest'), R('in.invInterestCarryover'))) });
   // Form 4684: personal casualty loss (federally declared disaster) less $100 per event and 10% of AGI.
   q({ id: 'fed.casualtyDeduction', label: 'Deductible Casualty Loss', unit: 'usd', form: 'Schedule A Line 15', category: 'itemized', optional: true,
     presentIf: gt(R('in.casualty'), lit(0)), expr: atLeast0(sub(R('in.casualty'), lit(100), mul(R('fed.agi'), rate(0.1)))) });
@@ -575,15 +684,15 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   q({ id: 'fed.charityNoncashAllowed', label: 'Property Gifts Allowed (30% of AGI)', unit: 'usd', display: 'inline', optional: true,
     expr: min(R('in.charityNoncash'), mul(R('fed.agi'), rate(0.3))) });
   q({ id: 'fed.charityDeduction', label: 'Deductible Charitable Gifts', unit: 'usd', form: 'Schedule A Line 14', category: 'itemized', optional: true,
-    presentIf: gt(add(R('in.charity'), R('in.charityNoncash')), lit(0)),
+    presentIf: gt(add(R('in.charity'), R('in.charityCarryover'), R('in.charityNoncash')), lit(0)),
     expr: year >= 2026
       // P.L. 119-21 §70425: from 2026 itemized charitable gifts count only above 0.5% of AGI.
-      ? atLeast0(sub(add(min(R('in.charity'), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')), round(mul(R('fed.agi'), rate(0.005)))))
-      : add(min(R('in.charity'), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')) });
+      ? atLeast0(sub(add(min(add(R('in.charity'), R('in.charityCarryover')), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')), round(mul(R('fed.agi'), rate(0.005)))))
+      : add(min(add(R('in.charity'), R('in.charityCarryover')), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')) });
   q({ id: 'fed.charityCarryforward', label: 'Charitable Gifts Carried to Next Year', unit: 'usd', category: 'itemized', optional: true,
-    expr: year >= 2026 ? atLeast0(sub(add(min(R('in.charity'), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')),
+    expr: year >= 2026 ? atLeast0(sub(add(min(add(R('in.charity'), R('in.charityCarryover')), atLeast0(sub(mul(R('fed.agi'), rate(0.6)), R('fed.charityNoncashAllowed')))), R('fed.charityNoncashAllowed')),
         add(R('fed.charityDeduction'), round(mul(R('fed.agi'), rate(0.005))))) ) // amounts over the AGI limits carry forward; the 0.5% floor does not
-      : sub(add(R('in.charity'), R('in.charityNoncash')), R('fed.charityDeduction')) });
+      : sub(add(R('in.charity'), R('in.charityCarryover'), R('in.charityNoncash')), R('fed.charityDeduction')) });
   const itemizedSum = add(R('fed.medicalDeduction'), R('fed.salt'), R('fed.mortgageDeduction'), R('fed.charityDeduction'), R('fed.gamblingLossDeduction'),
     R('fed.investmentInterestDeduction'), R('fed.casualtyDeduction'));
   if (year >= 2026) {
@@ -610,7 +719,8 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   q({ id: 'fed.netLtcg', label: 'Net Long-Term Capital Gain', unit: 'usd', category: 'capital', optional: true,
     expr: when(and(gt(R('fed.capAllowed'), lit(0)), gt(R('fed.longTermGain'), lit(0))), min(R('fed.capAllowed'), R('fed.longTermGain')), lit(0)) });
   q({ id: 'fed.qbiIncome', label: 'Qualified Business Income', unit: 'usd', category: 'adjustments',
-    expr: add(atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'), R('fed.seRetirementDeduction'), R('fed.seHealthDeduction'))), atLeast0(R('fed.k1Income'))) });
+    expr: atLeast0(sub(add(atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'), R('fed.seRetirementDeduction'), R('fed.seHealthDeduction'))),
+      atLeast0(sub(R('fed.k1Income'), R('fed.k1Guaranteed')))), R('in.qbiLossCarryover'))) });
   q({ id: 'fed.qbiIncomeLimit', label: 'QBI Taxable Income Limit Base', unit: 'usd', category: 'adjustments',
     expr: atLeast0(sub(atLeast0(sub(R('fed.agi'), R('fed.deduction'))), add(R('fed.qualifiedDividends'), R('fed.netLtcg')))) });
   const qbiBase = round(min(mul(R('fed.qbiIncome'), rate(0.2)), mul(R('fed.qbiIncomeLimit'), rate(0.2))));
@@ -776,14 +886,17 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   // Foreign tax credit: up to $300 ($600 joint) of passive foreign tax is allowed without Form 1116. Above that, Form 1116
   // limits the credit to tax x foreign-source taxable income / taxable income (applied once foreign income is entered).
   q({ id: 'fed.foreignTaxCreditAllowed', label: 'Foreign Tax Credit', unit: 'usd', form: 'Form 1116 / Schedule 3 Line 1', category: 'credits', optional: true,
-    presentIf: gt(R('in.foreignTaxCredit'), lit(0)),
-    expr: when(lte(R('in.foreignTaxCredit'), when(statusIs('married_joint'), lit(600), lit(300))), R('in.foreignTaxCredit'),
+    presentIf: gt(add(R('in.foreignTaxCredit'), R('in.ftcCarryover')), lit(0)),
+    expr: when(and(lte(R('in.ftcCarryover'), lit(0)), lte(R('in.foreignTaxCredit'), when(statusIs('married_joint'), lit(600), lit(300)))), R('in.foreignTaxCredit'),
       when(gt(R('in.foreignIncome'), lit(0)),
-        min(R('in.foreignTaxCredit'), round(mul(R('fed.tax'), min(rate(1), div(R('in.foreignIncome'), max(R('fed.taxableIncome'), lit(1))))))),
+        min(add(R('in.foreignTaxCredit'), R('in.ftcCarryover')), round(mul(R('fed.tax'), min(rate(1), div(R('in.foreignIncome'), max(R('fed.taxableIncome'), lit(1))))))),
         R('in.foreignTaxCredit'))) });
+  q({ id: 'fed.amtCredit', label: 'Credit for Prior-Year Minimum Tax', unit: 'usd', form: 'Form 8801', category: 'credits', optional: true,
+    presentIf: gt(R('in.amtCreditCarryover'), lit(0)),
+    expr: min(R('in.amtCreditCarryover'), atLeast0(sub(R('fed.tax'), R('fed.tentativeMinimumTax')))) });
   q({ id: 'fed.nonrefundableBeforeLimit', label: 'Nonrefundable Credits Before Tax Limit', unit: 'usd', category: 'credits', optional: true,
     expr: add(R('fed.ctcAfterPhaseout'), R('fed.odcAfterPhaseout'), R('fed.childCareCredit'), R('fed.educationNonrefundable'), R('fed.saversCredit'),
-      R('fed.foreignTaxCreditAllowed'), R('in.cleanEnergy'), R('fed.adoptionCredit'), R('fed.elderlyCredit')) });
+      R('fed.foreignTaxCreditAllowed'), R('in.cleanEnergy'), R('fed.adoptionCredit'), R('fed.elderlyCredit'), R('fed.amtCredit')) });
   q({ id: 'fed.nonrefundableCredits', label: 'Nonrefundable Credits', unit: 'usd', form: 'Form 1040 Line 21', category: 'credits', optional: true,
     expr: round(min(R('fed.tax'), R('fed.nonrefundableBeforeLimit'))) });
   q({ id: 'fed.ctcAllowed', label: 'Child Tax Credit Allowed', unit: 'usd', display: 'inline', expr: min(R('fed.tax'), R('fed.ctcAfterPhaseout')) });
@@ -819,8 +932,47 @@ function defineQuantities(g: FormulaGraph, year: number): void {
       lt(R('fed.eitcIncome'), lookup('fed.eitcIncomeLimit', R('fed.eitcKids')))),
       round(atLeast0(min(R('fed.eitcPhaseIn'), sub(lookup('fed.eitcMax', R('fed.eitcKids')), R('fed.eitcReduction')))), 'dollar'),
       lit(0)) });
+  // Form 8962 (annual method): household income ÷ poverty line (prior year's HHS guidelines), applicable figure, contribution,
+  // PTC = premiums or SLCSP − contribution, reconciled with advance payments. 2024–2025: enhanced table (0%–8.5%, no 400% limit)
+  // and repayment caps; 2026: Rev. Proc. 2025-25 table (2.10%–9.96%), 400% limit, no repayment cap (P.L. 119-21 §71305).
+  const anyMkt = gt(count('mkt'), num(0));
+  q({ id: 'fed.ptcHouseholdIncome', label: 'Household Income (Form 8962 Line 3)', unit: 'usd', category: 'credits', appliesWhen: anyMkt,
+    expr: add(R('fed.agi'), R('fed.taxExemptInterest'), sub(R('fed.ssaGross'), R('fed.taxableSS')), R('fed.feie')) });
+  const ak = flag('fed.fplAlaska', 'you lived in Alaska', 'not Alaska', 'select-ptc-region');
+  const hi = flag('fed.fplHawaii', 'you lived in Hawaii', 'not Hawaii', 'select-ptc-region');
+  const extra = sub(max(num(1), R('in.ptcHouseholdSize')), num(1));
+  q({ id: 'fed.ptcPovertyLine', label: 'Federal Poverty Line (Form 8962 Line 4)', unit: 'usd', category: 'credits', appliesWhen: anyMkt,
+    expr: when(ak, add(P('fed.fplBaseAK'), mul(extra, P('fed.fplAddAK'))), when(hi, add(P('fed.fplBaseHI'), mul(extra, P('fed.fplAddHI'))),
+      add(P('fed.fplBase'), mul(extra, P('fed.fplAdd'))))) });
+  q({ id: 'fed.ptcFplPercent', label: 'Household Income as % of Poverty Line', unit: 'count', category: 'credits', appliesWhen: anyMkt,
+    expr: floor(div(mul(R('fed.ptcHouseholdIncome'), lit(100)), max(R('fed.ptcPovertyLine'), lit(1)))) });
+  const pct = R('fed.ptcFplPercent');
+  const band = (lo: number, hi2: number, from: number, to: number) => add(rate(from), mul(div(sub(pct, num(lo)), num(hi2 - lo)), rate(to - from)));
+  const fig = year >= 2026
+    ? when(lt(pct, num(133)), rate(0.021), when(lt(pct, num(150)), band(133, 150, 0.0314, 0.0419), when(lt(pct, num(200)), band(150, 200, 0.0419, 0.066),
+        when(lt(pct, num(250)), band(200, 250, 0.066, 0.0844), when(lt(pct, num(300)), band(250, 300, 0.0844, 0.0996), rate(0.0996))))))
+    : when(lte(pct, num(150)), rate(0), when(lt(pct, num(200)), band(150, 200, 0, 0.02), when(lt(pct, num(250)), band(200, 250, 0.02, 0.04),
+        when(lt(pct, num(300)), band(250, 300, 0.04, 0.06), when(lt(pct, num(400)), band(300, 400, 0.06, 0.085), rate(0.085))))));
+  q({ id: 'fed.ptcApplicableFigure', label: 'Applicable Figure (Form 8962 Line 7)', unit: 'rate', category: 'credits', appliesWhen: anyMkt,
+    expr: div(round(mul(fig, lit(10000)), 'dollar'), lit(10000)) });
+  q({ id: 'fed.ptcContribution', label: 'Annual Contribution for Health Care (Line 8a)', unit: 'usd', category: 'credits', appliesWhen: anyMkt,
+    expr: round(mul(R('fed.ptcHouseholdIncome'), R('fed.ptcApplicableFigure')), 'dollar') });
+  const aptc = each('mkt', 'aptc');
+  const eligible = and(not(statusIs('married_separate')), or(gte(pct, num(100)), gt(aptc, lit(0))), year >= 2026 ? lte(pct, num(400)) : gte(pct, num(0)));
+  q({ id: 'fed.ptcAllowed', label: 'Premium Tax Credit (Line 24)', unit: 'usd', form: 'Form 8962 Line 24', category: 'credits', appliesWhen: anyMkt,
+    expr: when(eligible, round(min(each('mkt', 'premiums'), atLeast0(sub(each('mkt', 'slcsp'), R('fed.ptcContribution')))), 'dollar'), lit(0)) });
+  q({ id: 'fed.netPtc', label: 'Net Premium Tax Credit', unit: 'usd', form: 'Form 8962 Line 26 / Schedule 3 Line 9', category: 'credits', optional: true,
+    expr: when(anyMkt, atLeast0(sub(R('fed.ptcAllowed'), aptc)), lit(0)) });
+  q({ id: 'fed.excessAptc', label: 'Excess Advance PTC', unit: 'usd', form: 'Form 8962 Line 27', display: 'inline', optional: true,
+    expr: when(anyMkt, atLeast0(sub(aptc, R('fed.ptcAllowed'))), lit(0)) });
+  const cap = (single: number, other: number) => when(statusIs('single'), lit(single), lit(other));
+  q({ id: 'fed.excessAptcRepayment', label: 'Excess Advance PTC Repayment', unit: 'usd', form: 'Form 8962 Line 29 / Schedule 2 Line 2', category: 'tax', optional: true,
+    expr: year >= 2026 ? R('fed.excessAptc')
+      : when(lt(pct, num(200)), min(R('fed.excessAptc'), cap(375, 750)),
+        when(lt(pct, num(300)), min(R('fed.excessAptc'), year >= 2025 ? cap(975, 1950) : cap(950, 1900)),
+          when(lt(pct, num(400)), min(R('fed.excessAptc'), year >= 2025 ? cap(1625, 3250) : cap(1575, 3150)), R('fed.excessAptc')))) });
   q({ id: 'fed.refundableCredits', label: 'Refundable Credits', unit: 'usd', form: 'Form 1040 Lines 27–31', category: 'credits', optional: true,
-    expr: round(add(R('fed.actc'), R('fed.eitc'), R('fed.aotcRefundable'), R('in.ptc'), R('fed.adoptionRefundable'))) });
+    expr: round(add(R('fed.actc'), R('fed.eitc'), R('fed.aotcRefundable'), R('in.ptc'), R('fed.netPtc'), R('fed.adoptionRefundable'))) });
 
   // ---------- Other taxes (Schedule 2) & excess Social Security ----------
   q({ id: 'fed.ssMaxTax', label: 'Max Social Security Tax per Year', unit: 'usd', display: 'inline', expr: round(mul(P('fed.ssWageBase'), P('fed.ssRate'))) });
@@ -842,7 +994,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   q({ id: 'fed.addlMedicareWithheld', label: 'Additional Medicare Tax Withheld', unit: 'usd', form: 'Form 8959 Line 24', category: 'withholding', optional: true,
     expr: round(sumOver('w2', when(gt(field('box5'), lit(0)), atLeast0(sub(field('box6'), mul(field('box5'), P('fed.medicareRate')))), lit(0)))) });
   q({ id: 'fed.netInvestmentIncome', label: 'Net Investment Income', unit: 'usd', category: 'capital',
-    expr: atLeast0(add(R('in.interest'), R('fed.interest1099'), R('fed.dividends'), atLeast0(R('fed.capAllowed')), atLeast0(R('fed.rentalAllowed')))) });
+    expr: atLeast0(add(R('in.interest'), R('fed.interest1099'), R('fed.dividends'), atLeast0(R('fed.capAllowed')), atLeast0(R('fed.rentalAllowed')), atLeast0(R('fed.k1PassiveAllowed')))) });
   q({ id: 'fed.niitBase', label: 'NIIT Taxable Base', unit: 'usd', category: 'capital',
     expr: min(R('fed.netInvestmentIncome'), atLeast0(sub(R('fed.agi'), P('fed.niitThreshold')))) });
   q({ id: 'fed.niit', label: 'Net Investment Income Tax', unit: 'usd', form: 'Form 8960', category: 'tax', optional: true,
@@ -882,7 +1034,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: when(gt(R('in.householdWages'), lit(0)), add(R('fed.householdFica'), R('fed.householdFuta')), R('in.householdTax')) });
   q({ id: 'fed.otherTaxes', label: 'Other Taxes', unit: 'usd', form: 'Form 1040 Line 23', category: 'tax', optional: true,
     expr: round(add(R('fed.seTax'), R('fed.additionalMedicareTax'), R('fed.niit'), R('fed.amt'), R('fed.earlyDistributionPenalty'),
-      R('fed.tipsFica'), R('fed.hsaExcise'), R('fed.householdTax'))) });
+      R('fed.tipsFica'), R('fed.hsaExcise'), R('fed.householdTax'), R('fed.excessAptcRepayment'))) });
 
   // ---------- Bottom line ----------
   q({ id: 'fed.totalTax', label: 'Total Tax', unit: 'usd', form: 'Form 1040 Line 24', category: 'tax',
@@ -973,6 +1125,16 @@ export function federalContext(state: TaxAppState): GraphContext {
     values: { birthYear: n(dp.birthYear), isChild: dp.relationship === 'relative' ? 0 : 1, monthsLived: n(dp.monthsLived),
       student: dp.student ? 1 : 0, disabled: dp.disabled ? 1 : 0, hasSsn: dp.hasSsn === false ? 0 : 1 }
   })))(state.dependents || ({} as TaxAppState['dependents']));
+  collections.biz = (state.businesses || []).map(b => ({ id: b.id, name: b.name, values: {
+    receipts: n(b.receipts), advertising: n(b.advertising), supplies: n(b.supplies), insurance: n(b.insurance), utilities: n(b.utilities),
+    rentLease: n(b.rentLease), legal: n(b.legalProfessional), other: n(b.otherExpenses), meals: n(b.meals), miles: n(b.vehicleMiles),
+    sqft: n(b.homeOfficeSqFt), isSpouse: joint && b.owner === 'spouse' ? 1 : 0 } }));
+  collections.tx = (state.capitalTransactions || []).map(t => ({ id: t.id, name: t.description || `Sale ${t.id}`, values: {
+    proceeds: n(t.proceeds), basis: n(t.basis), adj: n(t.adjustment), isLong: t.term === 'short' ? 0 : 1 } }));
+  collections.rent = (state.rentalProperties || []).map(r => ({ id: r.id, name: r.name, values: {
+    rents: n(r.rents), expenses: n(r.expenses), depreciation: n(r.depreciation), basis: n(r.buildingBasis), pisYear: n(r.placedInServiceYear),
+    pisMonth: n(r.placedInServiceMonth), rentalDays: n(r.rentalDays), personalDays: n(r.personalDays) } }));
+  collections.mkt = (state.marketplacePolicies || []).map(m => ({ id: m.id, name: '1095-A', values: { premiums: n(m.premiums), slcsp: n(m.slcsp), aptc: n(m.advancePtc) } }));
   SOURCE_COLLECTIONS.forEach(c => {
     collections[c.id] = sources.filter(s => c.type.includes(s.type)).map(s => { const r = distributionCodeTreatment(s); return {
       id: s.id,
@@ -994,7 +1156,9 @@ export function federalContext(state: TaxAppState): GraphContext {
         fedWithheld: n(s.federalTaxWithheld),
         penalty: r.early && !r.rollover ? 1 : 0,
         simple: r.early && r.simple && !r.rollover ? 1 : 0,
-        isSpouse: joint && s.owner === 'spouse' ? 1 : 0
+        isSpouse: joint && s.owner === 'spouse' ? 1 : 0,
+        k1Rental: n(s.k1Rental), k1Guaranteed: n(s.k1Guaranteed), k1Interest: n(s.k1Interest), k1Dividends: n(s.k1Dividends),
+        k1QualDiv: n(s.k1QualifiedDividends), k1St: n(s.k1ShortTermGain), k1Lt: n(s.k1LongTermGain), k1Se: n(s.k1SeEarnings), passive: s.passive ? 1 : 0
       }
     }; });
   });
@@ -1008,6 +1172,8 @@ export function federalContext(state: TaxAppState): GraphContext {
     status: normalizeFilingStatus(state.filingStatus || 'single') as CoreStatus,
     flags: {
       'fed.forceItemized': state.deductionMethod === 'itemized',
+      'fed.fplAlaska': state.ptcRegion === 'AK',
+      'fed.fplHawaii': state.ptcRegion === 'HI',
       'fed.homeSaleQualifies': Boolean(state.otherIncome?.capitalGains?.homeSaleQualifies),
       'fed.homeSaleSpouseQualifies': Boolean(state.otherIncome?.capitalGains?.homeSaleSpouseQualifies),
       'fed.forceStandard': state.deductionMethod === 'standard',
@@ -1030,7 +1196,7 @@ export function federalContext(state: TaxAppState): GraphContext {
       'in.schedCExpenses': n(o.scheduleCExpenses),
       'in.stGain': n(o.capitalGains?.shortTerm),
       'in.ltGain': n(o.capitalGains?.longTerm),
-      'in.capCarryover': n(o.capitalGains?.carryoverLoss),
+      'in.capCarryover': n(o.capitalGains?.carryoverLoss) + n(state.carryovers?.shortTermCapitalLoss),
       'in.collectibles': n(o.capitalGains?.collectiblesGain),
       'in.unrecap1250': n(o.capitalGains?.unrecaptured1250Gain),
       'in.homeSaleGain': n(o.capitalGains?.homeSaleGain),
@@ -1083,6 +1249,16 @@ export function federalContext(state: TaxAppState): GraphContext {
       'in.adoption': n(d.adoptionCredit),
       'in.elderly': n(d.elderlyDisabledCredit),
       'in.ptc': n(d.premiumTaxCredit),
+      'in.ptcHouseholdSize': n(state.ptcHouseholdSize) || (1 + (joint ? 1 : 0) + ((d.list || []).length > 0 ? (d.list || []).length : int(d.childrenCount) + int(d.otherDependentsCount))),
+      'in.ltCapCarryover': n(state.carryovers?.longTermCapitalLoss),
+      'in.palCarryover': n(state.carryovers?.passiveLoss),
+      'in.charityCarryover': n(state.carryovers?.charity),
+      'in.invInterestCarryover': n(state.carryovers?.investmentInterest),
+      'in.nolCarryover': n(state.carryovers?.nol),
+      'in.amtCreditCarryover': n(state.carryovers?.amtCredit),
+      'in.ftcCarryover': n(state.carryovers?.foreignTax),
+      'in.qbiLossCarryover': n(state.carryovers?.qbiLoss),
+      'in.sec179Carryover': n(state.carryovers?.section179),
       'in.householdTax': n(d.householdEmploymentTax),
       'in.householdWages': n(d.householdWages),
       'in.estimatedPayments': n(d.estimatedTaxPayments)
@@ -1095,15 +1271,15 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
   { id: 'calc-total-w2-wages', stepLabel: 'Step 1 • Wage & Payroll Aggregation', title: 'W-2 Wages, Withholding & FICA',
     quantities: [{ id: 'fed.wages', show: 'always' }, 'fed.w2Withholding', 'fed.ssTaxWithheld', 'fed.medTaxWithheld', 'fed.ficaWithheld'] },
   { id: 'calc-capital-gains', stepLabel: 'Step 2a • Schedule D / Form 8949', title: 'Capital Gains & Loss Limitation',
-    quantities: ['fed.homeSaleExclusion', 'fed.homeSaleTaxableGain', 'fed.capGainDistributions', 'fed.capNet', 'fed.capAllowed', 'fed.capLossCarryforward'] },
+    quantities: ['fed.txShortTerm', 'fed.txLongTerm', 'fed.shortTermGain', 'fed.homeSaleExclusion', 'fed.homeSaleTaxableGain', 'fed.capGainDistributions', 'fed.capNet', 'fed.capAllowed', 'fed.capLossCarryforward'] },
   { id: 'calc-schedule-e', stepLabel: 'Step 2b • Schedule E / Form 8582', title: 'Rental Real Estate & K-1 Income',
     quantities: ['fed.rentalNet', 'fed.suspendedRentalLoss', 'fed.rentalAllowed', 'fed.k1Income'] },
   { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',
-    quantities: ['fed.interestTotal', 'fed.taxExemptInterest', 'fed.dividends', 'fed.qualifiedDividends', 'fed.businessProfit', 'fed.retirement',
+    quantities: ['fed.interestTotal', 'fed.taxExemptInterest', 'fed.dividends', 'fed.qualifiedDividends', 'fed.bizExpenses', 'fed.homeOffice', 'fed.sec179Allowed', 'fed.businessProfit', 'fed.k1PassiveAllowed', 'fed.rentalPropertiesDepreciation', 'fed.rentalPropertiesNet', 'fed.retirement',
       'fed.gambling', 'fed.otherSourceIncome', 'fed.taxableStateRefund', 'fed.ssaGross', 'fed.provisionalIncome', 'fed.taxableSS',
       'fed.depCareTaxable', { id: 'fed.totalIncome', show: 'always' }, 'fed.seRetirementLimit', 'fed.seRetirementDeduction', 'fed.seHealthDeduction', 'fed.hsaLimit', 'fed.hsaDeduction', 'fed.iraMagi', 'fed.iraDeductibleLimit', 'fed.taxpayerIraDeduction', 'fed.spouseIraContributionLimit', 'fed.spouseIraDeduction', 'fed.iraDeduction',
       'fed.studentLoanMagi', 'fed.studentLoanDeduction', { id: 'fed.adjustments', show: 'always' },
-      { id: 'fed.agi', show: 'always' }] },
+      'fed.nolDeduction', { id: 'fed.agi', show: 'always' }] },
   { id: 'calc-itemized-deductions', stepLabel: 'Step 4a • Schedule A Itemized Deductions', title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',
     quantities: ['fed.medicalFloor', 'fed.medicalDeduction', 'fed.saltCap', 'fed.salt', 'fed.mortgageDeduction', 'fed.charityDeduction', 'fed.charityCarryforward', 'fed.itemizedLimitation', 'fed.nonItemizerCharity', 'fed.casualtyDeduction', 'fed.gamblingLossDeduction', 'fed.investmentInterestDeduction', 'fed.itemized'] },
   { id: 'calc-taxable-income', stepLabel: 'Step 4 • Deductions & Taxable Income', title: 'Deduction & Taxable Income',
@@ -1115,11 +1291,11 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
       'fed.collectiblesTax', 'fed.regularTaxRow', 'fed.regularTax', { id: 'fed.tax', show: 'always' }] },
   { id: 'calc-total-credits', stepLabel: 'Step 6 • Tax Credits', title: 'Nonrefundable & Refundable Credits',
     quantities: ['fed.ctcChildren', 'fed.odcDependents', 'fed.eitcChildren', 'fed.careQualifyingPersons', 'fed.depCareExcluded', 'fed.ctcPhaseout', 'fed.childCreditsAfterPhaseout', 'fed.ctcAfterPhaseout', 'fed.odcAfterPhaseout', 'fed.careEarnedIncomeLimit', 'fed.childCareCredit', 'fed.aotcTotal',
-      'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.foreignTaxCreditAllowed', 'fed.adoptionAllowed', 'fed.adoptionRefundable', 'fed.elderlyCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
-      'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.refundableCredits'] },
+      'fed.educationNonrefundable', 'fed.saversContributions', 'fed.saversCredit', 'fed.foreignTaxCreditAllowed', 'fed.adoptionAllowed', 'fed.adoptionRefundable', 'fed.elderlyCredit', 'fed.amtCredit', 'fed.nonrefundableBeforeLimit', 'fed.nonrefundableCredits', 'fed.earnedIncome', 'fed.actc',
+      'fed.eitcEarnedRow', 'fed.eitcIncomeRow', 'fed.eitc', 'fed.aotcRefundable', 'fed.ptcHouseholdIncome', 'fed.ptcPovertyLine', 'fed.ptcFplPercent', 'fed.ptcApplicableFigure', 'fed.ptcContribution', 'fed.ptcAllowed', 'fed.netPtc', 'fed.refundableCredits'] },
   { id: 'calc-other-taxes', stepLabel: 'Step 7 • Schedule 2 & 3 Other Taxes', title: 'Self-Employment Tax, NIIT & Other Taxes',
     quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',
-      'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.hsaExcise', 'fed.tipsFica', 'fed.householdFica', 'fed.householdFuta', 'fed.householdTax', 'fed.otherTaxes', 'fed.excessSS'] },
+      'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.hsaExcise', 'fed.tipsFica', 'fed.householdFica', 'fed.householdFuta', 'fed.householdTax', 'fed.excessAptcRepayment', 'fed.otherTaxes', 'fed.excessSS'] },
   { id: 'calc-final-verdict', stepLabel: 'Step 8 • Federal Bottom Line', title: 'Total Tax, Payments & Federal Refund / Owed', isOutput: true,
     quantities: [{ id: 'fed.totalTax', show: 'always' }, 'fed.addlMedicareWithheld', { id: 'fed.payments', show: 'always' }, 'fed.requiredAnnualPayment', 'fed.estimatedTaxShortfall', { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
 ];

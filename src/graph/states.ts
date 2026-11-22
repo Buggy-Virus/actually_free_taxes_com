@@ -170,7 +170,7 @@ function defineShared(g: FormulaGraph): void {
   g.quantity({ id: 'ret.priorShare', label: 'Share of Year in Previous State', unit: 'rate', display: 'inline', expr: div(R('in.priorStateMonths'), num(12)) });
   g.quantity({ id: 'ret.dependents', label: 'Dependents', unit: 'count', display: 'inline', expr: add(R('fed.ctcChildren'), R('fed.odcDependents')) });
   g.quantity({ id: 'ret.netLtcg', label: 'Net Long-Term Capital Gain (State)', unit: 'usd', category: 'capital',
-    expr: atLeast0(add(R('fed.longTermGain'), min(lit(0), R('in.stGain')))) });
+    expr: atLeast0(add(R('fed.longTermGain'), min(lit(0), R('fed.shortTermGain')))) });
   g.quantity({ id: 'ret.outOfStateMuniInterest', label: 'Tax-Exempt Interest From Other States\' Bonds', unit: 'usd', category: 'state', optional: true,
     expr: atLeast0(sub(each('src.int', 'taxExempt'), each('src.int', 'inStateExempt'))) });
   g.quantity({ id: 'ret.interestDividends', label: 'Interest & Dividends', unit: 'usd', category: 'wages',
@@ -523,7 +523,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   if (code === 'PA') {
     q('paAddBack', { label: 'PA Non-Conformity Add-Back (IRA/HSA/Student Loan/Capital Loss)', unit: 'usd', category: 'state', optional: true,
       expr: add(R('fed.iraDeduction'), R('fed.hsaDeduction'), R('fed.studentLoanDeduction'),
-        when(lt(add(R('in.stGain'), R('fed.longTermGain')), lit(0)), neg(max(lit(-3000), add(R('in.stGain'), R('fed.longTermGain')))), lit(0))) });
+        when(lt(add(R('fed.shortTermGain'), R('fed.longTermGain')), lit(0)), neg(max(lit(-3000), add(R('fed.shortTermGain'), R('fed.longTermGain')))), lit(0))) });
     additions.push(R(S('paAddBack')));
   }
   if (code === 'CO') {
@@ -646,7 +646,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   const taxTerms: Expr[] = [R(S('bracketTax'))];
   if (code === 'MA') {
     q('stcgSurtax', { label: 'MA Short-Term Gains Surtax (+3.5%)', unit: 'usd', category: 'state', optional: true,
-      expr: when(and(gt(R('in.stGain'), lit(0)), gt(R(S('taxable')), lit(0))), round(mul(min(R('in.stGain'), R(S('taxable'))), rate(0.035))), lit(0)) });
+      expr: when(and(gt(R('fed.shortTermGain'), lit(0)), gt(R(S('taxable')), lit(0))), round(mul(min(R('fed.shortTermGain'), R(S('taxable'))), rate(0.035))), lit(0)) });
     q('millionaireSurtax', { label: 'MA 4% Millionaire Surtax', unit: 'usd', category: 'state', optional: true,
       expr: when(gt(R(S('taxable')), lit(1053750)), round(mul(sub(R(S('taxable')), lit(1053750)), rate(0.04))), lit(0)) });
     taxTerms.push(R(S('stcgSurtax')), R(S('millionaireSurtax')));

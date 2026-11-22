@@ -1087,6 +1087,141 @@ const CASES: Golden[] = [
     state: ret({ year: 2026, w2s: [w2(150000, { ssWageBase: 184500 })], otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 100000)] } }),
     expect: [['SE Social Security tax', fed('fed.seSsTax'), 4278], ['SE Medicare tax', fed('fed.seMedTax'), 2678.15]]
   },
+  // ---------------- Federal: businesses (B20) ----------------
+  {
+    name: 'Schedule C: expense categories, 50% meals, standard mileage and simplified home office',
+    source: 'Schedule C (2024): $50,000 − $5,000 supplies − 50% × $2,000 meals − 10,000 mi × $0.67 − 200 sq ft × $5 = $36,300',
+    state: ret({ businesses: [{ id: 1, name: 'Studio', receipts: 50000, supplies: 5000, meals: 2000, vehicleMiles: 10000, homeOfficeSqFt: 200 }] }),
+    expect: [['business expenses', fed('fed.bizExpenses'), 12700], ['home office', fed('fed.homeOffice'), 1000], ['net profit', fed('fed.businessProfit'), 36300]]
+  },
+  {
+    name: 'Simplified home office cannot create a loss',
+    source: 'Rev. Proc. 2013-13 §4.03: limited to gross income less other business expenses — $3,000 − $2,500 = $500 (of $1,500)',
+    state: ret({ businesses: [{ id: 1, name: 'Side', receipts: 3000, otherExpenses: 2500, homeOfficeSqFt: 300 }] }),
+    expect: [['home office', fed('fed.homeOffice'), 500], ['net profit', fed('fed.businessProfit'), 0]]
+  },
+  {
+    name: "Spouse's own business gets its own Schedule SE",
+    source: 'Schedule SE per spouse: $30,000 and $10,000 profits → 92.35% each → 12.4% × $36,940 + 2.9% × $36,940 = $5,651.82',
+    state: ret({ filingStatus: 'married_joint', businesses: [{ id: 1, name: 'A', receipts: 30000 }, { id: 2, name: 'B', owner: 'spouse', receipts: 10000 }] }),
+    expect: [["spouse's SE earnings", fed('fed.spouseSeEarnings'), 9235], ['SE tax', fed('fed.seTax'), 5651.82]]
+  },
+  // ---------------- Federal: Form 8949 (B21) ----------------
+  {
+    name: 'Form 8949 sales flow to Schedule D, wash-sale loss disallowed',
+    source: 'Form 8949: ST $10,000 − $12,000 = −$2,000; ST $5,000 − $7,000 + $2,000 code W = $0; LT $20,000 − $5,000 = $15,000 → net $13,000',
+    state: ret({ w2s: [w2(60000)], capitalTransactions: [
+      { id: 1, description: 'A', term: 'short', proceeds: 10000, basis: 12000 },
+      { id: 2, description: 'B', term: 'short', proceeds: 5000, basis: 7000, adjustment: 2000 },
+      { id: 3, description: 'C', term: 'long', proceeds: 20000, basis: 5000 }] }),
+    expect: [['short-term', fed('fed.txShortTerm'), -2000], ['long-term', fed('fed.txLongTerm'), 15000], ['net capital gain', fed('fed.capNet'), 13000]]
+  },
+  {
+    name: 'Long-term capital loss carryover reduces long-term gain',
+    source: 'Schedule D line 14: $10,000 LT gain − $4,000 LT carryover = $6,000',
+    state: ret({ w2s: [w2(60000)], capitalTransactions: [{ id: 1, description: 'X', term: 'long', proceeds: 15000, basis: 5000 }], carryovers: { longTermCapitalLoss: 4000 } }),
+    expect: [['long-term gain', fed('fed.longTermGain'), 6000], ['net LTCG', fed('fed.netLtcg'), 6000]]
+  },
+  // ---------------- Federal: Premium Tax Credit (B22) ----------------
+  {
+    name: 'Form 8962 (2024): household income 205% of poverty line',
+    source: 'Form 8962: $30,000 ÷ $14,580 = 205% → applicable figure 0.0220 → $660; min($6,000, $5,000 − $660) = $4,340 − $4,000 APTC = $340 net PTC',
+    state: ret({ w2s: [w2(30000)], marketplacePolicies: [{ id: 1, premiums: 6000, slcsp: 5000, advancePtc: 4000 }] }),
+    expect: [['FPL %', fed('fed.ptcFplPercent'), 205], ['applicable figure', fed('fed.ptcApplicableFigure'), 0.022], ['PTC', fed('fed.ptcAllowed'), 4340], ['net PTC', fed('fed.netPtc'), 340]]
+  },
+  {
+    name: 'Form 8962 (2024): excess advance PTC repayment is capped',
+    source: 'Form 8962 Table 5 (2024): $40,000 → 274%, figure 0.0496, PTC $3,016; $5,000 APTC → $1,984 excess, single cap $950',
+    state: ret({ w2s: [w2(40000)], marketplacePolicies: [{ id: 1, premiums: 6000, slcsp: 5000, advancePtc: 5000 }] }),
+    expect: [['applicable figure', fed('fed.ptcApplicableFigure'), 0.0496], ['PTC', fed('fed.ptcAllowed'), 3016], ['repayment', fed('fed.excessAptcRepayment'), 950]]
+  },
+  {
+    name: 'Form 8962 (2026): Rev. Proc. 2025-25 table and no repayment cap',
+    source: 'Rev. Proc. 2025-25: $40,000 ÷ $15,650 = 255% → 8.44% + 5/50 × 1.52% = 0.0859 → $3,436; PTC $1,564; full $3,436 excess repaid',
+    state: ret({ year: 2026, w2s: [w2(40000)], marketplacePolicies: [{ id: 1, premiums: 6000, slcsp: 5000, advancePtc: 5000 }] }),
+    expect: [['applicable figure', fed('fed.ptcApplicableFigure'), 0.0859], ['PTC', fed('fed.ptcAllowed'), 1564], ['repayment', fed('fed.excessAptcRepayment'), 3436]]
+  },
+  {
+    name: 'Form 8962 (2026): no credit above 400% of the poverty line',
+    source: '§36B(c)(1)(A) after the enhanced credit expired: $70,000 = 447% → $0; all $2,000 APTC repaid',
+    state: ret({ year: 2026, w2s: [w2(70000)], marketplacePolicies: [{ id: 1, premiums: 8000, slcsp: 7000, advancePtc: 2000 }] }),
+    expect: [['PTC', fed('fed.ptcAllowed'), 0], ['repayment', fed('fed.excessAptcRepayment'), 2000]]
+  },
+  // ---------------- Federal: Schedule K-1 boxes (B23) ----------------
+  {
+    name: 'K-1 boxes flow to their own lines',
+    source: 'Schedule K-1 (1065): box 1 $20,000 → Sch. E; box 5 $1,000 → interest; box 6a/6b $500 → dividends; box 9a $3,000 → Sch. D',
+    state: ret({ w2s: [w2(50000)], otherIncome: { interest: 0, sources: [src(1, 'Schedule K-1', 20000, { k1Interest: 1000, k1Dividends: 500, k1QualifiedDividends: 500, k1LongTermGain: 3000 })] } }),
+    expect: [['K-1 income', fed('fed.k1Income'), 20000], ['interest', fed('fed.interestTotal'), 1000], ['qualified dividends', fed('fed.qualifiedDividends'), 500], ['net capital gain', fed('fed.capNet'), 3000]]
+  },
+  {
+    name: 'Passive K-1 loss is suspended without passive income',
+    source: 'Form 8582: a $10,000 passive loss with no passive income is not allowed this year',
+    state: ret({ w2s: [w2(50000)], otherIncome: { interest: 0, sources: [src(1, 'Schedule K-1', -10000, { passive: true })] } }),
+    expect: [['K-1 income', fed('fed.k1Income'), 0], ['AGI', fed('fed.agi'), 50000]]
+  },
+  {
+    name: 'Guaranteed payments are SE income but not QBI',
+    source: 'K-1 box 4 $40,000 / box 14A $40,000: SE tax 15.3% × $36,940 = $5,651.82; §199A(c)(4) excludes guaranteed payments',
+    state: ret({ otherIncome: { interest: 0, sources: [src(1, 'Schedule K-1', 0, { k1Guaranteed: 40000, k1SeEarnings: 40000 })] } }),
+    expect: [['K-1 income', fed('fed.k1Income'), 40000], ['SE tax', fed('fed.seTax'), 5651.82], ['QBI deduction', fed('fed.qbi'), 0]]
+  },
+  // ---------------- Federal: rental properties (B24) ----------------
+  {
+    name: 'Rental depreciation: 27.5-year straight line',
+    source: 'Pub. 527 Table 2-2d: $275,000 basis placed in service 2020 → $10,000 a year; $24,000 − $8,000 − $10,000 = $6,000',
+    state: ret({ w2s: [w2(60000)], rentalProperties: [{ id: 1, name: 'Duplex', rents: 24000, expenses: 8000, buildingBasis: 275000, placedInServiceYear: 2020, placedInServiceMonth: 3 }] }),
+    expect: [['depreciation', fed('fed.rentalPropertiesDepreciation'), 10000], ['net rental', fed('fed.rentalPropertiesNet'), 6000]]
+  },
+  {
+    name: 'Rental depreciation: first year uses the mid-month convention',
+    source: 'Pub. 527 Table 2-2d: placed in service July → 5.5 months ÷ 12 × $10,000 = $4,583.33',
+    state: ret({ w2s: [w2(60000)], rentalProperties: [{ id: 1, name: 'Condo', rents: 0, expenses: 0, buildingBasis: 275000, placedInServiceYear: 2024, placedInServiceMonth: 7 }] }),
+    expect: [['depreciation', fed('fed.rentalPropertiesDepreciation'), 4583.33]]
+  },
+  {
+    name: 'Vacation home: expenses allocated by rental days, no loss',
+    source: 'IRC §280A(c)(5) / Pub. 527 ch. 5: 30 personal days > 14 → $12,000 × 100/130 = $9,230.77; $10,000 − $9,230.77 = $769.23',
+    state: ret({ w2s: [w2(60000)], rentalProperties: [{ id: 1, name: 'Cabin', rents: 10000, expenses: 9000, depreciation: 3000, rentalDays: 100, personalDays: 30 }] }),
+    expect: [['net rental', fed('fed.rentalPropertiesNet'), 769.23]]
+  },
+  {
+    name: 'Home rented under 15 days: rent is not reported',
+    source: 'IRC §280A(g): rented fewer than 15 days → income excluded and no expenses deducted',
+    state: ret({ w2s: [w2(60000)], rentalProperties: [{ id: 1, name: 'Home', rents: 5000, expenses: 500, rentalDays: 10, personalDays: 200 }] }),
+    expect: [['net rental', fed('fed.rentalPropertiesNet'), 0], ['AGI', fed('fed.agi'), 60000]]
+  },
+  // ---------------- Federal: carryovers (A5) ----------------
+  {
+    name: 'Prior-year unallowed passive loss reduces rental income',
+    source: 'Form 8582: $8,000 net rental income − $5,000 prior-year unallowed loss = $3,000',
+    state: ret({ w2s: [w2(60000)], rentalProperties: [{ id: 1, name: 'R', rents: 20000, expenses: 10000, depreciation: 2000 }], carryovers: { passiveLoss: 5000 } }),
+    expect: [['rental income', fed('fed.rentalAllowed'), 3000]]
+  },
+  {
+    name: 'Charitable contribution carryover is deducted with current gifts',
+    source: 'Pub. 526: $2,000 current + $5,000 carryover, under 60% of AGI → $7,000',
+    state: ret({ w2s: [w2(100000)], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 0, mortgageInterest: 20000, charity: 2000 }, carryovers: { charity: 5000 } }),
+    expect: [['charity deduction', fed('fed.charityDeduction'), 7000]]
+  },
+  {
+    name: 'Post-2017 NOL deduction limited to 80% of taxable income',
+    source: 'IRC §172(a)(2): $100,000 NOL; 80% × ($50,000 − $14,600) = $28,320 → AGI $21,680',
+    state: ret({ w2s: [w2(50000)], carryovers: { nol: 100000 } }),
+    expect: [['NOL deduction', fed('fed.nolDeduction'), 28320], ['AGI', fed('fed.agi'), 21680]]
+  },
+  {
+    name: 'Form 8801 minimum tax credit used against regular tax above tentative minimum tax',
+    source: 'Form 8801: regular tax far above TMT ($3,718) → full $3,000 credit',
+    state: ret({ w2s: [w2(100000)], carryovers: { amtCredit: 3000 } }),
+    expect: [['AMT credit', fed('fed.amtCredit'), 3000]]
+  },
+  {
+    name: 'Qualified business loss carryforward reduces QBI',
+    source: 'Form 8995 line 3: $10,000 profit − ½ SE tax − $20,000 carryforward → QBI $0',
+    state: ret({ w2s: [w2(40000)], otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 10000)] }, carryovers: { qbiLoss: 20000 } }),
+    expect: [['QBI deduction', fed('fed.qbi'), 0]]
+  },
 ];
 
 let passed = 0, gaps = 0;

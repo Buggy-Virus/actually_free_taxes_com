@@ -93,6 +93,16 @@ export interface IncomeSource {
   rollover?: boolean; // 1099-R distribution code G/H direct rollover (not taxable)
   /** 1099-R box 7 distribution code(s), e.g. '7', '1', '2', 'G', '1B', 'Q', 'S'. When set it decides rollover / early / Roth treatment. */
   distributionCode?: string;
+  // Schedule K-1 boxes (Form 1065 / 1120-S); `amount` is box 1 ordinary business income.
+  k1Rental?: number; // box 2 net rental real estate income (loss)
+  k1Guaranteed?: number; // 1065 box 4c guaranteed payments (nonpassive, SE income, not QBI)
+  k1Interest?: number; // box 5
+  k1Dividends?: number; // box 6a
+  k1QualifiedDividends?: number; // box 6b
+  k1ShortTermGain?: number; // box 8
+  k1LongTermGain?: number; // box 9a
+  k1SeEarnings?: number; // 1065 box 14 code A
+  passive?: boolean; // passive activity (no material participation): losses limited to passive income
   /** Whose document this is on a joint return (Schedule SE per person, spouse earned income). Default taxpayer. */
   owner?: 'taxpayer' | 'spouse';
   capitalGainDistributions?: number; // 1099-DIV Box 2a total capital gain distributions (long-term)
@@ -174,6 +184,67 @@ export interface PersonInfo {
   blind?: boolean;
 }
 
+export interface BusinessRecord {
+  id: number;
+  name: string;
+  owner?: 'taxpayer' | 'spouse';
+  receipts?: number;
+  advertising?: number;
+  supplies?: number;
+  insurance?: number;
+  utilities?: number;
+  rentLease?: number;
+  legalProfessional?: number;
+  otherExpenses?: number;
+  meals?: number;
+  vehicleMiles?: number;
+  homeOfficeSqFt?: number;
+}
+
+export interface CapitalTransaction {
+  id: number;
+  description: string;
+  term: 'short' | 'long';
+  box?: string;
+  proceeds: number;
+  basis: number;
+  adjustment?: number;
+}
+
+export interface RentalProperty {
+  id: number;
+  name: string;
+  rents: number;
+  expenses: number;
+  depreciation?: number;
+  buildingBasis?: number;
+  placedInServiceYear?: number;
+  placedInServiceMonth?: number;
+  rentalDays?: number;
+  personalDays?: number;
+}
+
+export interface MarketplacePolicy {
+  id: number;
+  premiums: number;
+  slcsp: number;
+  advancePtc: number;
+}
+
+/** Amounts carried in from last year's return. */
+export interface Carryovers {
+  shortTermCapitalLoss?: number;
+  longTermCapitalLoss?: number;
+  passiveLoss?: number;
+  charity?: number;
+  investmentInterest?: number;
+  nol?: number;
+  amtCredit?: number;
+  foreignTax?: number;
+  qbiLoss?: number;
+  section179?: number;
+}
+
 export interface DependentRecord {
   id: number;
   name: string;
@@ -229,6 +300,15 @@ export interface TaxAppState {
   year: TaxYear;
   filingStatus: FilingStatus;
   residentState?: string;
+  businesses?: BusinessRecord[];
+  capitalTransactions?: CapitalTransaction[];
+  rentalProperties?: RentalProperty[];
+  marketplacePolicies?: MarketplacePolicy[];
+  /** Form 8962 family size (default: you, spouse on a joint return, and dependents). */
+  ptcHouseholdSize?: number;
+  /** Poverty-line table: 48 states & DC, Alaska or Hawaii. */
+  ptcRegion?: 'contiguous' | 'AK' | 'HI';
+  carryovers?: Carryovers;
   w2s: W2Data[];
   otherIncome: OtherIncome;
   adjustments: Adjustments;

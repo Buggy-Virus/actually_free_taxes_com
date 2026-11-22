@@ -74,6 +74,46 @@ export const PANEL_CATALOG: PanelCatalogEntry[] = [
     inputIds: ['input-capital-gains-st', 'input-capital-gains-lt', 'input-cap-collectibles', 'input-cap-1250']
   },
   {
+    key: 'sched-c-businesses',
+    section: 'other-income',
+    title: 'Self-Employment Businesses',
+    officialTitle: 'Schedule C • One per business',
+    shortExplanation: 'Each business with its receipts, expense categories, business miles (standard rate) and simplified home office. 1099-NEC/K income is added on top.',
+    ratingKey: 'schedule-c-expenses',
+    size: 'full',
+    inputIds: []
+  },
+  {
+    key: 'form-8949-transactions',
+    section: 'other-income',
+    title: 'Stock & Investment Sales',
+    officialTitle: 'Form 8949 • Schedule D',
+    shortExplanation: 'Each sale from your 1099-B: proceeds, basis and any adjustment (such as a wash-sale loss). Totals flow to Schedule D with the net amounts entered elsewhere.',
+    ratingKey: 'capital-gains',
+    size: 'full',
+    inputIds: []
+  },
+  {
+    key: 'rental-properties',
+    section: 'other-income',
+    title: 'Rental Properties',
+    officialTitle: 'Schedule E Part I • Form 4562',
+    shortExplanation: 'Each property with rents and expenses. Leave depreciation blank to compute 27.5-year straight line from the building basis. Personal-use days apply the vacation-home rules.',
+    ratingKey: 'schedule-e-rental',
+    size: 'full',
+    inputIds: []
+  },
+  {
+    key: 'prior-year-carryovers',
+    section: 'other-income',
+    title: 'Carryovers From Last Year',
+    officialTitle: 'Capital loss, passive loss, charity, NOL, Form 8801 and more',
+    shortExplanation: "Amounts last year's return carried forward. Each is applied with its own limit this year.",
+    ratingKey: 'capital-gains',
+    size: 'full',
+    inputIds: []
+  },
+  {
     key: 'home-sale-121',
     section: 'other-income',
     title: 'Sale of Your Main Home',
@@ -567,6 +607,16 @@ export const PANEL_CATALOG: PanelCatalogEntry[] = [
     ratingKey: 'credits-age-blind',
     size: 'sm',
     inputIds: ['input-elderly-credit']
+  },
+  {
+    key: 'cred-1095a',
+    section: 'credits',
+    title: 'Marketplace Health Insurance (1095-A)',
+    officialTitle: 'Form 8962 • Premium Tax Credit',
+    shortExplanation: 'Annual totals from each Form 1095-A. The credit is figured from household income and reconciled with advance payments; any excess is repaid.',
+    ratingKey: 'credits-child-care',
+    size: 'full',
+    inputIds: []
   },
   {
     key: 'sched-h-household',
