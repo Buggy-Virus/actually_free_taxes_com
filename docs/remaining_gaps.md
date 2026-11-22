@@ -125,8 +125,8 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 
 | ID | Pri | Gap | Today | Approach | Status |
 | :-- | :-: | :-- | :-- | :-- | :-: |
-| E1 | P1 | Official Form 1040 + schedules PDF (field mapping from graph quantities) | Summary worksheet | Map `form` metadata on quantities to PDF fields | ⬜ |
-| E2 | P1 | Line-by-line guide for Free File Fillable Forms | Main lines only | Generate from quantities' `form` labels | ⬜ |
+| E1 | P1 | Official Form 1040 + schedules PDF (field mapping from graph quantities) | Summary worksheet | Map `form` metadata on quantities to PDF fields | ✅ Download fills the IRS fillable Form 1040 (2024 and 2025 layouts bundled in assets/forms; 2026 uses 2025 until published) via pdf-lib from jsdelivr; fields mapped by position (src/form1040-fields.ts); tests tie out every line. Name/SSN/address, filing-status boxes, dependents and the schedules' PDFs not filled |
+| E2 | P1 | Line-by-line guide for Free File Fillable Forms | Main lines only | Generate from quantities' `form` labels | ✅ Line-by-line guide: every Form 1040 line plus each supporting-form line from the quantities' form labels (Schedules 1/2/3/A/C/D/E/SE, Forms 6251/8889/8959/8960/8962…), rows jump to the calculation |
 | E3 | P2 | State forms PDFs, e-file integrations | Mock | | ⬜ |
 | E4 | P2 | Amended return (1040-X) | — | Diff two drafts | ⬜ |
 | E5 | P2 | IP PIN, prior-year AGI for e-file signature, bank details | — | | ⬜ |

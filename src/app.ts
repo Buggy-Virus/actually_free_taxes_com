@@ -32,6 +32,8 @@ import { GraphBlock } from './graph/graph.js';
 import { reviewReturn } from './validation.js';
 import { RECORD_KINDS, RecordKind, recordDomId } from './record-kinds.js';
 import { localityOptions } from './locality-rates.js';
+import { form1040Lines, form1040FieldValues, form1040Year } from './form1040.js';
+import { lineDomId } from './graph/graph.js';
 import { renderRatingPill, renderRatingCardHtml, getFieldRating, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
 import { PANEL_CATALOG, PanelCatalogEntry, getPanelCatalogEntry } from './panel-catalog.js';
 import { getStateCatalogForSection, getStateCatalogEntry } from './state-panel-catalog.js';
@@ -1801,6 +1803,14 @@ class TaxApp {
     if (btnQuickExport) {
       btnQuickExport.addEventListener('click', () => this.exportDraft());
     }
+    document.getElementById('btn-download-1040-pdf')?.addEventListener('click', () => { void this.downloadFilled1040(); });
+    document.getElementById('btn-line-guide')?.addEventListener('click', () => {
+      const box = document.getElementById('line-guide-container');
+      if (!box) return;
+      const show = box.style.display === 'none';
+      box.style.display = show ? '' : 'none';
+      if (show) this.renderLineGuide();
+    });
 
     ['btn-close-filing-modal', 'btn-close-filing-bottom'].forEach(id => {
       const btn = document.getElementById(id);
@@ -5286,6 +5296,72 @@ class TaxApp {
       const display = tok.valueFormatted || tok.label || '';
       return `<span class="formula-var ${emptyClass}" data-block-id="${esc(blockId)}" data-var-id="${esc(tok.varId)}" role="button" tabindex="0" title="Click to view contributing inputs">${esc(display)}</span>`;
     }).join('');
+  }
+
+  /** E2: Form 1040 lines plus every supporting-form line (from each graph quantity's `form` label), for copying into
+   *  Free File Fillable Forms or checking a paper return. Rows jump to the calculation line that produced them. */
+  private renderLineGuide(): void {
+    const box = document.getElementById('line-guide-container');
+    const ev = calculateTaxes(this.state).federalEval;
+    if (!box || !ev) return;
+    const year = this.state.year || 2024;
+    const money = (n: number) => (n < 0 ? '−$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const lines = form1040Lines(ev, year).filter(l => Math.abs(l.value) >= 0.005);
+    const support = new Map<string, Array<{ form: string; label: string; value: number; id: string }>>();
+    ev.graph.quantities.forEach((q, id) => {
+      if (!q.form || !id.startsWith('fed.') || /^Form 1040 Line/.test(q.form) || !ev.applies(id)) return;
+      const value = ev.value(id);
+      if (Math.abs(value) < 0.005 || q.unit === 'rate' || q.unit === 'count') return;
+      const doc = q.form.split(/ Line| Part|,|;|\//)[0].trim();
+      if (!support.has(doc)) support.set(doc, []);
+      support.get(doc)!.push({ form: q.form, label: q.label, value, id });
+    });
+    const row = (a: string, b: string, c: string, target?: string) =>
+      `<tr ${target ? `data-guide-target="${esc(target)}" style="cursor:pointer;"` : ''}><td style="padding:0.2rem 0.6rem;white-space:nowrap;">${esc(a)}</td><td style="padding:0.2rem 0.6rem;">${esc(b)}</td><td style="padding:0.2rem 0.6rem;text-align:right;white-space:nowrap;">${esc(c)}</td></tr>`;
+    box.innerHTML = `
+      <div class="calc-card">
+        <h3 class="calc-card-title">Form 1040 (${year}) — line by line</h3>
+        <p style="font-size:0.82rem;color:#64748b;margin:0.2rem 0 0.6rem;">Enter these amounts in IRS Free File Fillable Forms or on the paper form. Click a row to see how it was calculated.${year >= 2026 ? ' The 2026 form is not final; line numbers follow the 2025 form.' : ''}</p>
+        <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">${lines.map(l => row(`Line ${l.line}`, l.label, money(l.value), lineDomId(l.sources[0]))).join('')}</table>
+        ${[...support.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([doc, items]) => `
+          <h4 style="margin:1rem 0 0.3rem;">${esc(doc)}</h4>
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">${items.map(it => row(it.form, it.label, money(it.value), lineDomId(it.id))).join('')}</table>`).join('')}
+      </div>`;
+    box.querySelectorAll<HTMLElement>('[data-guide-target]').forEach(tr => tr.addEventListener('click', () => {
+      document.getElementById(tr.dataset.guideTarget || '')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }));
+  }
+
+  /** E1: fill the IRS fillable Form 1040 (assets/forms) with the graph's line values using pdf-lib, and download it. */
+  private async downloadFilled1040(): Promise<void> {
+    const ev = calculateTaxes(this.state).federalEval;
+    if (!ev) return;
+    const year = this.state.year || 2024;
+    const layout = form1040Year(year);
+    const btn = document.getElementById('btn-download-1040-pdf') as HTMLButtonElement | null;
+    if (btn) { btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
+    try {
+      const pdfLibUrl = 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
+      const { PDFDocument } = await import(/* webpackIgnore: true */ pdfLibUrl as string);
+      const bytes = await (await fetch(`assets/forms/f1040-${layout}.pdf`)).arrayBuffer();
+      const doc = await PDFDocument.load(bytes);
+      const form = doc.getForm();
+      Object.entries(form1040FieldValues(form1040Lines(ev, year), year)).forEach(([name, text]) => {
+        try { form.getTextField(name).setText(text); } catch { /* field missing in this revision */ }
+      });
+      const out = await doc.save();
+      const url = URL.createObjectURL(new Blob([out], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Form-1040-${year}-filled.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      alert('Could not build the PDF (the PDF library loads from cdn.jsdelivr.net). Use the line-by-line guide instead.');
+      console.warn(err);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Download Filled IRS Form 1040 (PDF)'; }
+    }
   }
 
   /** List editor for a repeating record kind (businesses, Form 8949 sales, rentals, 1095-A). */
