@@ -1269,6 +1269,25 @@ const CASES = [
         state: ret({ residentState: 'CA', w2s: [{ ...w2(100000, { state: 'CA', stateWithheld: 8000 }), stateDisabilityContributions: 1200 }] }),
         expect: [['state & local income taxes', fed('fed.saltIncomeTaxes'), 9200]]
     },
+    // ---------------- State: itemized deductions (C10) ----------------
+    {
+        name: 'GA itemized deductions: federal Schedule A without state income tax',
+        source: 'GA IT-511 Schedule 3: $20,000 mortgage + $5,000 property tax + $3,000 charity = $28,000 (the $4,000 GA withholding is not deductible) > $12,000 standard',
+        state: ret({ residentState: 'GA', w2s: [w2(90000, { state: 'GA', stateWithheld: 4000 })], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 5000, mortgageInterest: 20000, charity: 3000 } }),
+        expect: [['GA itemized', st('GA', 'itemized'), 28000], ['GA deduction', st('GA', 'deductionBase'), 28000]]
+    },
+    {
+        name: 'NC itemized deductions: mortgage + property tax capped at $20,000',
+        source: 'N.C.G.S. 105-153.5(a)(2): min($20,000, $18,000 + $6,000) + $2,000 charity = $22,000',
+        state: ret({ residentState: 'NC', w2s: [w2(90000, { state: 'NC' })], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 6000, mortgageInterest: 18000, charity: 2000 } }),
+        expect: [['NC itemized', st('NC', 'itemized'), 22000]]
+    },
+    {
+        name: 'KY itemized deductions: mortgage interest and charity only',
+        source: 'KRS 141.019(2): $10,000 mortgage + $1,000 charity = $11,000 (property tax not allowed)',
+        state: ret({ residentState: 'KY', w2s: [w2(90000, { state: 'KY' })], itemizedDeductions: { medicalExpenses: 0, realEstateTax: 4000, mortgageInterest: 10000, charity: 1000 } }),
+        expect: [['KY itemized', st('KY', 'itemized'), 11000]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];

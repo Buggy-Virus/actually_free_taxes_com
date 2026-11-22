@@ -335,6 +335,8 @@ const MUNI_ADDBACK_EXEMPT = ['IN', 'UT'];
 const NONRESIDENT_RATIO_METHOD = ['AR', 'CA', 'CO', 'CT', 'IA', 'KS', 'ME', 'MN', 'MO', 'MT', 'NE', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'RI', 'UT', 'VT', 'WV'];
 /** States that tax some Social Security benefits (each with its own exemptions — not yet modeled). */
 const MFS = statusIs('married_separate');
+/** States whose itemized deductions start from federal Schedule A (state income taxes removed); KY and NC have their own lists. */
+const STATE_SCHEDULE_A = ['AL', 'AZ', 'AR', 'DE', 'GA', 'HI', 'ID', 'KS', 'KY', 'ME', 'MN', 'MS', 'MO', 'NE', 'NC', 'OK', 'OR'];
 /** Convenience-of-the-employer rule (NY, DE, NE, PA); CT and NJ apply it only to residents of states that have such a rule. */
 const CONVENIENCE_STATES = ['NY', 'DE', 'NE', 'PA'];
 const RETALIATORY_CONVENIENCE = ['CT', 'NJ'];
@@ -630,11 +632,28 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   else if (code === 'WI') baseStd = atLeast0(round(sub(P(S('stdBase')), mul(atLeast0(sub(R(S('agi')), when(MFJ, lit(26360), lit(18220)))), when(MFJ, rate(0.19778), rate(0.12)))), 'dollar'));
   q('baseStdDeduction', { label: `${code} Standard Deduction`, unit: 'usd', category: 'state', expr: baseStd });
 
-  const itemizes = ['NY', 'CA', 'DC', 'MD', 'VA'].includes(code);
+  const itemizes = ['NY', 'CA', 'DC', 'MD', 'VA'].includes(code) || STATE_SCHEDULE_A.includes(code);
   if (itemizes) {
-    q('propertyTax', { label: `${code} Property Tax Allowed`, unit: 'usd', display: 'inline', expr: code === 'CA' ? R('in.realEstateTax') : min(lit(10000), R('in.realEstateTax')) });
-    q('itemized', { label: `${code} Itemized Deductions`, unit: 'usd', category: 'itemized', optional: true,
-      expr: add(R('fed.medicalDeduction'), R(S('propertyTax')), R('fed.mortgageDeduction'), R('fed.charityDeduction')) });
+    if (code === 'KY') {
+      // KRS 141.019: itemized deductions limited to home mortgage interest, charitable contributions and investment interest.
+      q('itemized', { label: 'KY Itemized Deductions (mortgage, charity, investment interest)', unit: 'usd', category: 'itemized', optional: true,
+        expr: add(R('fed.mortgageDeduction'), R('fed.charityDeduction'), R('fed.investmentInterestDeduction')) });
+    } else if (code === 'NC') {
+      // N.C.G.S. 105-153.5(a)(2): mortgage interest plus property tax capped at $20,000 combined, charity, medical.
+      q('itemized', { label: 'NC Itemized Deductions', unit: 'usd', category: 'itemized', optional: true,
+        expr: add(min(lit(20000), add(R('fed.mortgageDeduction'), R('in.realEstateTax'))), R('fed.charityDeduction'), R('fed.medicalDeduction')) });
+    } else if (STATE_SCHEDULE_A.includes(code)) {
+      // Federal Schedule A without state and local income (or sales) taxes; property taxes kept within the federal cap.
+      q('propertyTax', { label: `${code} Property Taxes Allowed`, unit: 'usd', display: 'inline',
+        expr: min(R('fed.saltCap'), add(R('in.realEstateTax'), R('in.personalPropertyTax'))) });
+      q('itemized', { label: `${code} Itemized Deductions (federal Schedule A less income taxes)`, unit: 'usd', category: 'itemized', optional: true,
+        expr: add(R('fed.medicalDeduction'), R(S('propertyTax')), R('fed.mortgageDeduction'), R('fed.charityDeduction'), R('fed.casualtyDeduction'),
+          R('fed.gamblingLossDeduction'), R('fed.investmentInterestDeduction')) });
+    } else {
+      q('propertyTax', { label: `${code} Property Tax Allowed`, unit: 'usd', display: 'inline', expr: code === 'CA' ? R('in.realEstateTax') : min(lit(10000), R('in.realEstateTax')) });
+      q('itemized', { label: `${code} Itemized Deductions`, unit: 'usd', category: 'itemized', optional: true,
+        expr: add(R('fed.medicalDeduction'), R(S('propertyTax')), R('fed.mortgageDeduction'), R('fed.charityDeduction')) });
+    }
     const forceStandard = flag('fed.forceStandard', 'you chose the standard deduction', 'you did not force the standard deduction', 'select-deduction-method');
     q('deductionBase', { label: `${code} Deduction Used`, unit: 'usd', display: 'inline',
       expr: when(and(not(forceStandard), gt(R(S('itemized')), R(S('baseStdDeduction')))), R(S('itemized')), R(S('baseStdDeduction'))) });
@@ -651,7 +670,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
     exTerms.push(R(S('personalExemption')));
   } else if (code === 'IL') {
     q('personalExemption', { label: 'IL Personal Exemption', unit: 'usd', category: 'state', optional: true,
-      expr: when(gt(R(S('agi')), when(MFJ, lit(500000), lit(250000))), lit(0), mul(P('st.taxpayerCount'), lit(2775))) });
+      expr: when(gt(R(S('agi')), when(MFJ, lit(500000), lit(250000))), lit(0), mul(P('st.taxpayerCount'), lit(stateExemptionForYear('IL', year, 'personal', 2775)))) });
     exTerms.push(R(S('personalExemption')));
   } else if (STATE_PERSONAL_EXEMPTION[code]) {
     q('personalExemption', { label: `${code} Personal Exemption`, unit: 'usd', category: 'state', optional: true,
