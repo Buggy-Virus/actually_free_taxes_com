@@ -186,6 +186,7 @@ export interface Adjustments {
   hsaCatchUp?: boolean; // Form 8889: age 55+ additional $1,000
   iraCatchUp?: boolean; // IRA: age 50+ additional $1,000
   spouseIra?: number; // Spouse's traditional IRA contributions (own limit and phase-out; joint returns)
+  spouseSeRetirement?: number; // Spouse's SEP / SIMPLE / solo 401(k) contributions (limit from the spouse's own business)
   qualifiedTips?: number; // 2025-2028 Schedule 1-A: qualified tips (P.L. 119-21)
   qualifiedOvertime?: number; // 2025-2028 Schedule 1-A: qualified overtime premium pay
   carLoanInterest?: number; // 2025-2028 Schedule 1-A: interest on a new US-assembled personal vehicle loan

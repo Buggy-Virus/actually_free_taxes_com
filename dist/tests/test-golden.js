@@ -1463,6 +1463,20 @@ const CASES = [
         state: ret({ filingStatus: 'married_separate', residentState: 'CA', communitySpouseWages: 20000, communitySpouseWithheld: 1000, w2s: [w2(80000, { state: 'CA', fedWithheld: 9000 })] }),
         expect: [['wages', fed('fed.wages'), 50000], ['withholding', fed('fed.w2Withholding'), 5000]]
     },
+    {
+        name: "Spouse's SEP contribution limited by the spouse's own business profit",
+        source: 'Pub. 560: spouse net earnings $10,000 − $706.48 half SE tax = $9,293.52 ≥ $5,000; taxpayer limit min($69,000, $92,935, $23,000 + 20% × $92,935) = $41,587 ≥ $30,000 → $35,000',
+        state: ret({ filingStatus: 'married_joint', businesses: [{ id: 1, name: 'A', receipts: 100000 }, { id: 2, name: 'B', owner: 'spouse', receipts: 10000 }],
+            adjustments: { studentLoan: 0, ira: 0, hsa: 0, seRetirement: 30000, spouseSeRetirement: 5000 } }),
+        expect: [['SE retirement deduction', fed('fed.seRetirementDeduction'), 35000]]
+    },
+    {
+        name: "Spouse with no self-employment income can't deduct an SE retirement contribution",
+        source: 'Pub. 560: contributions are limited to the participant’s net earnings from self-employment — $0 for the spouse',
+        state: ret({ filingStatus: 'married_joint', businesses: [{ id: 1, name: 'A', receipts: 100000 }],
+            adjustments: { studentLoan: 0, ira: 0, hsa: 0, spouseSeRetirement: 30000 } }),
+        expect: [['SE retirement deduction', fed('fed.seRetirementDeduction'), 0]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];

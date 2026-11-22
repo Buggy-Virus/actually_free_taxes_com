@@ -175,6 +175,7 @@ function defineInputs(g) {
     io('in.hsa', 'HSA Contributions', 'input-adj-hsa', 'adj-hsa', 'adjustments', { optional: true });
     io('in.educator', 'Educator Expenses Paid', 'input-adj-educator', 'adj-educator', 'adjustments', { optional: true });
     io('in.seRetirement', 'SEP / SIMPLE / Solo 401(k)', 'input-adj-se-retirement', 'adj-se-retirement', 'adjustments', { optional: true });
+    io('in.spouseSeRetirement', "Spouse's SEP / SIMPLE / Solo 401(k)", 'input-adj-spouse-se-retirement', 'adj-se-retirement', 'adjustments', { optional: true });
     io('in.seHealth', 'Self-Employed Health Insurance', 'input-adj-se-health', 'adj-se-health', 'adjustments', { optional: true });
     io('in.alimonyPaid', 'Alimony Paid', 'input-adj-alimony', 'adj-alimony', 'adjustments', { optional: true });
     io('in.militaryMoving', 'Military Moving Expenses', 'input-adj-military-moving', 'adj-military-moving', 'adjustments', { optional: true });
@@ -509,11 +510,18 @@ function defineQuantities(g, year) {
     // ---------- Adjustments (Schedule 1 Part II) ----------
     // Self-employed retirement: at most 20% of (net profit − ½ SE tax) plus the elective deferral limit (solo 401(k) maximum),
     // within the annual additions cap. SE health insurance (Form 7206) is limited to net profit − ½ SE tax − SE retirement.
+    // Each self-employed spouse's limit comes from their own net profit less their own half of SE tax (Pub. 560): at most that
+    // net earnings amount, the elective deferral limit plus 20% of it, and the annual additions cap.
+    const halfSe = (earn, room) => round(mul(add(mul(min(R(earn), R(room)), rate(0.124)), mul(R(earn), rate(0.029))), rate(0.5)));
     q({ id: 'fed.seRetirementLimit', label: 'Self-Employed Retirement Contribution Limit', unit: 'usd', category: 'adjustments',
         appliesWhen: gt(R('in.seRetirement'), lit(0)),
-        expr: min(P('fed.annualAdditionsCap'), add(P('fed.electiveDeferralLimit'), mul(atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'))), rate(0.2)))) });
+        expr: min(P('fed.annualAdditionsCap'), atLeast0(sub(R('fed.taxpayerBusinessProfit'), halfSe('fed.taxpayerSeEarnings', 'fed.seSsRoom'))), add(P('fed.electiveDeferralLimit'), mul(atLeast0(sub(R('fed.taxpayerBusinessProfit'), halfSe('fed.taxpayerSeEarnings', 'fed.seSsRoom'))), rate(0.2)))) });
+    q({ id: 'fed.spouseSeRetirementLimit', label: "Spouse's Self-Employed Retirement Limit", unit: 'usd', category: 'adjustments',
+        appliesWhen: gt(R('in.spouseSeRetirement'), lit(0)),
+        expr: min(P('fed.annualAdditionsCap'), atLeast0(sub(R('fed.spouseBusinessProfit'), halfSe('fed.spouseSeEarnings', 'fed.spouseSeSsRoom'))), add(P('fed.electiveDeferralLimit'), mul(atLeast0(sub(R('fed.spouseBusinessProfit'), halfSe('fed.spouseSeEarnings', 'fed.spouseSeSsRoom'))), rate(0.2)))) });
     q({ id: 'fed.seRetirementDeduction', label: 'SEP / SIMPLE / Solo 401(k) Deduction', unit: 'usd', form: 'Schedule 1 Line 16', category: 'adjustments', optional: true,
-        presentIf: gt(R('in.seRetirement'), lit(0)), expr: min(R('in.seRetirement'), R('fed.seRetirementLimit')) });
+        presentIf: gt(add(R('in.seRetirement'), R('in.spouseSeRetirement')), lit(0)),
+        expr: add(min(R('in.seRetirement'), R('fed.seRetirementLimit')), min(R('in.spouseSeRetirement'), when(gt(R('in.spouseSeRetirement'), lit(0)), R('fed.spouseSeRetirementLimit'), lit(0)))) });
     q({ id: 'fed.seHealthDeduction', label: 'Self-Employed Health Insurance Deduction', unit: 'usd', form: 'Schedule 1 Line 17', category: 'adjustments', optional: true,
         presentIf: gt(R('in.seHealth'), lit(0)),
         expr: min(R('in.seHealth'), atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'), R('fed.seRetirementDeduction')))) });
@@ -1186,6 +1194,7 @@ export function federalContext(state) {
             'in.studentLoan': n(a.studentLoan),
             'in.ira': n(a.ira),
             'in.spouseIra': joint ? n(a.spouseIra) : 0,
+            'in.spouseSeRetirement': joint ? n(a.spouseSeRetirement) : 0,
             'in.hsa': n(a.hsa),
             'in.educator': n(a.educatorExpenses),
             'in.seRetirement': n(a.seRetirement),
@@ -1259,7 +1268,7 @@ export const FEDERAL_BLOCKS = [
     { id: 'calc-agi', stepLabel: 'Step 3 • Gross Income, Adjustments & AGI', title: 'Total Income & Adjusted Gross Income (AGI)',
         quantities: ['fed.interestTotal', 'fed.taxExemptInterest', 'fed.dividends', 'fed.qualifiedDividends', 'fed.bizExpenses', 'fed.homeOffice', 'fed.sec179Allowed', 'fed.businessProfit', 'fed.k1PassiveAllowed', 'fed.rentalPropertiesDepreciation', 'fed.rentalPropertiesNet', 'fed.retirement',
             'fed.gambling', 'fed.otherSourceIncome', 'fed.taxableStateRefund', 'fed.ssaGross', 'fed.provisionalIncome', 'fed.taxableSS',
-            'fed.depCareTaxable', { id: 'fed.totalIncome', show: 'always' }, 'fed.seRetirementLimit', 'fed.seRetirementDeduction', 'fed.seHealthDeduction', 'fed.hsaLimit', 'fed.hsaDeduction', 'fed.iraMagi', 'fed.iraDeductibleLimit', 'fed.taxpayerIraDeduction', 'fed.spouseIraContributionLimit', 'fed.spouseIraDeduction', 'fed.iraDeduction',
+            'fed.depCareTaxable', { id: 'fed.totalIncome', show: 'always' }, 'fed.seRetirementLimit', 'fed.spouseSeRetirementLimit', 'fed.seRetirementDeduction', 'fed.seHealthDeduction', 'fed.hsaLimit', 'fed.hsaDeduction', 'fed.iraMagi', 'fed.iraDeductibleLimit', 'fed.taxpayerIraDeduction', 'fed.spouseIraContributionLimit', 'fed.spouseIraDeduction', 'fed.iraDeduction',
             'fed.studentLoanMagi', 'fed.studentLoanDeduction', { id: 'fed.adjustments', show: 'always' },
             'fed.nolDeduction', { id: 'fed.agi', show: 'always' }] },
     { id: 'calc-itemized-deductions', stepLabel: 'Step 4a • Schedule A Itemized Deductions', title: 'Itemized Deductions (Medical 7.5% Floor & SALT Cap)',

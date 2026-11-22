@@ -1054,6 +1054,7 @@ class TaxApp {
         hsaCatchUp: Boolean(parsed.adjustments?.hsaCatchUp),
         iraCatchUp: Boolean(parsed.adjustments?.iraCatchUp),
         spouseIra: Number(parsed.adjustments?.spouseIra) || 0,
+        spouseSeRetirement: Number(parsed.adjustments?.spouseSeRetirement) || 0,
         bothEducators: Boolean(parsed.adjustments?.bothEducators),
         studentLoan: Number(parsed.adjustments?.studentLoan) || 0,
         ira: Number(parsed.adjustments?.ira) || 0,
@@ -4557,6 +4558,7 @@ class TaxApp {
         case 'input-adj-hsa': return Number(this.state.adjustments?.hsa) || 0;
         case 'input-adj-educator': return Number(this.state.adjustments?.educatorExpenses) || 0;
         case 'input-adj-se-retirement': return Number(this.state.adjustments?.seRetirement) || 0;
+        case 'input-adj-spouse-se-retirement': return Number(this.state.adjustments?.spouseSeRetirement) || 0;
         case 'input-adj-se-health': return Number(this.state.adjustments?.seHealthInsurance) || 0;
         case 'input-adj-alimony': return Number(this.state.adjustments?.alimonyPaid) || 0;
         case 'input-children-count': return Number(this.state.dependents?.childrenCount) || 0;
@@ -4748,6 +4750,11 @@ class TaxApp {
         ${numBox('input-household-wages', 'Cash Wages Paid (Schedule H computes the tax)')}
         ${numBox('input-household-tax', 'Or: Tax Amount From Your Own Schedule H')}
       </div>`;
+    } else if (entry.key === 'adj-se-retirement' && this.state.filingStatus === 'married_joint') {
+      inputsHtml = `<div class="panel-multi-inputs">
+        ${numBox('input-adj-se-retirement', 'Your SEP / SIMPLE / Solo 401(k) Contributions')}
+        ${numBox('input-adj-spouse-se-retirement', "Spouse's SEP / SIMPLE / Solo 401(k) Contributions")}
+      </div>`;
     } else if (entry.key === 'adj-ira') {
       inputsHtml = `<div class="panel-multi-inputs">
         ${numBox('input-adj-ira', 'Traditional IRA Contributions')}
@@ -4842,6 +4849,7 @@ class TaxApp {
     const iraCatch = document.getElementById('check-ira-catchup') as HTMLInputElement | null;
     if (iraCatch) iraCatch.addEventListener('change', () => { this.state.adjustments.iraCatchUp = iraCatch.checked; this.recalculateAndRender(); });
     bindNum('input-adj-spouse-ira', v => this.state.adjustments.spouseIra = v);
+    bindNum('input-adj-spouse-se-retirement', v => this.state.adjustments.spouseSeRetirement = v);
     bindNum('input-prior-year-tax', v => this.state.priorYearTax = v);
     bindNum('input-prior-year-agi', v => this.state.priorYearAgi = v);
     bindNum('input-sched1a-tips', v => this.state.adjustments.qualifiedTips = v);
