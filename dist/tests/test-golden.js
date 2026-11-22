@@ -1238,6 +1238,37 @@ const CASES = [
         state: ret({ year: 2025, residentState: 'RI', taxpayer: { birthYear: 1955 }, otherIncome: { interest: 0, sources: [src(1, '1099-R', 60000, { distributionCode: '7' })] } }),
         expect: [['RI pension modification', st('RI', 'retirementSubtraction'), 50000]]
     },
+    // ---------------- State: military pay, convenience rule, disability contributions (C11–C13) ----------------
+    {
+        name: 'IL resident: active-duty military pay excluded',
+        source: 'IL-1040 Schedule M line 14 (35 ILCS 5/203(a)(2)(E)): $45,000 military W-2 subtracted',
+        state: ret({ residentState: 'IL', w2s: [{ ...w2(45000, { state: 'IL' }), militaryPay: true }] }),
+        expect: [['IL military exclusion', st('IL', 'militarySubtraction'), 45000]]
+    },
+    {
+        name: 'NY resident stationed in NY: military pay taxed',
+        source: 'NY IT-201 instructions: the military pay subtraction applies only to service performed outside New York',
+        state: ret({ residentState: 'NY', militaryStationedInHomeState: true, w2s: [{ ...w2(45000, { state: 'NY' }), militaryPay: true }] }),
+        expect: [['NY military exclusion', st('NY', 'militarySubtraction'), 0]]
+    },
+    {
+        name: 'Nonresident wages allocated by days worked in the state',
+        source: 'Days allocation for a nonresident: MA employer, 60 of 240 days worked in MA → 25% of $100,000 = $25,000 MA-source wages',
+        state: ret({ residentState: 'NH', w2s: [{ ...w2(100000), states: [{ id: 0, state: 'MA', stateId: '', stateWages: 100000, stateTaxWithheld: 0, localWages: 0, localTaxWithheld: 0, localityName: '', daysWorkedInState: 60, totalWorkDays: 240 }] }] }),
+        expect: [['MA-source wages', st('MA', 'sourcedWages'), 25000]]
+    },
+    {
+        name: 'NY convenience-of-the-employer rule: remote days still count as NY days',
+        source: '20 NYCRR 132.18: a nonresident working from home for their own convenience allocates those days to New York — $100,000 stays NY-source',
+        state: ret({ residentState: 'NH', w2s: [{ ...w2(100000), states: [{ id: 0, state: 'NY', stateId: '', stateWages: 100000, stateTaxWithheld: 0, localWages: 0, localTaxWithheld: 0, localityName: '', daysWorkedInState: 60, totalWorkDays: 240 }] }] }),
+        expect: [['NY-source wages', st('NY', 'sourcedWages'), 100000]]
+    },
+    {
+        name: 'CA SDI is deductible as a state income tax',
+        source: 'Rev. Rul. 81-191 / Schedule A line 5a instructions: $8,000 CA withholding + $1,200 SDI = $9,200 state income taxes',
+        state: ret({ residentState: 'CA', w2s: [{ ...w2(100000, { state: 'CA', stateWithheld: 8000 }), stateDisabilityContributions: 1200 }] }),
+        expect: [['state & local income taxes', fed('fed.saltIncomeTaxes'), 9200]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];

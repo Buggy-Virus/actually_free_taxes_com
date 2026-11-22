@@ -896,6 +896,7 @@ class TaxApp {
                 ...numericFields(w),
                 box12aCode: w?.box12aCode, box12bCode: w?.box12bCode, box12cCode: w?.box12cCode, box12dCode: w?.box12dCode,
                 box13Statutory: Boolean(w?.box13Statutory), box13Retirement: Boolean(w?.box13Retirement), box13ThirdPartySick: Boolean(w?.box13ThirdPartySick),
+                militaryPay: Boolean(w?.militaryPay),
                 employeeName: w?.employeeName, employeeSsn: w?.employeeSsn, controlNumber: w?.controlNumber, employeeAddress: w?.employeeAddress,
                 box14: w?.box14, box14bLeft: w?.box14bLeft, box14bRight: w?.box14bRight,
                 owner: w?.owner === 'spouse' ? 'spouse' : 'taxpayer',
@@ -916,7 +917,9 @@ class TaxApp {
                     stateTaxWithheld: Number(s?.stateTaxWithheld) || 0,
                     localWages: Number(s?.localWages) || 0,
                     localTaxWithheld: Number(s?.localTaxWithheld) || 0,
-                    localityName: String(s?.localityName ?? '')
+                    localityName: String(s?.localityName ?? ''),
+                    daysWorkedInState: s?.daysWorkedInState === undefined ? undefined : Number(s.daysWorkedInState) || 0,
+                    totalWorkDays: s?.totalWorkDays === undefined ? undefined : Number(s.totalWorkDays) || 0
                 }))
             };
         });
@@ -1038,6 +1041,7 @@ class TaxApp {
             ptcHouseholdSize: Number(parsed.ptcHouseholdSize) || undefined,
             ptcRegion: parsed.ptcRegion === 'AK' || parsed.ptcRegion === 'HI' ? parsed.ptcRegion : undefined,
             carryovers: numericFields(parsed.carryovers),
+            militaryStationedInHomeState: Boolean(parsed.militaryStationedInHomeState),
             priorYearTax: Number(parsed.priorYearTax) || 0,
             priorYearAgi: Number(parsed.priorYearAgi) || 0,
             statePanels: Array.isArray(parsed.statePanels)
@@ -3039,6 +3043,11 @@ class TaxApp {
               </div>
             </div>
           </div>
+          <div style="display:flex;gap:0.8rem;flex-wrap:wrap;font-size:0.8rem;padding:0.35rem 0.6rem;">
+            <label>Days worked in ${esc(st.state || 'state')} <input type="number" step="1" min="0" class="w2-input" style="width:5rem;display:inline-block;padding-left:0.4rem;" id="w2-${w2.id}-state-${st.id}-days-in" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="daysWorkedInState" value="${st.daysWorkedInState ?? ''}"></label>
+            <label>of total work days <input type="number" step="1" min="0" class="w2-input" style="width:5rem;display:inline-block;padding-left:0.4rem;" id="w2-${w2.id}-state-${st.id}-days-total" data-w2-id="${w2.id}" data-state-id="${st.id}" data-state-field="totalWorkDays" value="${st.totalWorkDays ?? ''}"></label>
+            <span style="color:#64748b;">(only needed if you're a nonresident who worked part of the year elsewhere)</span>
+          </div>
         </div>
       `).join('');
             group.innerHTML = `
@@ -3064,6 +3073,11 @@ class TaxApp {
               </button>
             ` : ''}
           </div>
+        </div>
+        <div class="w2-extras" style="display:flex;flex-wrap:wrap;gap:0.9rem;align-items:center;font-size:0.82rem;margin:0.25rem 0 0.5rem;">
+          <label><input type="checkbox" id="w2-${w2.id}-military" data-w2-field="militaryPay" data-w2-id="${w2.id}" ${w2.militaryPay ? 'checked' : ''}> Active-duty military pay</label>
+          ${w2.militaryPay ? `<label><input type="checkbox" id="check-military-home" ${this.state.militaryStationedInHomeState ? 'checked' : ''}> Stationed in my home state</label>` : ''}
+          <label>Box 14 state disability / paid-leave contributions $<input type="number" step="any" class="w2-input" style="width:7rem;display:inline-block;padding-left:0.4rem;" id="w2-${w2.id}-sdi" data-w2-field="stateDisabilityContributions" data-w2-id="${w2.id}" value="${w2.stateDisabilityContributions || ''}" placeholder="0"></label>
         </div>
 
         <!-- Federal W-2 PDF Overlay -->
@@ -3334,6 +3348,11 @@ class TaxApp {
             bindCheckProp('box13Statutory');
             bindCheckProp('box13Retirement');
             bindCheckProp('box13ThirdPartySick');
+            bindCheckProp('militaryPay');
+            const milHome = document.getElementById('check-military-home');
+            if (milHome)
+                milHome.addEventListener('change', () => { this.state.militaryStationedInHomeState = milHome.checked; this.recalculateAndRender(); });
+            document.getElementById(`w2-${w2.id}-military`)?.addEventListener('change', () => this.renderW2Forms());
             const bindNumProp = (field) => {
                 document.querySelectorAll(`[data-w2-field="${String(field)}"][data-w2-id="${w2.id}"]`).forEach(el => {
                     el.addEventListener('input', (e) => {
@@ -3346,6 +3365,7 @@ class TaxApp {
             bindNumProp('box8');
             bindNumProp('box10');
             bindNumProp('box11');
+            bindNumProp('stateDisabilityContributions');
             bindNumProp('box12aAmount');
             bindNumProp('box12bAmount');
             bindNumProp('box12cAmount');
@@ -3465,6 +3485,13 @@ class TaxApp {
                         this.recalculateAndRender();
                     });
                 }
+                ['daysWorkedInState', 'totalWorkDays'].forEach(fieldName => {
+                    document.querySelector(`input${rowSelector}[data-state-field="${fieldName}"]`)?.addEventListener('input', (e) => {
+                        const v = e.target.value;
+                        st[fieldName] = v === '' ? undefined : Number(v) || 0;
+                        this.recalculateAndRender();
+                    });
+                });
                 const locNameInp = document.querySelector(`input${rowSelector}[data-state-field="localityName"]`);
                 if (locNameInp) {
                     locNameInp.addEventListener('input', (e) => {

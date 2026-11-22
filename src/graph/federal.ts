@@ -64,7 +64,9 @@ function defineInputs(g: FormulaGraph): void {
       retirementPlanTaxpayer: { label: "Box 13 Retirement Plan (taxpayer's W-2)", unit: 'count', domId: (it: CollectionItem) => `w2-${it.id}-box1-container` },
       retirementPlanSpouse: { label: "Box 13 Retirement Plan (spouse's W-2)", unit: 'count', domId: (it: CollectionItem) => `w2-${it.id}-box1-container` },
       isTaxpayer: { label: "Taxpayer's W-2", unit: 'count', domId: (it: CollectionItem) => `w2-${it.id}-owner` },
-      isSpouse: { label: "Spouse's W-2", unit: 'count', domId: (it: CollectionItem) => `w2-${it.id}-owner` }
+      isSpouse: { label: "Spouse's W-2", unit: 'count', domId: (it: CollectionItem) => `w2-${it.id}-owner` },
+      military: { label: 'Active-Duty Military W-2', unit: 'count', optional: true, domId: (it: CollectionItem) => `w2-${it.id}-military` },
+      sdi: { label: 'Box 14 State Disability / Paid Leave', unit: 'usd', optional: true, domId: (it: CollectionItem) => `w2-${it.id}-sdi` }
     }
   });
   const stateLineDom = (suffix: string) => (it: CollectionItem) => `w2-${Math.floor(it.id / 1000)}-state-${it.id % 1000}-${suffix}`;
@@ -661,7 +663,8 @@ function defineQuantities(g: FormulaGraph, year: number): void {
       : P('fed.saltCapBase') });
   // Schedule A line 5a: state/local income taxes (withheld + other paid) or, by election, general sales taxes — whichever is larger.
   q({ id: 'fed.saltIncomeTaxes', label: 'State & Local Income Taxes Paid', unit: 'usd', display: 'inline',
-    expr: add(R('fed.stateWithheld'), R('fed.localWithheld'), R('in.otherSaltIncomeTax')) });
+    // Mandatory state disability / paid-leave contributions count as state income taxes (Rev. Rul. 81-191 and later rulings).
+    expr: add(R('fed.stateWithheld'), R('fed.localWithheld'), R('in.otherSaltIncomeTax'), each('w2', 'sdi')) });
   q({ id: 'fed.saltIncomeOrSales', label: 'Income Taxes or General Sales Taxes (larger)', unit: 'usd', display: 'inline',
     expr: max(R('fed.saltIncomeTaxes'), R('in.salesTax')) });
   q({ id: 'fed.salt', label: 'SALT Deduction', unit: 'usd', form: 'Schedule A Line 5e', category: 'itemized', optional: true,
@@ -1112,7 +1115,7 @@ export function federalContext(state: TaxAppState): GraphContext {
       return { id: w.id, name: w.employer, values: { box1: n(w.box1), box2: n(w.box2), box3: n(w.box3), box4: n(w.box4), box5: n(w.box5), box6: n(w.box6),
         box10: n(w.box10), employerHsa: byCodes(['W']), deferrals: byCodes(['D', 'E', 'F', 'G', 'H', 'S', 'AA', 'BB', 'EE']),
         retirementPlanTaxpayer: w.box13Retirement && !spouse ? 1 : 0, retirementPlanSpouse: w.box13Retirement && spouse ? 1 : 0,
-        isTaxpayer: spouse ? 0 : 1, isSpouse: spouse ? 1 : 0 } };
+        isTaxpayer: spouse ? 0 : 1, isSpouse: spouse ? 1 : 0, military: w.militaryPay ? 1 : 0, sdi: n(w.stateDisabilityContributions) } };
     }),
     w2State: w2s.flatMap(w => (w.states || []).map(s => ({
       id: w.id * 1000 + s.id,
@@ -1173,6 +1176,7 @@ export function federalContext(state: TaxAppState): GraphContext {
     flags: {
       'fed.forceItemized': state.deductionMethod === 'itemized',
       'fed.fplAlaska': state.ptcRegion === 'AK',
+      'ret.militaryHome': Boolean(state.militaryStationedInHomeState),
       'fed.fplHawaii': state.ptcRegion === 'HI',
       'fed.homeSaleQualifies': Boolean(state.otherIncome?.capitalGains?.homeSaleQualifies),
       'fed.homeSaleSpouseQualifies': Boolean(state.otherIncome?.capitalGains?.homeSaleSpouseQualifies),

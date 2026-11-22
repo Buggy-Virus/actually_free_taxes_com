@@ -105,7 +105,8 @@ export function returnContext(state, plan) {
         const lc = code.toLowerCase();
         ctx.collections[`st.${lc}.w2`] = (state.w2s || []).flatMap(w => (w.states || [])
             .filter(s => (s.state || plan.resident).toUpperCase().trim() === code)
-            .map(s => ({ id: w.id * 1000 + s.id, name: w.employer, values: { stateWages: n(s.stateWages), withheld: n(s.stateTaxWithheld), localWages: n(s.localWages), localWithheld: n(s.localTaxWithheld) } })));
+            .map(s => ({ id: w.id * 1000 + s.id, name: w.employer, values: { stateWages: n(s.stateWages), withheld: n(s.stateTaxWithheld), localWages: n(s.localWages), localWithheld: n(s.localTaxWithheld),
+                daysIn: n(s.daysWorkedInState), daysTotal: n(s.totalWorkDays) } })));
         const srcs = (state.otherIncome?.sources || []).filter(s => (s.state || plan.resident).toUpperCase().trim() === code);
         ctx.collections[`st.${lc}.srcInt`] = srcs.filter(s => s.type === '1099-INT').map(s => ({ id: s.id, name: s.payer, values: { amount: n(s.amount), accrued: n(s.accruedInterestPaid) } }));
         ctx.collections[`st.${lc}.srcOther`] = srcs.filter(s => s.type !== '1099-INT').map(s => ({ id: s.id, name: `${s.type} (${s.payer || 'Payer'})`, values: { amount: n(s.amount) } }));
@@ -170,7 +171,9 @@ function defineStateDocuments(g, plan, code) {
             stateWages: { label: 'Box 16 State Wages', unit: 'usd', domId: lineDom('box16') },
             withheld: { label: 'Box 17 State Tax Withheld', unit: 'usd', domId: lineDom('box17') },
             localWages: { label: 'Box 18 Local Wages', unit: 'usd', domId: it => `w2-${Math.floor(it.id / 1000)}-state-card-${it.id % 1000}` },
-            localWithheld: { label: 'Box 19 Local Tax Withheld', unit: 'usd', domId: it => `w2-${Math.floor(it.id / 1000)}-state-card-${it.id % 1000}` }
+            localWithheld: { label: 'Box 19 Local Tax Withheld', unit: 'usd', domId: it => `w2-${Math.floor(it.id / 1000)}-state-card-${it.id % 1000}` },
+            daysIn: { label: 'Days Worked in State', unit: 'count', optional: true, domId: lineDom('days-in') },
+            daysTotal: { label: 'Total Work Days', unit: 'count', optional: true, domId: lineDom('days-total') }
         }
     });
     const srcDom = (it) => `input-source-${it.id}-amount`;
@@ -183,6 +186,11 @@ function defineStateDocuments(g, plan, code) {
     g.quantity({ id: S('estimatedPayments'), label: `${code} Estimated & Extension Payments`, unit: 'usd', category: 'withholding', optional: true,
         expr: each(`st.${lc}.estpay`, 'amount') });
     g.quantity({ id: S('w2Wages'), label: `${code} W-2 Wages (Box 16)`, unit: 'usd', category: 'state', expr: each(`st.${lc}.w2`, 'stateWages') });
+    // Nonresident wage sourcing: with work days entered, wages are allocated by days physically worked in the state — except in
+    // convenience-of-the-employer states, where days worked at home for the employee's convenience count as in-state days.
+    const convenience = CONVENIENCE_STATES.includes(code) || (RETALIATORY_CONVENIENCE.includes(code) && CONVENIENCE_STATES.concat(RETALIATORY_CONVENIENCE).includes(plan.resident));
+    g.quantity({ id: S('sourcedWages'), label: convenience ? `${code} Wages (convenience-of-employer rule)` : `${code} Wages Sourced by Days Worked`, unit: 'usd', category: 'state',
+        expr: convenience ? R(S('w2Wages')) : round(sumOver(`st.${lc}.w2`, when(gt(field('daysTotal'), num(0)), mul(field('stateWages'), min(num(1), div(field('daysIn'), field('daysTotal')))), field('stateWages')))) });
     g.quantity({ id: S('w2Withheld'), label: `${code} Tax Withheld (Box 17)`, unit: 'usd', category: 'withholding', expr: each(`st.${lc}.w2`, 'withheld') });
     g.quantity({ id: S('localWages'), label: `${code} Local Wages`, unit: 'usd', display: 'inline', expr: each(`st.${lc}.w2`, 'localWages') });
     g.quantity({ id: S('localWithheld'), label: `${code} Local Tax Withheld`, unit: 'usd', category: 'withholding', optional: true, expr: each(`st.${lc}.w2`, 'localWithheld') });
@@ -306,6 +314,12 @@ const MUNI_ADDBACK_EXEMPT = ['IN', 'UT'];
 const NONRESIDENT_RATIO_METHOD = ['AR', 'CA', 'CO', 'CT', 'IA', 'KS', 'ME', 'MN', 'MO', 'MT', 'NE', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'RI', 'UT', 'VT', 'WV'];
 /** States that tax some Social Security benefits (each with its own exemptions — not yet modeled). */
 const MFS = statusIs('married_separate');
+/** Convenience-of-the-employer rule (NY, DE, NE, PA); CT and NJ apply it only to residents of states that have such a rule. */
+const CONVENIENCE_STATES = ['NY', 'DE', 'NE', 'PA'];
+const RETALIATORY_CONVENIENCE = ['CT', 'NJ'];
+/** Active-duty military pay: excluded for residents wherever stationed, or only while stationed outside the state. */
+const MILITARY_EXEMPT = ['AR', 'AZ', 'IA', 'IL', 'IN', 'KY', 'MI', 'MN', 'MO', 'MT', 'ND', 'NM', 'OK', 'WI'];
+const MILITARY_EXEMPT_OUT_OF_STATE = ['CA', 'ID', 'ME', 'NJ', 'NY', 'OH', 'OR', 'PA', 'VT'];
 const taxpayerAgeKnown = quietly(gt(R('in.taxpayerBirthYear'), num(0)));
 const spouseAgeKnown = quietly(and(MFJ, gt(R('in.spouseBirthYear'), num(0))));
 /** A per-person amount by age tier: tiers are [minimum age, amount], highest first; `base` applies below every tier or when the age is unknown. */
@@ -535,6 +549,15 @@ function defineResident(g, plan) {
             q('ageDeduction', { label: retirement.ageDeduction.label, unit: 'usd', category: 'state', optional: true, expr: retirement.ageDeduction.expr(R(S('retirementSubtraction'))) });
             subtractions.push(R(S('ageDeduction')));
         }
+    }
+    // Active-duty military pay (resident returns).
+    if (MILITARY_EXEMPT.includes(code) || MILITARY_EXEMPT_OUT_OF_STATE.includes(code)) {
+        const militaryWages = each('w2', 'box1', 'military');
+        q('militarySubtraction', { label: MILITARY_EXEMPT.includes(code) ? `${code} Active-Duty Military Pay Exclusion` : `${code} Military Pay Exclusion (stationed outside ${code})`,
+            unit: 'usd', category: 'state', optional: true,
+            expr: MILITARY_EXEMPT.includes(code) ? militaryWages
+                : when(flag('ret.militaryHome', `stationed in ${code}`, `stationed outside ${code}`, 'check-military-home'), lit(0), militaryWages) });
+        subtractions.push(R(S('militarySubtraction')));
     }
     // Unemployment compensation (1099-G) is not taxed by CA, NJ, PA or VA.
     if (UI_EXEMPT_STATES.includes(code)) {
@@ -813,7 +836,7 @@ function defineNonresident(g, plan, code) {
     }
     else {
         q('income', { label: `${code}-Source Income`, unit: 'usd', category: 'state',
-            expr: add(R(S('w2Wages')), R(S('documentIncome')), atLeast0(R(S('rentalNet')))) });
+            expr: add(R(S('sourcedWages')), R(S('documentIncome')), atLeast0(R(S('rentalNet')))) });
     }
     const reciprocalByRule = !partYear && Boolean(rule.reciprocalWith?.includes(plan.resident) || resRule.reciprocalWith?.includes(code));
     const reciprocal = reciprocalByRule ? lte(R(S('rentalNet')), lit(0)) : gt(lit(0), lit(1));
@@ -893,7 +916,7 @@ export function stateBlocks(plan, code, g) {
         const blocks = [
             { id: `calc-state-${lc}-taxable`, stepLabel: `${name} • Step 1: Income, Deductions & Taxable Income`, title: `${code} Deductions & Taxable Income`,
                 quantities: [S('w2Wages'), S('documentIncome'), { id: S('startingPoint'), show: 'always' },
-                    ...pick('muniAddBack', 'refundSubtraction', 'hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ssSubtraction', 'retirementIncomeTest', 'retirementSubtraction', 'ageDeduction', 'unemploymentSubtraction', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
+                    ...pick('muniAddBack', 'refundSubtraction', 'hsaAddBack', 'adjustmentAddBack', 'paAddBack', 'saltAddBack', 'ssSubtraction', 'retirementIncomeTest', 'retirementSubtraction', 'ageDeduction', 'militarySubtraction', 'unemploymentSubtraction', 'treasurySubtraction', 'ltcgExclusion', 'fedTaxDeduction', 'propertyTaxDeduction'),
                     { id: S('agi'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'), { id: S('baseStdDeduction'), show: 'always' },
                     ...pick('itemized'), S('panelItem'), S('deduction'), ...pick('personalExemption', 'dependentExemption', 'childDeduction'), S('exemptions'),
                     { id: S('taxable'), show: 'always' }] },
@@ -916,7 +939,7 @@ export function stateBlocks(plan, code, g) {
     }
     const py = code === plan.priorState;
     out.push({ id: `calc-state-${lc}-taxable`, stepLabel: `${name} • ${py ? 'Part-Year Resident' : 'Nonresident'} Income & Taxable Income`, title: `${code} ${py ? 'Part-Year' : 'Nonresident'} Taxable Income`,
-        quantities: [S('w2Wages'), ...pick('residentPeriodIncome'), S('documentIncome'), S('rentalNet'), { id: S('income'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'),
+        quantities: [S('w2Wages'), ...pick('sourcedWages', 'residentPeriodIncome'), S('documentIncome'), S('rentalNet'), { id: S('income'), show: 'always' }, S('panelOther'), S('panelAdj'), S('adjustedIncome'),
             S('incomeRatio'), S('deduction'), S('exemptions'), ...pick('taxableIfResident', 'taxIfResident'), ...(has('taxableIfResident') ? [] : [S('taxable')]), S('tentativeTax')] });
     out.push({ id: `calc-state-${lc}-card`, stepLabel: `${name} • Nonresident Return`, title: rule.formNonResident, isOutput: true,
         quantities: [S('panelCred'), { id: S('totalTax'), show: 'always' }, { id: S('totalWithholding'), show: 'always' }, { id: S('net'), show: 'always' }] });

@@ -20,6 +20,9 @@ export interface StateTaxLine {
   localWages: number; // Box 18
   localTaxWithheld: number; // Box 19
   localityName: string; // Box 20
+  /** Days actually worked in this state, and total work days (for allocating a nonresident's wages). */
+  daysWorkedInState?: number;
+  totalWorkDays?: number;
 }
 
 export interface W2Data {
@@ -55,6 +58,11 @@ export interface W2Data {
   box13Statutory?: boolean;
   box13Retirement?: boolean;
   box13ThirdPartySick?: boolean;
+  /** Active-duty military pay (residents of many states exclude it; SCRA protects it from nonresident states). */
+  militaryPay?: boolean;
+  /** W-2 box 14: mandatory state disability / paid family leave contributions (CA SDI, NJ DI/FLI, NY SDI/PFL, RI TDI,
+   *  HI TDI, WA/MA/CT/OR/CO paid leave). Deductible as state income taxes on Schedule A. */
+  stateDisabilityContributions?: number;
   box14?: string; // Other 14a
   box14bLeft?: string;
   box14bRight?: string;
@@ -300,6 +308,8 @@ export interface TaxAppState {
   year: TaxYear;
   filingStatus: FilingStatus;
   residentState?: string;
+  /** Active-duty servicemember stationed in their state of residence (some states exempt military pay only when stationed elsewhere). */
+  militaryStationedInHomeState?: boolean;
   businesses?: BusinessRecord[];
   capitalTransactions?: CapitalTransaction[];
   rentalProperties?: RentalProperty[];
