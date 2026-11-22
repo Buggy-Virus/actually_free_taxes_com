@@ -18,7 +18,7 @@
 
 import { TaxAppState, PanelSectionCategory } from '../types.js';
 import { CoreFilingStatus, normalizeFilingStatus } from '../tax-constants.js';
-import { NYC_LOCAL_BRACKETS, getStateTaxRule, StateTaxRuleDefinition } from '../state-rules.js';
+import { NYC_LOCAL_BRACKETS, getStateTaxRule, StateTaxRuleDefinition, stateExemptionForYear } from '../state-rules.js';
 import { STATE_PANEL_CATALOG } from '../state-panel-catalog.js';
 import {
   Expr, Cond, add, and, atLeast0, brackets, ceil, div, each, field, gt, gte, lit, lt, lte, max, min, mul, neg, not, num,
@@ -584,8 +584,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   // ---------- deductions ----------
   let baseStd: Expr = P(S('stdBase'));
   if (startsFromFti) baseStd = lit(0); // the federal deduction is already in federal taxable income
-  else if (code === 'MD') baseStd = min(when(MFJ, lit(5450), lit(2700)), max(when(MFJ, lit(3650), lit(1800)), round(mul(R(S('agi')), rate(0.15)), 'dollar')));
-  else if (code === 'LA' && year >= 2025) baseStd = when(MFJ, lit(25000), lit(12500));
+  else if (code === 'MD' && year < 2025) baseStd = min(when(MFJ, lit(5450), lit(2700)), max(when(MFJ, lit(3650), lit(1800)), round(mul(R(S('agi')), rate(0.15)), 'dollar')));
   else if (code === 'DE') baseStd = add(P(S('stdBase')), mul(min(num(2), R('fed.age65BlindBoxes')), lit(2500)));
   else if (code === 'WI') baseStd = atLeast0(round(sub(P(S('stdBase')), mul(atLeast0(sub(R(S('agi')), when(MFJ, lit(26360), lit(18220)))), when(MFJ, rate(0.19778), rate(0.12)))), 'dollar'));
   q('baseStdDeduction', { label: `${code} Standard Deduction`, unit: 'usd', category: 'state', expr: baseStd });
@@ -615,12 +614,12 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
     exTerms.push(R(S('personalExemption')));
   } else if (STATE_PERSONAL_EXEMPTION[code]) {
     q('personalExemption', { label: `${code} Personal Exemption`, unit: 'usd', category: 'state', optional: true,
-      expr: mul(P('st.taxpayerCount'), lit(STATE_PERSONAL_EXEMPTION[code])) });
+      expr: mul(P('st.taxpayerCount'), lit(stateExemptionForYear(code, year, 'personal', STATE_PERSONAL_EXEMPTION[code]))) });
     exTerms.push(R(S('personalExemption')));
   }
   if (STATE_DEPENDENT_EXEMPTION[code]) {
     q('dependentExemption', { label: `${code} Dependent Exemption`, unit: 'usd', category: 'state', optional: true,
-      expr: mul(R('ret.dependents'), lit(STATE_DEPENDENT_EXEMPTION[code])) });
+      expr: mul(R('ret.dependents'), lit(stateExemptionForYear(code, year, 'dependent', STATE_DEPENDENT_EXEMPTION[code]))) });
     exTerms.push(R(S('dependentExemption')));
   }
   if (code === 'NC') {
@@ -638,17 +637,14 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
 
   // ---------- tax ----------
   let base: Expr;
-  if (code === 'LA' && year >= 2025) base = mul(R(S('taxable')), rate(0.03));
-  else if (code === 'IA' && year >= 2025) base = mul(R(S('taxable')), rate(0.038));
-  else if (code === 'NC' && year >= 2025) base = mul(R(S('taxable')), rate(0.0425));
-  else base = ruleTax(code, rule, R(S('taxable')));
+  base = ruleTax(code, rule, R(S('taxable')));
   q('bracketTax', { label: `${code} Tax on Taxable Income`, unit: 'usd', category: 'state', expr: base });
   const taxTerms: Expr[] = [R(S('bracketTax'))];
   if (code === 'MA') {
     q('stcgSurtax', { label: 'MA Short-Term Gains Surtax (+3.5%)', unit: 'usd', category: 'state', optional: true,
       expr: when(and(gt(R('fed.shortTermGain'), lit(0)), gt(R(S('taxable')), lit(0))), round(mul(min(R('fed.shortTermGain'), R(S('taxable'))), rate(0.035))), lit(0)) });
     q('millionaireSurtax', { label: 'MA 4% Millionaire Surtax', unit: 'usd', category: 'state', optional: true,
-      expr: when(gt(R(S('taxable')), lit(1053750)), round(mul(sub(R(S('taxable')), lit(1053750)), rate(0.04))), lit(0)) });
+      expr: when(gt(R(S('taxable')), lit(year >= 2025 ? 1083150 : 1053750)), round(mul(sub(R(S('taxable')), lit(year >= 2025 ? 1083150 : 1053750)), rate(0.04))), lit(0)) });
     taxTerms.push(R(S('stcgSurtax')), R(S('millionaireSurtax')));
   }
   if (code === 'CA') {
@@ -823,7 +819,7 @@ function defineNonresident(g: FormulaGraph, plan: ReturnPlan, code: string): voi
     expr: when(gt(R('fed.agi'), lit(0)), min(rate(1), div(R(S('adjustedIncome')), R('fed.agi'))), rate(1)) });
   // Personal and dependent exemptions (same amounts as for residents).
   const nrExTerms: Expr[] = [];
-  if (STATE_PERSONAL_EXEMPTION[code]) nrExTerms.push(mul(P('st.taxpayerCount'), lit(STATE_PERSONAL_EXEMPTION[code])));
+  if (STATE_PERSONAL_EXEMPTION[code]) nrExTerms.push(mul(P('st.taxpayerCount'), lit(stateExemptionForYear(code, plan.year, 'personal', STATE_PERSONAL_EXEMPTION[code]))));
   if (STATE_DEPENDENT_EXEMPTION[code]) nrExTerms.push(mul(R('ret.dependents'), lit(STATE_DEPENDENT_EXEMPTION[code])));
   const fullExemptions: Expr = nrExTerms.length ? add(...nrExTerms) : lit(0);
   if (NONRESIDENT_RATIO_METHOD.includes(code)) {

@@ -33,6 +33,8 @@ export const NYC_LOCAL_BRACKETS: Record<CoreFilingStatus, BracketDef[]> = {
   ]
 };
 
+import { STATE_YEAR_TABLES, StateYearRow, BracketPairs } from './state-year-tables.js';
+
 export interface StateTaxRuleDefinition {
   code: string;
   name: string;
@@ -794,29 +796,83 @@ const replaceRate = (rule: StateTaxRuleDefinition, from: number, to: number): Pa
     ? (Object.fromEntries(Object.entries(rule.brackets).map(([k, rows]) => [k, rows.map(r => (r.rate === from ? { ...r, rate: to } : r))])) as StateTaxRuleDefinition['brackets'])
     : undefined
 });
+/** Year-specific patches not expressible as a bracket table (applied after STATE_YEAR_TABLES). */
 export const STATE_YEAR_OVERRIDES: Record<number, Record<string, (base: StateTaxRuleDefinition) => Partial<StateTaxRuleDefinition>>> = {
   2024: {
     CO: () => ({ flatRate: 0.0425 }) // SB24-228 temporary reduction for tax year 2024
-  },
-  2025: {
-    GA: () => ({ flatRate: 0.0519 }), // HB 111
-    IN: () => ({ flatRate: 0.03 }),
-    ID: () => ({ flatRate: 0.053 }), // HB 40
-    UT: () => ({ flatRate: 0.045 }), // HB 106
-    MS: base => replaceRate(base, 0.047, 0.044)
   }
 };
+
+/** States whose head-of-household filers use the joint rate schedule. */
+const HOH_USES_JOINT = ['NJ', 'OR', 'MD', 'OK', 'NM'];
+/** States with their own head-of-household schedule: thresholds are scaled from the 2024 schedule by each bracket's indexing. */
+const HOH_OWN_SCHEDULE = ['CA', 'NY', 'MN', 'ME', 'VT', 'HI', 'ND', 'CT', 'NE', 'MT'];
+/** States whose married-filing-separately filers use the single schedule (elsewhere MFS is half the joint schedule). */
+const MFS_USES_SINGLE = ['NY', 'NJ', 'MD', 'CA', 'HI', 'CT'];
+
+const toDefs = (pairs: BracketPairs): BracketDef[] =>
+  pairs.map(([rate, min], i) => ({ rate, min, max: i + 1 < pairs.length ? pairs[i + 1][1] : Infinity }));
+const sameStarts = (a: BracketPairs, b: BracketPairs) => a.length === b.length && a.every(([, m], i) => m === b[i][1]);
+
+/** Build a year's rule from the generated bracket table (state-year-tables.ts), keeping everything else from the base rule. */
+function ruleFromTable(base: StateTaxRuleDefinition, row: StateYearRow): Partial<StateTaxRuleDefinition> {
+  const patch: Partial<StateTaxRuleDefinition> = {};
+  if (row.single.length === 1 && row.single[0][1] === 0 && row.mfj.length === 1) {
+    patch.isFlat = true;
+    patch.flatRate = row.single[0][0];
+    patch.brackets = undefined;
+  } else {
+    const single = toDefs(row.single);
+    const joint = toDefs(row.mfj);
+    const mfs = sameStarts(row.single, row.mfj) || MFS_USES_SINGLE.includes(base.code)
+      ? single : joint.map(b => ({ rate: b.rate, min: Math.round(b.min / 2), max: b.max === Infinity ? Infinity : Math.round(b.max / 2) }));
+    let hoh: BracketDef[] = single;
+    if (HOH_USES_JOINT.includes(base.code)) hoh = joint;
+    else if (HOH_OWN_SCHEDULE.includes(base.code)) {
+      const baseSingle = base.brackets?.single || [];
+      const baseHoh = base.brackets?.head_of_household || [];
+      hoh = baseSingle.length === single.length && baseHoh.length === single.length
+        ? single.map((b, k) => {
+            const scale = (x: number, k2: number) => baseSingle[k2].min > 0 ? Math.round(x * (b.min / baseSingle[k2].min)) : x;
+            const min = k === 0 ? 0 : scale(baseHoh[k].min, k);
+            return { rate: b.rate, min, max: Infinity };
+          }).map((b, k, arr) => ({ ...b, max: k + 1 < arr.length ? arr[k + 1].min : Infinity }))
+        : single.map(b => ({ rate: b.rate, min: Math.round(b.min * 1.4), max: b.max === Infinity ? Infinity : Math.round(b.max * 1.4) }));
+    }
+    patch.isFlat = false;
+    patch.flatRate = undefined;
+    patch.brackets = { single, married_joint: joint, married_separate: mfs, head_of_household: hoh };
+  }
+  if (row.std) {
+    const [s, m] = row.std;
+    const baseS = base.standardDeduction.single;
+    const hohStd = HOH_USES_JOINT.includes(base.code) ? m : baseS > 0 ? Math.round(base.standardDeduction.head_of_household * s / baseS / 50) * 50 : s;
+    patch.standardDeduction = { single: s, married_joint: m, married_separate: s, head_of_household: hohStd };
+  }
+  return patch;
+}
+
+/** Personal / dependent exemption amount for a year, from the bracket table when it lists one. */
+export function stateExemptionForYear(code: string, year: number, kind: 'personal' | 'dependent', fallback: number): number {
+  return STATE_YEAR_TABLES[year]?.[code]?.[kind] ?? (year > 2026 ? STATE_YEAR_TABLES[2026]?.[code]?.[kind] : undefined) ?? fallback;
+}
 
 export function getStateTaxRule(code: string, year?: number): StateTaxRuleDefinition {
   const upper = (code || '').toUpperCase().trim();
   const base = STATE_TAX_RULES[upper];
   if (base) {
-    // Rates set for 2025 carry forward to later years unless that year has its own entry.
-    const override = year === undefined ? undefined
-      : STATE_YEAR_OVERRIDES[year]?.[upper] ?? (year > 2025 ? STATE_YEAR_OVERRIDES[2025]?.[upper] : undefined);
-    if (!override) return base;
-    const patch = override(base);
-    return { ...base, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) };
+    if (year === undefined) return base;
+    // The latest table carries forward to later years until that year's table is added.
+    const tableYear = STATE_YEAR_TABLES[year] ? year : year > 2026 ? 2026 : undefined;
+    const row = tableYear !== undefined ? STATE_YEAR_TABLES[tableYear][upper] : undefined;
+    let rule: StateTaxRuleDefinition = base;
+    if (row && base.hasIncomeTax) rule = { ...rule, ...ruleFromTable(base, row) };
+    const override = STATE_YEAR_OVERRIDES[year]?.[upper];
+    if (override) {
+      const patch = override(rule);
+      rule = { ...rule, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) };
+    }
+    return rule;
   }
   return {
     code: upper || 'OTHER',

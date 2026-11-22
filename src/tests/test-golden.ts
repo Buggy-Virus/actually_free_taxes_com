@@ -1222,6 +1222,31 @@ const CASES: Golden[] = [
     state: ret({ w2s: [w2(40000)], otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 10000)] }, carryovers: { qbiLoss: 20000 } }),
     expect: [['QBI deduction', fed('fed.qbi'), 0]]
   },
+  // ---------------- State: year-specific rate tables (C2) ----------------
+  {
+    name: 'NY 2026: lower middle-class rates',
+    source: 'NY Tax Law §601 as amended (FY2026 budget) / Tax Foundation 2026 table: $92,000 taxable → 3.9%/4.4%/5.15%/5.4%/5.9% = $4,859.75',
+    state: ret({ year: 2026, residentState: 'NY', w2s: [w2(100000, { state: 'NY', ssWageBase: 184500 })] }),
+    expect: [['NY taxable', st('NY', 'taxable'), 92000], ['NY tax', st('NY', 'bracketTax'), 4859.75]]
+  },
+  {
+    name: 'NC 2026: 3.99% flat rate',
+    source: 'N.C.G.S. §105-153.7 schedule / Tax Foundation 2026 table: ($52,750 − $12,750) × 3.99% = $1,596',
+    state: ret({ year: 2026, residentState: 'NC', w2s: [w2(52750, { state: 'NC' })] }),
+    expect: [['NC tax', st('NC', 'bracketTax'), 1596]]
+  },
+  {
+    name: 'MS 2026: 4% above $10,000',
+    source: 'Miss. Code §27-7-5 (HB 1 of 2025) / Tax Foundation 2026 table: $30,000 − $2,300 − $6,000 = $21,700 → 4% × $11,700 = $468',
+    state: ret({ year: 2026, residentState: 'MS', w2s: [w2(30000, { state: 'MS' })] }),
+    expect: [['MS tax', st('MS', 'bracketTax'), 468]]
+  },
+  {
+    name: 'GA 2025: 5.19% (HB 111, retroactive to January 1, 2025)',
+    source: 'O.C.G.A. §48-7-20 as amended by HB 111: ($50,000 − $12,000) × 5.19% = $1,972.20',
+    state: ret({ year: 2025, residentState: 'GA', w2s: [w2(50000, { state: 'GA' })] }),
+    expect: [['GA tax', st('GA', 'bracketTax'), 1972.2]]
+  },
 ];
 
 let passed = 0, gaps = 0;
