@@ -361,7 +361,7 @@ interface RetirementRule {
  *  DE §1106(b)(4): pension exclusion $12,500 at 60+, $2,000 under 60, per person.
  *  VA §58.1-322.03: age deduction $12,000 per person 65+, less $1 per $1 of AGI (excluding SS) over $50,000 single / $75,000 married.
  */
-function retirementExclusion(code: string): RetirementRule | null {
+function retirementExclusion(code: string, year = 2024): RetirementRule | null {
   const ret = nonEarlyRetirement();
   const capped = (cap: Expr, income: Expr = ret) => min(income, cap);
   switch (code) {
@@ -369,6 +369,11 @@ function retirementExclusion(code: string): RetirementRule | null {
       return { label: `${code} Retirement Income Exclusion`, expr: () => R('fed.retirement') };
     case 'PA':
       return { label: 'PA Retirement Income Exclusion (non-early distributions)', expr: () => ret };
+    case 'RI': { // pension & annuity modification: $20,000 (2024) / $50,000 (2025+) per person at full retirement age, same AGI limit
+      const cap = year >= 2025 ? 50000 : 20000;
+      return { label: `RI Pension & Annuity Modification (${cap === 50000 ? '$50,000' : '$20,000'} per person)`,
+        expr: () => when(lte(R('fed.agi'), riAgiLimit(year)), capped(mul(riFraPeople(), lit(cap))), lit(0)) };
+    }
     case 'IA':
       return { label: 'IA Retirement Income Exclusion (age 55+)', expr: () => when(gt(perPerson([[55, 1]]), num(0)), ret, lit(0)) };
     case 'NY':
@@ -417,6 +422,17 @@ function retirementExclusion(code: string): RetirementRule | null {
  * CO §39-22-104(4)(f) (65+ full SS subtraction; 2025+ ages 55–64 with AGI ≤ $75,000 / $95,000).
  * UT taxes SS but gives a credit (see ssCredit). MT (2024+) and RI are taxed as federal — RI's modification is not yet modeled.
  */
+/** Rhode Island modification AGI limits (2026 reuses 2025 until published). */
+const riAgiLimit = (year: number): Expr => year >= 2025
+  ? when(MFJ, lit(133500), lit(107000))
+  : when(MFJ, lit(130250), when(MFS, lit(104225), lit(104200)));
+/** Reached Social Security full retirement age by year end (66 if born 1954 or earlier, 67 if born 1960 or later; the
+ *  1955-1959 cohorts reach it at 66 and 2-10 months, so with only a birth year they count once they turn 67). */
+const fraReached = (age: Expr, birthYear: Expr, known: Cond): Cond => and(known, or(gte(age, num(67)), and(gte(age, num(66)), lte(birthYear, num(1954)))));
+const riFraPeople = (): Expr => add(when(fraReached(R('fed.taxpayerAge'), R('in.taxpayerBirthYear'), taxpayerAgeKnown), num(1), num(0)),
+  when(fraReached(R('fed.spouseAge'), R('in.spouseBirthYear'), quietly(and(MFJ, gt(R('in.spouseBirthYear'), num(0))))), num(1), num(0)));
+const riReachedFra = (): Cond => gt(riFraPeople(), num(0));
+
 function ssSubtractionExpr(code: string, year: number): Expr | null {
   const tss = R('fed.taxableSS');
   const agi = R('fed.agi');
@@ -445,7 +461,9 @@ function ssSubtractionExpr(code: string, year: number): Expr | null {
       const eligible = y25 ? or(gte(age, num(65)), and(gte(age, num(55)), lte(agi, when(MFJ, lit(95000), lit(75000))))) : gte(age, num(65));
       return when(and(taxpayerAgeKnown, eligible), tss, lit(0));
     }
-    case 'MT': case 'RI': case 'UT':
+    case 'RI': // all or nothing: full retirement age and federal AGI at or under the limit (RI Pub. 2025-01 / 2026-01)
+      return when(and(riReachedFra(), lte(agi, riAgiLimit(year))), tss, lit(0));
+    case 'MT': case 'UT':
       return null;
     default:
       return tss;
@@ -545,7 +563,7 @@ function defineResident(g: FormulaGraph, plan: ReturnPlan): void {
   }
   // Retirement income exclusions (C6). Pension income is pooled across spouses until 1099-R ownership exists (A4),
   // so a joint return gets each qualifying spouse's cap against the combined amount.
-  const retirement = retirementExclusion(code);
+  const retirement = retirementExclusion(code, year);
   if (retirement) {
     if (retirement.incomeTest) q('retirementIncomeTest', { label: retirement.incomeTest, unit: 'usd', display: 'inline',
       expr: atLeast0(sub(add(R(S('startingPoint')), ...additions), ...subtractions)) });

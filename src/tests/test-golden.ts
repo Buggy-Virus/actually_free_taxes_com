@@ -1247,6 +1247,25 @@ const CASES: Golden[] = [
     state: ret({ year: 2025, residentState: 'GA', w2s: [w2(50000, { state: 'GA' })] }),
     expect: [['GA tax', st('GA', 'bracketTax'), 1972.2]]
   },
+  // ---------------- State: Rhode Island Social Security & pension modifications (C5a) ----------------
+  {
+    name: 'RI 2024: Social Security modification at full retirement age under $104,200 AGI',
+    source: 'RI Pub. 2025-01: age 70, single, federal AGI $67,000 <= $104,200 -> all $17,000 taxable SS subtracted',
+    state: ret({ residentState: 'RI', taxpayer: { birthYear: 1954 }, w2s: [w2(50000, { state: 'RI' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['RI SS modification', st('RI', 'ssSubtraction'), 17000]]
+  },
+  {
+    name: 'RI 2025: no Social Security modification above the AGI limit',
+    source: 'RI Pub. 2026-01: single limit $107,000; AGI $95,000 + $17,000 taxable SS = $112,000 is over it -> $0',
+    state: ret({ year: 2025, residentState: 'RI', taxpayer: { birthYear: 1950 }, w2s: [w2(95000, { state: 'RI' })], otherIncome: { interest: 0, sources: [src(1, 'SSA-1099', 20000)] } }),
+    expect: [['RI SS modification', st('RI', 'ssSubtraction'), 0]]
+  },
+  {
+    name: 'RI 2025: pension modification rises to $50,000',
+    source: 'RI Pub. 2026-01: up to $50,000 of pension income at full retirement age under the AGI limit; $60,000 pension -> $50,000',
+    state: ret({ year: 2025, residentState: 'RI', taxpayer: { birthYear: 1955 }, otherIncome: { interest: 0, sources: [src(1, '1099-R', 60000, { distributionCode: '7' })] } }),
+    expect: [['RI pension modification', st('RI', 'retirementSubtraction'), 50000]]
+  },
 ];
 
 let passed = 0, gaps = 0;
