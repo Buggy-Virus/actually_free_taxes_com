@@ -308,6 +308,8 @@ export interface TaxAppState {
   year: TaxYear;
   filingStatus: FilingStatus;
   residentState?: string;
+  /** Resident locality picked in the state section, "ST:Name" (e.g. "MD:Montgomery", "IN:Marion", "NY:NYC"). */
+  localityKey?: string;
   /** Active-duty servicemember stationed in their state of residence (some states exempt military pay only when stationed elsewhere). */
   militaryStationedInHomeState?: boolean;
   businesses?: BusinessRecord[];

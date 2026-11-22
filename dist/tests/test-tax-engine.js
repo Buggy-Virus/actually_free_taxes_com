@@ -923,7 +923,7 @@ console.log("Running TypeScript Tax Engine Verification Suite...\n");
     assert.strictEqual(nyBlocks[1].id, 'calc-state-ny-tentative', 'NY Panel 2 is State Brackets & Tentative Tax');
     assert(nyBlocks[1].lines.some(l => l.id.startsWith('q-st-ny-bracketTax-b')), 'NY state bracket waterfall intermediate lines are generated');
     assert.strictEqual(nyBlocks[2].id, 'calc-state-ny-local', 'NY Panel 3 is NYC Local Brackets');
-    assert(nyBlocks[2].lines.some(l => l.id.startsWith('q-st-ny-localTax-b')), 'NYC local bracket waterfall intermediate lines are generated');
+    assert(nyBlocks[2].lines.some(l => l.id.startsWith('q-st-ny-nycTaxBeforeCredits-b')), 'NYC local bracket waterfall intermediate lines are generated');
     assert.strictEqual(nyBlocks[3].id, 'calc-state-ny-card', 'NY Panel 4 is OSTC, Total Tax & Net Outcome');
     assert(nyBlocks[3].lines.some(l => l.id === 'q-st-ny-ostc-nj'), 'NY OSTC credit FormulaNode line for NJ is generated');
     // Verify DC Form D-30 FormulaNode expansion

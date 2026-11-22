@@ -110,14 +110,16 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 
 | ID | Pri | Gap | Today | Approach / inputs needed | Status |
 | :-- | :-: | :-- | :-- | :-- | :-: |
-| D1 | P0 | Locality picker (residence + work locality per W-2) | Locality name text on W-2 state line | Shared picker; rate tables by year | ⬜ |
-| D2 | P1 | Maryland county tax by county (2.25%–3.20%, applies to all residents) | Flat 3.2% when box 18/19 present | County select + verified 2024/2025 rate table | ⬜ |
+| D1 | P0 | Locality picker (residence + work locality per W-2) | Locality name text on W-2 state line | Shared picker; rate tables by year | ✅ Resident locality picker beside the resident state (NY: NYC/Yonkers; MD: 24 jurisdictions; IN: 92 counties) — src/locality-rates.ts; W-2 box 20 still drives NYC/Yonkers when nothing is picked. Work-locality picker for other states → D3/D4/D7 |
+| D2 | P1 | Maryland county tax by county (2.25%–3.20%, applies to all residents) | Flat 3.2% when box 18/19 present | County select + verified 2024/2025 rate table | ✅ County rates 2024–2026 from the DLS 'Local Income Tax Rates in Maryland' table; Anne Arundel and Frederick graduated schedules; applied to MD taxable income. MD nonresident special tax not modeled |
 | D3 | P1 | PA Act 32 EIT by PSD code; Philadelphia wage/NPT/SIT; LST | Box 19 passthrough | PSD rate table | ⬜ |
 | D4 | P1 | Ohio municipal and school district income taxes | Box 19 passthrough | Municipality/SD tables | ⬜ |
-| D5 | P1 | Indiana county LIT | Box 19 passthrough | County table | ⬜ |
-| D6 | P1 | NYC household credit, NYC EITC, rate-reduction amount; Yonkers nonresident 0.5% | School credit + brackets only | | ⬜ |
+| D5 | P1 | Indiana county LIT | Box 19 passthrough | County table | ✅ 92 county rates from Departmental Notice #1 (Oct. 2026) used for tax year 2026; 2024/2025 still use W-2 box 19 → D5a |
+| D5a | P2 | Indiana county rates for 2024 and 2025 (earlier Departmental Notice #1 editions) and nonresident work-county tax | Box 19 passthrough | Archived DN #1 PDFs | ⬜ |
+| D6 | P1 | NYC household credit, NYC EITC, rate-reduction amount; Yonkers nonresident 0.5% | School credit + brackets only | | ✅ NYC household credit (Tables 4–6), school tax rate reduction (line 69a), NYC EIC (IT-215 rate bands) and Yonkers nonresident earnings tax (Y-203, 0.5% with exclusion); identical 2024/2025 rules from the IT-201/IT-215 instructions |
 | D7 | P2 | Michigan cities, KY occupational taxes, KC/St. Louis, Wilmington, AL occupational, Portland SHS / Multnomah PFA, TriMet/LTD | Box 19 passthrough | City tables | ⬜ |
-| D8 | P2 | NY MCTMT, Denver/Aurora OPT, WV city service fees | — | | ⬜ |
+| D8 | P2 | NY MCTMT, Denver/Aurora OPT, WV city service fees | — | | ✅ MCTMT for self-employed NYC residents (Zone 1, 0.60% of net SE earnings over $50,000). Denver/Aurora OPT and WV city fees → D8a |
+| D8a | P2 | Denver / Aurora occupational privilege taxes, WV city service fees, MCTMT Zone 2 for suburban residents | — | | ⬜ |
 
 ## E. Output, filing, product
 

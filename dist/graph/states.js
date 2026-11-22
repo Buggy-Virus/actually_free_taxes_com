@@ -17,6 +17,7 @@
  */
 import { normalizeFilingStatus } from '../tax-constants.js';
 import { NYC_LOCAL_BRACKETS, getStateTaxRule, stateExemptionForYear } from '../state-rules.js';
+import { mdCountyRate, IN_COUNTY_RATES_2026, NYC_HOUSEHOLD_PER_PERSON } from '../locality-rates.js';
 import { STATE_PANEL_CATALOG } from '../state-panel-catalog.js';
 import { add, and, atLeast0, brackets, ceil, div, each, field, gt, gte, lit, lt, lte, max, min, mul, neg, not, num, or, param, quietly, rate, ref, round, statusIs, sub, sumOver, when, flag, floor } from './expr.js';
 import { FormulaGraph } from './graph.js';
@@ -54,13 +55,17 @@ export function planFromState(state) {
     if (priorState)
         codes.add(priorState);
     let nyc = false, yonkers = false;
+    let yonkersWork = false;
+    const picked = (state.localityKey || '').toUpperCase().startsWith(`${resident}:`) ? String(state.localityKey) : '';
     (state.w2s || []).forEach(w => (w.states || []).forEach(s => {
         const code = (s.state || resident).toUpperCase().trim();
         if (code !== resident)
             return;
         const loc = (s.localityName || '').toUpperCase().trim();
-        if (loc.includes('YONKERS'))
+        if (loc.includes('YONKERS')) {
             yonkers = true;
+            yonkersWork = true;
+        }
         else if (loc.includes('NYC') || loc.includes('NEW YORK') || (code === 'NY' && (Number(s.localTaxWithheld) || 0) > 0))
             nyc = true;
     }));
@@ -69,11 +74,13 @@ export function planFromState(state) {
         resident,
         nonresidents: [...codes].filter(c => c !== resident).sort(),
         rentalState: rentalState && hasRental ? rentalState : '',
-        residentLocality: resident === 'NY' ? (nyc ? 'nyc' : yonkers ? 'yonkers' : '') : '',
+        residentLocality: picked === 'NY:NYC' ? 'nyc' : picked === 'NY:Yonkers' ? 'yonkers' : picked ? picked
+            : resident === 'NY' ? (nyc ? 'nyc' : yonkers ? 'yonkers' : '') : '',
+        yonkersNonresident: resident === 'NY' && yonkersWork && picked !== 'NY:Yonkers' && !(yonkers && !picked),
         priorState
     };
 }
-const planKey = (p) => `${p.year}|${p.resident}|${p.nonresidents.join(',')}|${p.rentalState}|${p.residentLocality}|${p.priorState}`;
+const planKey = (p) => `${p.year}|${p.resident}|${p.nonresidents.join(',')}|${p.rentalState}|${p.residentLocality}|${p.yonkersNonresident}|${p.priorState}`;
 const graphCache = new Map();
 /** The full return graph for a plan (federal + state modules), cached per plan. */
 export function returnGraph(plan) {
@@ -106,7 +113,8 @@ export function returnContext(state, plan) {
         ctx.collections[`st.${lc}.w2`] = (state.w2s || []).flatMap(w => (w.states || [])
             .filter(s => (s.state || plan.resident).toUpperCase().trim() === code)
             .map(s => ({ id: w.id * 1000 + s.id, name: w.employer, values: { stateWages: n(s.stateWages), withheld: n(s.stateTaxWithheld), localWages: n(s.localWages), localWithheld: n(s.localTaxWithheld),
-                daysIn: n(s.daysWorkedInState), daysTotal: n(s.totalWorkDays) } })));
+                daysIn: n(s.daysWorkedInState), daysTotal: n(s.totalWorkDays),
+                yonkersWages: (s.localityName || '').toUpperCase().includes('YONKERS') ? n(s.localWages) || n(s.stateWages) : 0 } })));
         const srcs = (state.otherIncome?.sources || []).filter(s => (s.state || plan.resident).toUpperCase().trim() === code);
         ctx.collections[`st.${lc}.srcInt`] = srcs.filter(s => s.type === '1099-INT').map(s => ({ id: s.id, name: s.payer, values: { amount: n(s.amount), accrued: n(s.accruedInterestPaid) } }));
         ctx.collections[`st.${lc}.srcOther`] = srcs.filter(s => s.type !== '1099-INT').map(s => ({ id: s.id, name: `${s.type} (${s.payer || 'Payer'})`, values: { amount: n(s.amount) } }));
@@ -173,7 +181,8 @@ function defineStateDocuments(g, plan, code) {
             localWages: { label: 'Box 18 Local Wages', unit: 'usd', domId: it => `w2-${Math.floor(it.id / 1000)}-state-card-${it.id % 1000}` },
             localWithheld: { label: 'Box 19 Local Tax Withheld', unit: 'usd', domId: it => `w2-${Math.floor(it.id / 1000)}-state-card-${it.id % 1000}` },
             daysIn: { label: 'Days Worked in State', unit: 'count', optional: true, domId: lineDom('days-in') },
-            daysTotal: { label: 'Total Work Days', unit: 'count', optional: true, domId: lineDom('days-total') }
+            daysTotal: { label: 'Total Work Days', unit: 'count', optional: true, domId: lineDom('days-total') },
+            yonkersWages: { label: 'Yonkers Wages (Box 18)', unit: 'usd', optional: true, domId: it => `w2-${Math.floor(it.id / 1000)}-state-card-${it.id % 1000}` }
         }
     });
     const srcDom = (it) => `input-source-${it.id}-amount`;
@@ -705,14 +714,56 @@ function defineResident(g, plan) {
     else if (plan.residentLocality === 'yonkers') {
         local = round(mul(R(S('tentativeTax')), rate(0.1675)));
     }
+    else if (plan.residentLocality.startsWith('MD:')) {
+        // MD county tax: the county rate (or Anne Arundel / Frederick graduated schedule) × Maryland taxable net income.
+        const county = plan.residentLocality.slice(3);
+        const r = mdCountyRate(county, year);
+        if (typeof r === 'number')
+            local = round(mul(R(S('taxable')), rate(r)));
+        else if (r) {
+            const sched = (s2) => s2.reduce((acc, b, k) => {
+                const top = k + 1 < s2.length ? s2[k + 1].over : Infinity;
+                const slice = top === Infinity ? atLeast0(sub(R(S('taxable')), lit(b.over))) : min(lit(top - b.over), atLeast0(sub(R(S('taxable')), lit(b.over))));
+                return add(acc, mul(slice, rate(b.rate)));
+            }, lit(0));
+            local = round(when(MFJ, sched(r.joint), sched(r.other)));
+        }
+    }
+    else if (plan.residentLocality.startsWith('IN:') && year >= 2026) {
+        // Indiana county tax: county rate (Departmental Notice #1) × Indiana taxable income.
+        local = round(mul(R(S('taxable')), rate(IN_COUNTY_RATES_2026[plan.residentLocality.slice(3)] || 0)));
+    }
     else if (code === 'MD') {
         local = when(or(gt(R(S('localWithheld')), lit(0)), gt(R(S('localWages')), lit(0))), round(mul(R(S('taxable')), rate(0.032))), lit(0));
     }
     else if (LOCAL_PASSTHROUGH.includes(code)) {
         local = R(S('localWithheld'));
     }
-    const localLabel = plan.residentLocality === 'nyc' ? 'NYC Resident Income Tax' : plan.residentLocality === 'yonkers' ? 'Yonkers Resident Surcharge'
-        : code === 'MD' ? 'MD County Income Tax (3.20%)' : `${code} Local Tax (W-2 Box 19)`;
+    const localityName = plan.residentLocality.includes(':') ? plan.residentLocality.slice(3) : '';
+    let localLabel = plan.residentLocality === 'nyc' ? 'NYC Resident Income Tax' : plan.residentLocality === 'yonkers' ? 'Yonkers Resident Surcharge'
+        : plan.residentLocality.startsWith('MD:') ? `${localityName} County Income Tax` : plan.residentLocality.startsWith('IN:') && year >= 2026 ? `${localityName} County Income Tax`
+            : code === 'MD' ? 'MD County Income Tax (3.20%)' : `${code} Local Tax (W-2 Box 19)`;
+    if (plan.residentLocality === 'nyc') {
+        // IT-201 line 48: NYC household credit, by federal AGI and household size (you, spouse, dependents); nonrefundable against NYC tax.
+        q('nycTaxBeforeCredits', { label: 'NYC Resident Tax (before household credit)', unit: 'usd', category: 'state', expr: local });
+        const people = add(num(1), when(MFJ, num(1), num(0)), R('ret.dependents'));
+        const band = (field2) => NYC_HOUSEHOLD_PER_PERSON.reduceRight((rest, b) => when(lte(R('fed.agi'), lit(b.upTo)), lit(b[field2]), rest), lit(0));
+        q('nycHouseholdCredit', { label: 'NYC Household Credit', unit: 'usd', form: 'IT-201 Line 48', category: 'state_credit', optional: true,
+            expr: min(R(S('nycTaxBeforeCredits')), when(statusIs('single'), when(lte(R('fed.agi'), lit(10000)), lit(15), when(lte(R('fed.agi'), lit(12500)), lit(10), lit(0))), round(mul(people, when(MFS, band('perPersonMfs'), band('perPerson'))), 'dollar'))) });
+        local = sub(R(S('nycTaxBeforeCredits')), R(S('nycHouseholdCredit')));
+        // MCTMT (IT-201 line 54e): self-employed NYC residents pay 0.60% (Zone 1) of net SE earnings once they exceed $50,000.
+        q('mctmt', { label: 'Metropolitan Commuter Transportation Mobility Tax (Zone 1, 0.60%)', unit: 'usd', form: 'IT-201 Line 54e', category: 'state', optional: true,
+            expr: when(gt(R('fed.seEarnings'), lit(50000)), round(mul(R('fed.seEarnings'), rate(0.006)), 'dollar'), lit(0)) });
+        local = add(local, R(S('mctmt')));
+    }
+    if (plan.yonkersNonresident) {
+        // Form Y-203: 0.5% of Yonkers wages less the exclusion ($3,000 / $2,000 / $1,000 by total wages; none over $30,000).
+        const yWages = each(`st.${code.toLowerCase()}.w2`, 'yonkersWages');
+        q('yonkersNonresidentTax', { label: 'Yonkers Nonresident Earnings Tax', unit: 'usd', form: 'Form Y-203', category: 'state', optional: true,
+            expr: round(mul(atLeast0(sub(yWages, when(lte(yWages, lit(10000)), lit(3000), when(lte(yWages, lit(20000)), lit(2000), when(lte(yWages, lit(30000)), lit(1000), lit(0)))))), rate(0.005))) });
+        local = add(local, R(S('yonkersNonresidentTax')));
+        localLabel = `${localLabel} + Yonkers Nonresident Earnings Tax`;
+    }
     q('localTax', { label: localLabel, unit: 'usd', form: plan.residentLocality ? 'Form IT-201' : undefined, category: 'state', optional: true, expr: local });
     // ---------- credits ----------
     const ostcTerms = [];
@@ -840,6 +891,18 @@ function defineResident(g, plan) {
         // NYC school tax credit (fixed amount): $63, or $125 on joint returns, for income of $250,000 or less; refundable.
         q('nycSchoolTaxCredit', { label: 'NYC School Tax Credit', unit: 'usd', form: 'IT-201 Line 69', category: 'state_credit', optional: true,
             expr: when(lte(R(S('agi')), lit(250000)), when(MFJ, lit(125), lit(63)), lit(0)) });
+        // IT-201 line 69a: NYC school tax credit rate reduction, by NYC taxable income (none over $500,000).
+        const nycTi = R(S('taxable'));
+        const rr = (first, base) => when(lte(nycTi, lit(first)), mul(nycTi, rate(0.00171)), add(lit(base), mul(sub(nycTi, lit(first)), rate(0.00228))));
+        q('nycRateReduction', { label: 'NYC School Tax Credit (Rate Reduction)', unit: 'usd', form: 'IT-201 Line 69a', category: 'state_credit', optional: true,
+            expr: when(gt(nycTi, lit(500000)), lit(0), round(when(MFJ, rr(21600, 37), when(statusIs('head_of_household'), rr(14400, 25), rr(12000, 21))), 'dollar')) });
+        // IT-215 Worksheet C: NYC EIC = federal EIC × a rate from 30% (NYAGI under $5,000) down to 10% (≥ $42,500), stepping
+        // down by 0.00002 per dollar across each $2,500 transition band.
+        const nyagi = R(S('agi'));
+        const step = (from, start) => sub(rate(start), mul(sub(nyagi, lit(from - 1)), lit(0.00002)));
+        const eicRate = when(lt(nyagi, lit(5000)), rate(0.3), when(lt(nyagi, lit(7500)), step(5000, 0.3), when(lt(nyagi, lit(15000)), rate(0.25), when(lt(nyagi, lit(17500)), step(15000, 0.25), when(lt(nyagi, lit(20000)), rate(0.2), when(lt(nyagi, lit(22500)), step(20000, 0.2), when(lt(nyagi, lit(40000)), rate(0.15), when(lt(nyagi, lit(42500)), step(40000, 0.15), rate(0.1)))))))));
+        q('nycEitc', { label: 'NYC Earned Income Credit', unit: 'usd', form: 'IT-215 / IT-201 Line 71', category: 'state_credit', optional: true,
+            expr: round(mul(R('fed.eitc'), div(round(mul(eicRate, lit(10000)), 'dollar'), lit(10000)))) });
     }
     // Nonrefundable credits can only reduce tax to $0; refundable credits are paid out like withholding.
     const eitcRefundable = eitcRate > 0 && !NONREFUNDABLE_EITC.includes(code);
@@ -851,7 +914,7 @@ function defineResident(g, plan) {
     (eitcRefundable ? refundable : nonref).push(R(S('stateEitc')));
     (exRefundable ? refundable : nonref).push(R(S('exemptionCredit')));
     if (plan.residentLocality === 'nyc')
-        refundable.push(R(S('nycSchoolTaxCredit')));
+        refundable.push(R(S('nycSchoolTaxCredit')), R(S('nycRateReduction')), R(S('nycEitc')));
     q('nonrefundableCredits', { label: `${code} Nonrefundable Credits`, unit: 'usd', category: 'state_credit', optional: true, expr: add(...nonref) });
     q('refundableCredits', { label: `${code} Refundable Credits`, unit: 'usd', category: 'state_credit', optional: true, expr: refundable.length ? add(...refundable) : lit(0) });
     q('netStateTax', { label: `${code} Net State Tax`, unit: 'usd', category: 'state',
@@ -969,10 +1032,10 @@ export function stateBlocks(plan, code, g) {
                     { id: S('tentativeTax'), show: 'always' }] }
         ];
         blocks.push({ id: `calc-state-${lc}-local`, stepLabel: `${name} • Step 3: Local / Municipal Tax`, title: g.quantities.get(S('localTax')).label,
-            quantities: [S('localTax')] });
+            quantities: [...pick('nycTaxBeforeCredits', 'nycHouseholdCredit', 'mctmt', 'yonkersNonresidentTax'), S('localTax')] });
         const ostc = plan.nonresidents.filter(nr => has(`ostc.${nr.toLowerCase()}`)).map(nr => S(`ostc.${nr.toLowerCase()}`));
         blocks.push({ id: `calc-state-${lc}-card`, stepLabel: `${name} • Credits, Total Tax & Net Outcome`, title: `${rule.formResident} • Bottom Line`, isOutput: true,
-            quantities: [...ostc, S('otherStateCredit'), S('stateEitc'), S('exemptionCredit'), ...pick('ssCredit', 'nycSchoolTaxCredit'), S('panelCred'), S('nonrefundableCredits'), { id: S('netStateTax'), show: 'always' },
+            quantities: [...ostc, S('otherStateCredit'), S('stateEitc'), S('exemptionCredit'), ...pick('ssCredit', 'nycSchoolTaxCredit', 'nycRateReduction', 'nycEitc'), S('panelCred'), S('nonrefundableCredits'), { id: S('netStateTax'), show: 'always' },
                 { id: S('totalTax'), show: 'always' }, { id: S('totalWithholding'), show: 'always' }, S('refundableCredits'), { id: S('net'), show: 'always' }] });
         return blocks;
     }

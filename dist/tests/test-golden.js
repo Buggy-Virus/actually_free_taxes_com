@@ -1314,6 +1314,67 @@ const CASES = [
         state: ret({ filingStatus: 'married_joint', residentState: 'NY', w2s: [w2(90000, { state: 'NY' })], dependents: { childrenCount: 2 } }),
         expect: [['NY ESCC', st('NY', 'exemptionCredit'), 660]]
     },
+    // ---------------- Local: picked jurisdictions (D1, D2, D5, D6, D8) ----------------
+    {
+        name: 'MD 2025: Montgomery County 3.20% of Maryland taxable income',
+        source: 'DLS "Local Income Tax Rates in Maryland" (CY 2025): Montgomery 3.20% × MD taxable income',
+        state: ret({ year: 2025, residentState: 'MD', localityKey: 'MD:Montgomery', w2s: [w2(80000, { state: 'MD' })] }),
+        expect: [['county tax − 3.2% × taxable', r => Math.round(r.federalEval.value('st.md.taxable') * 0.032 * 100) / 100 - r.federalEval.value('st.md.localTax'), 0]]
+    },
+    {
+        name: 'MD 2025: Anne Arundel graduated county rates (2.70% / 2.94% / 3.20%)',
+        source: 'MD Comptroller (2025): single, 2.70% of the first $50,000 + 2.94% to $400,000 + 3.20% above',
+        state: ret({ year: 2025, residentState: 'MD', localityKey: 'MD:Anne Arundel', w2s: [w2(150000, { state: 'MD' })] }),
+        expect: [['county tax', r => { const t = r.federalEval.value('st.md.taxable'); return Math.round((50000 * 0.027 + (t - 50000) * 0.0294) * 100) / 100 - r.federalEval.value('st.md.localTax'); }, 0]]
+    },
+    {
+        name: 'MD 2026: Allegany County rises to 3.20%',
+        source: 'DLS "Local Income Tax Rates in Maryland": Allegany 3.03% (CY 2025) → 3.20% (CY 2026)',
+        state: ret({ year: 2026, residentState: 'MD', localityKey: 'MD:Allegany', w2s: [w2(60000, { state: 'MD' })] }),
+        expect: [['county tax', r => Math.round(r.federalEval.value('st.md.taxable') * 0.032 * 100) / 100 - r.federalEval.value('st.md.localTax'), 0]]
+    },
+    {
+        name: 'IN 2026: Marion County 2.02% of Indiana taxable income',
+        source: 'Indiana Departmental Notice #1 (R47 / 10-26): Marion 0.0202 — ($50,000 − $1,000 exemption) × 2.02% = $989.80',
+        state: ret({ year: 2026, residentState: 'IN', localityKey: 'IN:Marion', w2s: [w2(50000, { state: 'IN' })] }),
+        expect: [['IN taxable', st('IN', 'taxable'), 49000], ['county tax', st('IN', 'localTax'), 989.8]]
+    },
+    {
+        name: 'NYC household credit: $30 per person at federal AGI up to $15,000',
+        source: 'IT-201 instructions line 48, Table 5: head of household with 1 child, AGI $15,000 → 2 × $30 = $60 (NYC tax 3.078% × ($15,000 − $11,200 − $1,000 dependent exemption) = $86.18)',
+        state: ret({ filingStatus: 'head_of_household', residentState: 'NY', localityKey: 'NY:NYC', w2s: [w2(15000, { state: 'NY' })], dependents: { childrenCount: 1 } }),
+        expect: [['NYC tax before credit', st('NY', 'nycTaxBeforeCredits'), 86.18], ['NYC household credit', st('NY', 'nycHouseholdCredit'), 60]]
+    },
+    {
+        name: 'NYC household credit: single at $10,000 AGI gets $15',
+        source: 'IT-201 instructions line 48, Table 4: single, AGI ≤ $10,000 → $15 (NYC tax on $10,000 − $8,000 = $2,000 is $61.56)',
+        state: ret({ residentState: 'NY', localityKey: 'NY:NYC', w2s: [w2(10000, { state: 'NY' })] }),
+        expect: [['NYC tax before credit', st('NY', 'nycTaxBeforeCredits'), 61.56], ['NYC household credit', st('NY', 'nycHouseholdCredit'), 15]]
+    },
+    {
+        name: 'NYC school tax credit rate reduction',
+        source: 'IT-201 line 69a: single, NYC taxable income $92,000 → $21 + 0.228% × ($92,000 − $12,000) = $203.40 → $203',
+        state: ret({ residentState: 'NY', localityKey: 'NY:NYC', w2s: [w2(100000, { state: 'NY' })] }),
+        expect: [['NYC taxable', st('NY', 'taxable'), 92000], ['rate reduction', st('NY', 'nycRateReduction'), 203]]
+    },
+    {
+        name: 'NYC earned income credit: 25% band',
+        source: 'IT-215 Worksheet C: NYAGI $10,000 (between $7,500 and $15,000) → 25% of the federal EIC',
+        state: ret({ filingStatus: 'head_of_household', residentState: 'NY', localityKey: 'NY:NYC', w2s: [w2(10000, { state: 'NY' })], dependents: { childrenCount: 1 } }),
+        expect: [['NYC EIC', r => Math.round(r.federalEval.value('fed.eitc') * 0.25 * 100) / 100 - r.federalEval.value('st.ny.nycEitc'), 0]]
+    },
+    {
+        name: 'Yonkers nonresident earnings tax (NYC resident working in Yonkers)',
+        source: 'Form Y-203: 0.5% × ($60,000 Yonkers wages − $0 exclusion over $30,000) = $300',
+        state: ret({ residentState: 'NY', localityKey: 'NY:NYC', w2s: [{ ...w2(60000), states: [{ id: 0, state: 'NY', stateId: '', stateWages: 60000, stateTaxWithheld: 0, localWages: 60000, localTaxWithheld: 0, localityName: 'YONKERS' }] }] }),
+        expect: [['Yonkers nonresident tax', st('NY', 'yonkersNonresidentTax'), 300]]
+    },
+    {
+        name: 'MCTMT for a self-employed NYC resident',
+        source: 'IT-201 line 54e / Form MTA-6: $100,000 profit × 92.35% = $92,350 net SE earnings > $50,000 → 0.60% = $554',
+        state: ret({ residentState: 'NY', localityKey: 'NY:NYC', otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 100000, { state: 'NY' })] } }),
+        expect: [['MCTMT', st('NY', 'mctmt'), 554]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];

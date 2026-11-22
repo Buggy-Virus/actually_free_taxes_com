@@ -31,6 +31,7 @@ import { ArrowEngine } from './arrow-engine.js';
 import { GraphBlock } from './graph/graph.js';
 import { reviewReturn } from './validation.js';
 import { RECORD_KINDS, RecordKind, recordDomId } from './record-kinds.js';
+import { localityOptions } from './locality-rates.js';
 import { renderRatingPill, renderRatingCardHtml, getFieldRating, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
 import { PANEL_CATALOG, PanelCatalogEntry, getPanelCatalogEntry } from './panel-catalog.js';
 import { getStateCatalogForSection, getStateCatalogEntry } from './state-panel-catalog.js';
@@ -1106,6 +1107,7 @@ class TaxApp {
       ptcRegion: parsed.ptcRegion === 'AK' || parsed.ptcRegion === 'HI' ? parsed.ptcRegion : undefined,
       carryovers: numericFields(parsed.carryovers),
       militaryStationedInHomeState: Boolean(parsed.militaryStationedInHomeState),
+      localityKey: typeof parsed.localityKey === 'string' && /^[A-Z]{2}:/.test(parsed.localityKey) ? parsed.localityKey : undefined,
       priorYearTax: Number(parsed.priorYearTax) || 0,
       priorYearAgi: Number(parsed.priorYearAgi) || 0,
       statePanels: Array.isArray(parsed.statePanels)
@@ -1279,6 +1281,13 @@ class TaxApp {
 
     const resSelect = document.getElementById('select-resident-state') as HTMLSelectElement | null;
     if (resSelect) resSelect.value = this.state.residentState || '';
+    const locSel = document.getElementById('select-resident-locality') as HTMLSelectElement | null;
+    const locWrap = document.getElementById('resident-locality-wrap');
+    if (locSel && locWrap) {
+      const opts = localityOptions(this.state.residentState || '');
+      locWrap.style.display = opts.length ? '' : 'none';
+      locSel.innerHTML = `<option value="">— None / not listed —</option>` + opts.map(o => `<option value="${esc(o.key)}" ${o.key === this.state.localityKey ? 'selected' : ''}>${esc(o.label)}</option>`).join('');
+    }
 
     const dedSelect = document.getElementById('select-deduction-method') as HTMLSelectElement | null;
     if (dedSelect) dedSelect.value = this.state.deductionMethod || 'auto';
@@ -1474,12 +1483,26 @@ class TaxApp {
     }
 
     const resStateSelect = document.getElementById('select-resident-state') as HTMLSelectElement | null;
+    const locSelect = document.getElementById('select-resident-locality') as HTMLSelectElement | null;
+    const syncLocality = () => {
+      const wrap = document.getElementById('resident-locality-wrap');
+      const opts = localityOptions(this.state.residentState || '');
+      if (!locSelect || !wrap) return;
+      wrap.style.display = opts.length ? '' : 'none';
+      const current = this.state.localityKey && opts.some(o => o.key === this.state.localityKey) ? this.state.localityKey : '';
+      locSelect.innerHTML = `<option value="">— None / not listed —</option>` + opts.map(o => `<option value="${esc(o.key)}" ${o.key === current ? 'selected' : ''}>${esc(o.label)}</option>`).join('');
+    };
     if (resStateSelect) {
       resStateSelect.value = this.state.residentState || '';
       resStateSelect.addEventListener('change', (e: Event) => {
         this.state.residentState = (e.target as HTMLSelectElement).value;
+        syncLocality();
         this.recalculateAndRender();
       });
+    }
+    if (locSelect) {
+      syncLocality();
+      locSelect.addEventListener('change', () => { this.state.localityKey = locSelect.value || undefined; this.recalculateAndRender(); });
     }
 
     const toggleArrows = document.getElementById('toggle-all-arrows') as HTMLInputElement | null;
