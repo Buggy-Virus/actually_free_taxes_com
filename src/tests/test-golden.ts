@@ -1484,6 +1484,12 @@ const CASES: Golden[] = [
       { id: 2, name: 'B', birthYear: 2003, relationship: 'child', monthsLived: 12, student: true, educationExpenses: 3000, aotcYearsClaimed: 4 }] } }),
     expect: [['AOTC', fed('fed.aotcTotal'), 2500], ['refundable part', fed('fed.aotcRefundable'), 1000]]
   },
+  {
+    name: 'Community property: separate returns split community wages and withholding',
+    source: 'Pub. 555: CA, MFS, own wages $80,000 / $9,000 withheld, spouse $20,000 / $1,000 → each reports $50,000 and $5,000',
+    state: ret({ filingStatus: 'married_separate', residentState: 'CA', communitySpouseWages: 20000, communitySpouseWithheld: 1000, w2s: [w2(80000, { state: 'CA', fedWithheld: 9000 })] }),
+    expect: [['wages', fed('fed.wages'), 50000], ['withholding', fed('fed.w2Withholding'), 5000]]
+  },
 ];
 
 let passed = 0, gaps = 0;

@@ -351,6 +351,9 @@ export interface TaxAppState {
   specialSituations?: string[];
   /** Use tax owed on out-of-state purchases, added to the resident state's tax (C15). */
   stateUseTax?: number;
+  /** Married filing separately in a community property state: the spouse's wages and federal withholding (Pub. 555). */
+  communitySpouseWages?: number;
+  communitySpouseWithheld?: number;
   /** Direct deposit for the refund (Form 1040 lines 35b–35d) and the IRS Identity Protection PIN (E5). */
   refundRouting?: string;
   refundAccount?: string;

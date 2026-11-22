@@ -1115,6 +1115,8 @@ class TaxApp {
         ? { ...numericFields(parsed.advanced), qbiSstb: Boolean(parsed.advanced.qbiSstb), parentMarriedJoint: Boolean(parsed.advanced.parentMarriedJoint) } : {},
       specialSituations: Array.isArray(parsed.specialSituations) ? parsed.specialSituations.filter((x: unknown) => typeof x === 'string') : [],
       stateUseTax: Number(parsed.stateUseTax) || 0,
+      communitySpouseWages: Number(parsed.communitySpouseWages) || 0,
+      communitySpouseWithheld: Number(parsed.communitySpouseWithheld) || 0,
       refundRouting: typeof parsed.refundRouting === 'string' ? parsed.refundRouting.replace(/\D/g, '').slice(0, 9) : undefined,
       refundAccount: typeof parsed.refundAccount === 'string' ? parsed.refundAccount.replace(/[^0-9A-Za-z-]/g, '').slice(0, 17) : undefined,
       refundAccountType: parsed.refundAccountType === 'savings' ? 'savings' : parsed.refundAccountType === 'checking' ? 'checking' : undefined,
@@ -1513,6 +1515,19 @@ class TaxApp {
         this.recalculateAndRender();
       });
     }
+    const syncCommunity = () => {
+      const wrap = document.getElementById('community-property-wrap');
+      if (wrap) wrap.style.display = this.state.filingStatus === 'married_separate' && ['AZ', 'CA', 'ID', 'LA', 'NV', 'NM', 'TX', 'WA', 'WI'].includes((this.state.residentState || '').toUpperCase()) ? '' : 'none';
+    };
+    syncCommunity();
+    resStateSelect?.addEventListener('change', syncCommunity);
+    document.getElementById('select-filing-status')?.addEventListener('change', () => setTimeout(syncCommunity, 0));
+    ([['input-community-spouse-wages', 'communitySpouseWages'], ['input-community-spouse-withheld', 'communitySpouseWithheld']] as const).forEach(([id, key]) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (!el) return;
+      el.value = this.state[key] ? String(this.state[key]) : '';
+      el.addEventListener('input', () => { this.state[key] = Number(el.value) || 0; this.recalculateAndRender(); });
+    });
     if (locSelect) {
       syncLocality();
       locSelect.addEventListener('change', () => { this.state.localityKey = locSelect.value || undefined; this.recalculateAndRender(); });

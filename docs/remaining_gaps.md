@@ -99,7 +99,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | C13 | P1 | PFML / SDI payroll contributions and multi-employer excess refunds (CA SDI also federal SALT) | — | W-2 box 14 amounts | ✅ W-2 box 14 state disability / paid-leave contributions added to Schedule A state income taxes. Multi-employer excess refunds (NJ UI/DI/FLI) not modeled — CA SDI has no wage cap from 2024 |
 | C14 | P2 | State AMT (CA, CO, CT, MN) | — | | ⬜ |
 | C15 | P2 | Use tax line | — | Input | ✅ Use tax input added to the resident state's total tax |
-| C16 | P2 | Community property allocation (9 states) | — | | ⬜ |
+| C16 | P2 | Community property allocation (9 states) | — | | ✅ MFS residents of AZ, CA, ID, LA, NV, NM, TX, WA, WI: spouse's wages and withholding inputs → each return reports half (Form 8958); other community income (interest, business, separate-property tracing) not split |
 | C17 | P2 | Separate state filing status where allowed/required | — | | ⬜ |
 | C18 | P2 | Credit for taxes paid: per-state limitation formulas, local taxes, reverse credits | One ratio formula | | ⬜ |
 | C19 | P2 | Renter / property tax credits and circuit breakers (MN M1PR, MI 1040CR, WI H, NJ ANCHOR) | Some panels | | ⬜ |

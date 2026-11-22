@@ -137,6 +137,8 @@ function defineInputs(g) {
     co('in.ftcCarryover', 'Foreign Tax Credit Carryover', 'foreign-tax');
     co('in.qbiLossCarryover', 'Qualified Business Loss Carryforward', 'qbi-loss');
     co('in.sec179Carryover', 'Section 179 Carryover', 'section-179');
+    io('in.communitySpouseWages', "Spouse's Community Wages (MFS)", 'input-community-spouse-wages', undefined, undefined, { optional: true });
+    io('in.communitySpouseWithheld', "Spouse's Federal Withholding (MFS)", 'input-community-spouse-withheld', undefined, undefined, { optional: true });
     io('in.ptcHouseholdSize', 'Form 8962 Family Size', 'input-ptc-household-size', 'cred-1095a', 'credits', { unit: 'count', optional: true });
     // Advanced federal items
     const adv = (id, label, key, extra = {}) => io(id, label, `input-adv-${key}`, 'advanced-federal', 'other-income', { optional: true, ...extra });
@@ -351,8 +353,15 @@ function defineQuantities(g, year) {
     q({ id: 'fed.careQualifyingPersons', label: 'Qualifying Persons for Care (under 13 or disabled)', unit: 'count', category: 'credits', optional: true,
         expr: when(hasDeps, sumOver('dep', one(or(lt(depAge, num(13)), itemFlag('disabled', 'permanently disabled', 'not disabled')))), max(num(1), add(R('in.children'), R('in.otherDependents')))) });
     // ---------- Wages & payroll ----------
-    q({ id: 'fed.wages', label: 'Total W-2 Wages', unit: 'usd', form: 'Form 1040 Line 1a', category: 'wages', expr: each('w2', 'box1') });
-    q({ id: 'fed.w2Withholding', label: 'W-2 Federal Tax Withheld', unit: 'usd', form: 'Form 1040 Line 25a', category: 'withholding', expr: each('w2', 'box2') });
+    // Community property states (AZ, CA, ID, LA, NV, NM, TX, WA, WI): on separate returns each spouse reports half of the
+    // community wages and claims half of the withholding on them (Pub. 555; Form 8958 allocation).
+    const community = flag('fed.communityProperty', 'married filing separately in a community property state', 'not a community property allocation', 'input-community-spouse-wages');
+    q({ id: 'fed.communityWageAdjustment', label: 'Community Property Wage Allocation (Form 8958)', unit: 'usd', form: 'Form 8958', category: 'wages', optional: true,
+        expr: when(community, mul(sub(R('in.communitySpouseWages'), each('w2', 'box1')), rate(0.5)), lit(0)) });
+    q({ id: 'fed.communityWithholdingAdjustment', label: 'Community Property Withholding Allocation', unit: 'usd', form: 'Form 8958', category: 'withholding', optional: true,
+        expr: when(community, mul(sub(R('in.communitySpouseWithheld'), each('w2', 'box2')), rate(0.5)), lit(0)) });
+    q({ id: 'fed.wages', label: 'Total W-2 Wages', unit: 'usd', form: 'Form 1040 Line 1a', category: 'wages', expr: add(each('w2', 'box1'), R('fed.communityWageAdjustment')) });
+    q({ id: 'fed.w2Withholding', label: 'W-2 Federal Tax Withheld', unit: 'usd', form: 'Form 1040 Line 25a', category: 'withholding', expr: add(each('w2', 'box2'), R('fed.communityWithholdingAdjustment')) });
     q({ id: 'fed.ssWages', label: 'Social Security Wages', unit: 'usd', display: 'inline', expr: each('w2', 'box3') });
     q({ id: 'fed.ssTaxWithheld', label: 'Social Security Tax Withheld', unit: 'usd', category: 'ss', expr: each('w2', 'box4') });
     q({ id: 'fed.medWages', label: 'Medicare Wages', unit: 'usd', display: 'inline', expr: each('w2', 'box5') });
@@ -1139,6 +1148,7 @@ export function federalContext(state) {
             'fed.qbiSstb': Boolean(state.advanced?.qbiSstb),
             'fed.parentJoint': Boolean(state.advanced?.parentMarriedJoint),
             'fed.fplAlaska': state.ptcRegion === 'AK',
+            'fed.communityProperty': state.filingStatus === 'married_separate' && ['AZ', 'CA', 'ID', 'LA', 'NV', 'NM', 'TX', 'WA', 'WI'].includes((state.residentState || '').toUpperCase()),
             'ret.militaryHome': Boolean(state.militaryStationedInHomeState),
             'fed.fplHawaii': state.ptcRegion === 'HI',
             'fed.homeSaleQualifies': Boolean(state.otherIncome?.capitalGains?.homeSaleQualifies),
@@ -1216,6 +1226,7 @@ export function federalContext(state) {
             'in.adoption': n(d.adoptionCredit),
             'in.elderly': n(d.elderlyDisabledCredit),
             'in.ptc': n(d.premiumTaxCredit),
+            'in.communitySpouseWages': n(state.communitySpouseWages), 'in.communitySpouseWithheld': n(state.communitySpouseWithheld),
             'in.iraBasis': n(state.advanced?.iraBasis), 'in.iraYearEndValue': n(state.advanced?.iraYearEndValue), 'in.rothConversion': n(state.advanced?.rothConversion),
             'in.form4797Ordinary': n(state.advanced?.form4797Ordinary), 'in.section1231Gain': n(state.advanced?.section1231Gain),
             'in.qbiW2Wages': n(state.advanced?.qbiW2Wages), 'in.qbiUbia': n(state.advanced?.qbiUbia), 'in.isoSpread': n(state.advanced?.isoSpread),
@@ -1240,7 +1251,7 @@ export function federalContext(state) {
 /** How federal quantities are grouped into calculation cards. Presentation only — no math. */
 export const FEDERAL_BLOCKS = [
     { id: 'calc-total-w2-wages', stepLabel: 'Step 1 • Wage & Payroll Aggregation', title: 'W-2 Wages, Withholding & FICA',
-        quantities: [{ id: 'fed.wages', show: 'always' }, 'fed.w2Withholding', 'fed.ssTaxWithheld', 'fed.medTaxWithheld', 'fed.ficaWithheld'] },
+        quantities: ['fed.communityWageAdjustment', 'fed.communityWithholdingAdjustment', { id: 'fed.wages', show: 'always' }, 'fed.w2Withholding', 'fed.ssTaxWithheld', 'fed.medTaxWithheld', 'fed.ficaWithheld'] },
     { id: 'calc-capital-gains', stepLabel: 'Step 2a • Schedule D / Form 8949', title: 'Capital Gains & Loss Limitation',
         quantities: ['fed.txShortTerm', 'fed.txLongTerm', 'fed.shortTermGain', 'fed.homeSaleExclusion', 'fed.homeSaleTaxableGain', 'fed.capGainDistributions', 'fed.capNet', 'fed.capAllowed', 'fed.capLossCarryforward'] },
     { id: 'calc-schedule-e', stepLabel: 'Step 2b • Schedule E / Form 8582', title: 'Rental Real Estate & K-1 Income',

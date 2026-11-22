@@ -333,6 +333,13 @@
               <option value="WI">WI - Wisconsin (Form 1)</option>
               <option value="WY">WY - Wyoming (0% No State Income Tax)</option>
             </select>
+            <div id="community-property-wrap" style="margin-top:0.5rem;display:none;">
+              <div class="panel-input-label">Community property (married filing separately): your spouse's</div>
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                <label style="font-size:0.8rem;">wages $<input type="number" step="any" class="w2-input" style="width:8rem;display:inline-block;padding-left:0.4rem;" id="input-community-spouse-wages"></label>
+                <label style="font-size:0.8rem;">federal withholding $<input type="number" step="any" class="w2-input" style="width:8rem;display:inline-block;padding-left:0.4rem;" id="input-community-spouse-withheld"></label>
+              </div>
+            </div>
             <div id="resident-locality-wrap" style="margin-top:0.5rem;display:none;">
               <label for="select-resident-locality" class="panel-input-label">Local income tax jurisdiction (where you live)</label>
               <select id="select-resident-locality" class="w2-input"></select>
