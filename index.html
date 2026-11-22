@@ -562,6 +562,20 @@
               Line-by-Line Guide (Free File Fillable Forms)
             </button>
           </div>
+          <div class="panel-multi-inputs" style="margin-top:1rem;">
+            <div><label class="panel-input-label" for="input-refund-routing">Refund routing number (line 35b)</label><input type="text" inputmode="numeric" maxlength="9" class="w2-input" id="input-refund-routing" autocomplete="off"></div>
+            <div><label class="panel-input-label" for="input-refund-account">Account number (line 35d)</label><input type="text" maxlength="17" class="w2-input" id="input-refund-account" autocomplete="off"></div>
+            <div><label class="panel-input-label" for="select-refund-type">Account type (line 35c)</label><select class="w2-input" id="select-refund-type"><option value="checking">Checking</option><option value="savings">Savings</option></select></div>
+            <div><label class="panel-input-label" for="input-ip-pin">IRS Identity Protection PIN (if issued)</label><input type="text" inputmode="numeric" maxlength="6" class="w2-input" id="input-ip-pin" autocomplete="off"></div>
+            <div><label class="panel-input-label" for="input-state-use-tax">State use tax on out-of-state purchases</label><input type="number" step="any" class="w2-input" id="input-state-use-tax" placeholder="0"></div>
+          </div>
+          <p style="font-size:0.78rem;color:#64748b;">Bank details and your IP PIN stay in this browser; they are only written into the PDF you download.</p>
+          <div style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <label class="panel-input-label" for="select-amend-base" style="margin:0;">Amended return (1040-X): compare this draft with</label>
+            <select class="w2-input" id="select-amend-base" style="max-width:16rem;"></select>
+            <button type="button" class="btn btn-outline" id="btn-amend-compare">Show 1040-X columns</button>
+          </div>
+          <div id="amend-container" style="margin-top:0.75rem;"></div>
           <div id="line-guide-container" style="display:none;margin-top:1rem;"></div>
         </div>
       </div>

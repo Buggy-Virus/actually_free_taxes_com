@@ -6,7 +6,7 @@ import { ArrowEngine } from './arrow-engine.js';
 import { reviewReturn } from './validation.js';
 import { RECORD_KINDS, recordDomId } from './record-kinds.js';
 import { localityOptions } from './locality-rates.js';
-import { form1040Lines, form1040FieldValues, form1040Year } from './form1040.js';
+import { form1040Lines, form1040FieldValues, form1040Year, REFUND_ACCOUNT_FIELDS } from './form1040.js';
 import { lineDomId } from './graph/graph.js';
 import { renderRatingPill, renderRatingCardHtml, renderRatingCircles, renderW2HeaderCircles, renderFieldExplanationDrawer, renderExplainToggleBtn } from './field-ratings.js';
 import { PANEL_CATALOG, getPanelCatalogEntry } from './panel-catalog.js';
@@ -951,6 +951,8 @@ class TaxApp {
             ...Object.fromEntries(['k1Rental', 'k1Guaranteed', 'k1Interest', 'k1Dividends', 'k1QualifiedDividends', 'k1ShortTermGain', 'k1LongTermGain', 'k1SeEarnings']
                 .filter(k => src?.[k] !== undefined).map(k => [k, Number(src[k]) || 0])),
             passive: Boolean(src?.passive),
+            iraDistribution: Boolean(src?.iraDistribution),
+            qcdAmount: Number(src?.qcdAmount) || 0,
             state: src?.state ? String(src.state).toUpperCase().trim() : ''
         }));
         return {
@@ -1044,6 +1046,14 @@ class TaxApp {
             ptcHouseholdSize: Number(parsed.ptcHouseholdSize) || undefined,
             ptcRegion: parsed.ptcRegion === 'AK' || parsed.ptcRegion === 'HI' ? parsed.ptcRegion : undefined,
             carryovers: numericFields(parsed.carryovers),
+            advanced: parsed.advanced && typeof parsed.advanced === 'object'
+                ? { ...numericFields(parsed.advanced), qbiSstb: Boolean(parsed.advanced.qbiSstb), parentMarriedJoint: Boolean(parsed.advanced.parentMarriedJoint) } : {},
+            specialSituations: Array.isArray(parsed.specialSituations) ? parsed.specialSituations.filter((x) => typeof x === 'string') : [],
+            stateUseTax: Number(parsed.stateUseTax) || 0,
+            refundRouting: typeof parsed.refundRouting === 'string' ? parsed.refundRouting.replace(/\D/g, '').slice(0, 9) : undefined,
+            refundAccount: typeof parsed.refundAccount === 'string' ? parsed.refundAccount.replace(/[^0-9A-Za-z-]/g, '').slice(0, 17) : undefined,
+            refundAccountType: parsed.refundAccountType === 'savings' ? 'savings' : parsed.refundAccountType === 'checking' ? 'checking' : undefined,
+            ipPin: typeof parsed.ipPin === 'string' ? parsed.ipPin.replace(/\D/g, '').slice(0, 6) : undefined,
             militaryStationedInHomeState: Boolean(parsed.militaryStationedInHomeState),
             localityKey: typeof parsed.localityKey === 'string' && /^[A-Z]{2}:/.test(parsed.localityKey) ? parsed.localityKey : undefined,
             priorYearTax: Number(parsed.priorYearTax) || 0,
@@ -1723,6 +1733,29 @@ class TaxApp {
             btnQuickExport.addEventListener('click', () => this.exportDraft());
         }
         document.getElementById('btn-download-1040-pdf')?.addEventListener('click', () => { void this.downloadFilled1040(); });
+        const bindText = (id, set, get) => {
+            const el = document.getElementById(id);
+            if (!el)
+                return;
+            el.value = get() || (el instanceof HTMLSelectElement ? el.value : '');
+            el.addEventListener('input', () => { set(el.value); this.saveDraft(); });
+            el.addEventListener('change', () => { set(el.value); this.saveDraft(); });
+        };
+        bindText('input-refund-routing', v => { this.state.refundRouting = v.replace(/\D/g, '').slice(0, 9); }, () => this.state.refundRouting);
+        bindText('input-refund-account', v => { this.state.refundAccount = v.replace(/[^0-9A-Za-z-]/g, '').slice(0, 17); }, () => this.state.refundAccount);
+        bindText('select-refund-type', v => { this.state.refundAccountType = v === 'savings' ? 'savings' : 'checking'; }, () => this.state.refundAccountType);
+        bindText('input-ip-pin', v => { this.state.ipPin = v.replace(/\D/g, '').slice(0, 6); }, () => this.state.ipPin);
+        const useTax = document.getElementById('input-state-use-tax');
+        if (useTax) {
+            useTax.value = this.state.stateUseTax ? String(this.state.stateUseTax) : '';
+            useTax.addEventListener('input', () => { this.state.stateUseTax = Number(useTax.value) || 0; this.recalculateAndRender(); });
+        }
+        const amendSel = document.getElementById('select-amend-base');
+        if (amendSel) {
+            const store = this.loadDraftsStore();
+            amendSel.innerHTML = store.drafts.filter(d => d.id !== store.activeId).map(d => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('') || '<option value="">(save another draft first)</option>';
+        }
+        document.getElementById('btn-amend-compare')?.addEventListener('click', () => this.renderAmendedComparison());
         document.getElementById('btn-line-guide')?.addEventListener('click', () => {
             const box = document.getElementById('line-guide-container');
             if (!box)
@@ -4072,6 +4105,8 @@ class TaxApp {
         ensure('adj-student-loan', (Number(this.state.adjustments?.studentLoan) || 0) !== 0);
         ensure('adj-ira', (Number(this.state.adjustments?.ira) || 0) !== 0);
         RECORD_KINDS.forEach(k => ensure(k.panelKey, k.list(this.state).length > 0));
+        ensure('advanced-federal', Object.values(this.state.advanced || {}).some(v => Boolean(v)));
+        ensure('special-situations', (this.state.specialSituations || []).length > 0);
         ensure('prior-year-carryovers', Object.values(this.state.carryovers || {}).some(v => Number(v) !== 0));
         ensure('home-sale-121', (Number(this.state.otherIncome?.capitalGains?.homeSaleGain) || 0) !== 0);
         ensure('adj-hsa', (Number(this.state.adjustments?.hsa) || 0) !== 0);
@@ -4247,6 +4282,8 @@ class TaxApp {
             : src.type === '1099-R'
                 ? money('Taxable Amount (Box 2a)', 'taxableAmount', src.taxableAmount, 'Same as Box 1')
                     + distributionCodeSelect()
+                    + check('IRA / SEP / SIMPLE', 'iraDistribution', src.iraDistribution, 'Box 7 IRA/SEP/SIMPLE checked').replace('data-src-field', `id="input-source-${src.id}-ira" data-src-field`)
+                    + money('Qualified Charitable Distribution (age 70½+)', 'qcdAmount', src.qcdAmount || 0).replace('data-src-field', `id="input-source-${src.id}-qcdAmount" data-src-field`)
                     + (src.distributionCode ? '' : check('Rollover (Code G / H)', 'rollover', src.rollover, 'Rolled over — not taxable')
                         + check('Early Withdrawal (10% Penalty)', 'earlyDistributionPenalty', src.earlyDistributionPenalty, 'Code 1 Early Distribution'))
                     + money('Amount Meeting a 10% Exception (Form 5329)', 'penaltyExceptionAmount', src.penaltyExceptionAmount || 0)
@@ -4479,6 +4516,17 @@ class TaxApp {
             <option value="HI" ${this.state.ptcRegion === 'HI' ? 'selected' : ''}>Hawaii</option></select></div>
         </div>`;
             }
+        }
+        else if (entry.key === 'advanced-federal') {
+            const advState = (this.state.advanced || {});
+            inputsHtml = `<div class="panel-multi-inputs">${[['iraBasis', 'ira-basis', 'IRA basis — all nondeductible contributions incl. this year (Form 8606 line 3)'], ['iraYearEndValue', 'ira-value', 'Year-end value of all traditional/SEP/SIMPLE IRAs'], ['rothConversion', 'roth-conversion', 'Converted to a Roth IRA this year'], ['form4797Ordinary', 'f4797-ordinary', 'Form 4797 ordinary gain (incl. §1245 recapture)'], ['section1231Gain', 'f4797-1231', 'Net §1231 gain (loss) from business property'], ['qbiW2Wages', 'qbi-wages', 'W-2 wages paid by your qualified businesses (QBI limit)'], ['qbiUbia', 'qbi-ubia', 'UBIA of qualified property (QBI limit)'], ['isoSpread', 'iso', 'Incentive stock option exercise spread (AMT)'], ['privateActivityBondInterest', 'pab', 'Private activity bond interest (AMT)'], ['applyRefundToNextYear', 'apply-refund', "Apply this much of the refund to next year's estimated tax"], ['parentTaxableIncome', 'parent-ti', "Kiddie tax: parent's taxable income (if a parent can claim you)"]].map(([k, dom, label]) => `<div><label class="panel-input-label">${esc(label)}</label><div class="w2-input-wrapper"><span class="currency-symbol">$</span><input type="number" step="any" class="w2-input" id="input-adv-${dom}" data-adv-field="${k}" value="${advState[k] ?? ''}" placeholder="0"></div></div>`).join('')}
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-adv-sstb" data-adv-check="qbiSstb" ${advState.qbiSstb ? 'checked' : ''}> Specified service business (law, health, consulting, etc.)</label>
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;"><input type="checkbox" id="check-adv-parent-joint" data-adv-check="parentMarriedJoint" ${advState.parentMarriedJoint ? 'checked' : ''}> Kiddie tax: parent files jointly</label>
+      </div>`;
+        }
+        else if (entry.key === 'special-situations') {
+            const picked = new Set(this.state.specialSituations || []);
+            inputsHtml = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0.3rem;font-size:0.82rem;">${[['qsbs', '§1202 qualified small business stock sale'], ['sec1256', 'Section 1256 contracts / straddles (Form 6781)'], ['installment', 'Installment sale (Form 6252)'], ['likeKind', 'Like-kind exchange (Form 8824)'], ['nol', 'Net operating loss created this year (Form 172 computation)'], ['atRisk', 'At-risk or excess business loss limits (Forms 6198 / 461)'], ['cod', 'Canceled debt / insolvency (Form 982)'], ['nra', 'Nonresident alien or dual-status year (Form 1040-NR)'], ['deceased', 'Final return for a deceased taxpayer'], ['foreignAccounts', 'Foreign accounts or assets over the FBAR / Form 8938 thresholds']].map(([k, label]) => `<label><input type="checkbox" data-situation="${k}" ${picked.has(k) ? 'checked' : ''}> ${esc(label)}</label>`).join('')}</div>`;
         }
         else if (entry.key === 'prior-year-carryovers') {
             const carry = (this.state.carryovers || {});
@@ -4715,6 +4763,33 @@ class TaxApp {
                 this.recalculateAndRender();
             });
         });
+        document.querySelectorAll('[data-adv-field]').forEach(el => {
+            el.addEventListener('input', () => {
+                var _a;
+                const advState = ((_a = this.state).advanced ?? (_a.advanced = {}));
+                advState[el.dataset.advField || ''] = el.value === '' ? undefined : Number(el.value) || 0;
+                this.recalculateAndRender();
+            });
+        });
+        document.querySelectorAll('[data-adv-check]').forEach(el => {
+            el.addEventListener('change', () => {
+                var _a;
+                const advState = ((_a = this.state).advanced ?? (_a.advanced = {}));
+                advState[el.dataset.advCheck || ''] = el.checked;
+                this.recalculateAndRender();
+            });
+        });
+        document.querySelectorAll('[data-situation]').forEach(el => {
+            el.addEventListener('change', () => {
+                const set = new Set(this.state.specialSituations || []);
+                if (el.checked)
+                    set.add(el.dataset.situation || '');
+                else
+                    set.delete(el.dataset.situation || '');
+                this.state.specialSituations = [...set];
+                this.recalculateAndRender();
+            });
+        });
         document.querySelectorAll('[data-carry-field]').forEach(el => {
             el.addEventListener('input', () => {
                 var _a;
@@ -4822,6 +4897,12 @@ class TaxApp {
                 break;
             case 'prior-year-carryovers':
                 this.state.carryovers = {};
+                break;
+            case 'advanced-federal':
+                this.state.advanced = {};
+                break;
+            case 'special-situations':
+                this.state.specialSituations = [];
                 break;
             case 'home-sale-121':
                 if (this.state.otherIncome.capitalGains)
@@ -5254,6 +5335,33 @@ class TaxApp {
             document.getElementById(tr.dataset.guideTarget || '')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }));
     }
+    /** E4: Form 1040-X columns — A (original return = the chosen draft), B (net change), C (correct amount = this draft). */
+    renderAmendedComparison() {
+        const box = document.getElementById('amend-container');
+        const sel = document.getElementById('select-amend-base');
+        if (!box || !sel)
+            return;
+        const other = this.loadDraftsStore().drafts.find(d => d.id === sel.value);
+        if (!other) {
+            box.textContent = 'Save the original return as a separate draft first.';
+            return;
+        }
+        const year = this.state.year || 2024;
+        const orig = calculateTaxes(other.state).federalEval;
+        const cur = calculateTaxes(this.state).federalEval;
+        if (!orig || !cur)
+            return;
+        const a = new Map(form1040Lines(orig, other.state.year || year).map(l => [l.line, l]));
+        const rows = form1040Lines(cur, year).map(l => {
+            const av = a.get(l.line)?.value ?? 0;
+            return { line: l.line, label: l.label, a: av, b: l.value - av, c: l.value };
+        }).filter(r => r.a !== 0 || r.c !== 0);
+        const m = (n) => (n < 0 ? '−$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        box.innerHTML = `<div class="calc-card"><h3 class="calc-card-title">Form 1040-X — ${esc(other.name)} → this draft</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:0.84rem;"><tr><th style="text-align:left;">1040 line</th><th style="text-align:left;"></th><th style="text-align:right;">A. Original</th><th style="text-align:right;">B. Change</th><th style="text-align:right;">C. Correct</th></tr>
+      ${rows.map(r => `<tr style="${Math.abs(r.b) >= 0.005 ? 'font-weight:600;' : ''}"><td>${esc(r.line)}</td><td>${esc(r.label)}</td><td style="text-align:right;">${m(r.a)}</td><td style="text-align:right;">${m(r.b)}</td><td style="text-align:right;">${m(r.c)}</td></tr>`).join('')}
+      </table><p style="font-size:0.78rem;color:#64748b;">File Form 1040-X with these columns and explain the changes in Part II.</p></div>`;
+    }
     /** E1: fill the IRS fillable Form 1040 (assets/forms) with the graph's line values using pdf-lib, and download it. */
     async downloadFilled1040() {
         const ev = calculateTaxes(this.state).federalEval;
@@ -5272,7 +5380,13 @@ class TaxApp {
             const bytes = await (await fetch(`assets/forms/f1040-${layout}.pdf`)).arrayBuffer();
             const doc = await PDFDocument.load(bytes);
             const form = doc.getForm();
-            Object.entries(form1040FieldValues(form1040Lines(ev, year), year)).forEach(([name, text]) => {
+            const values = form1040FieldValues(form1040Lines(ev, year), year);
+            const bank = REFUND_ACCOUNT_FIELDS[layout];
+            if (bank && ev.applies('fed.refund') && this.state.refundRouting && this.state.refundAccount) {
+                values[bank.routing] = this.state.refundRouting;
+                values[bank.account] = this.state.refundAccount;
+            }
+            Object.entries(values).forEach(([name, text]) => {
                 try {
                     form.getTextField(name).setText(text);
                 }

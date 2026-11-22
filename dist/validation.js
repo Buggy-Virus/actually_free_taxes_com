@@ -92,6 +92,23 @@ export function reviewReturn(state, summary) {
         out.push({ severity: 'warning', targetId: 'input-foreign-source-income',
             message: `Foreign taxes of ${money(ftc)} are over the ${money(ftcLimit)} allowed without Form 1116. Enter your foreign-source income so the credit can be limited correctly.` });
     }
+    // ── Situations the app does not compute (B43/B44): refer ──
+    const REFER = {
+        qsbs: 'A §1202 qualified small business stock exclusion is figured on Form 8949 / Schedule D with code Q — not computed here.',
+        sec1256: 'Section 1256 contracts and straddles go on Form 6781 (60/40 split) — not computed here.',
+        installment: 'Installment sales are reported on Form 6252 — not computed here.',
+        likeKind: 'Like-kind exchanges are reported on Form 8824 — not computed here.',
+        nol: 'A net operating loss created this year needs the IRS Pub. 536 worksheets — not computed here.',
+        atRisk: 'At-risk (Form 6198) and excess business loss (Form 461) limits are not applied.',
+        cod: 'Canceled debt and insolvency exclusions use Form 982 — not computed here.',
+        nra: 'Nonresident aliens and dual-status filers file Form 1040-NR — this app prepares Form 1040 only.',
+        deceased: "A deceased taxpayer's final return has special rules (Pub. 559) — check them before filing.",
+        foreignAccounts: 'Foreign accounts may require FinCEN Form 114 (FBAR) and Form 8938 — not prepared here.'
+    };
+    (state.specialSituations || []).forEach(k => {
+        if (REFER[k])
+            out.push({ severity: 'warning', message: `${REFER[k]} Consider IRS Free File Fillable Forms or a tax professional for this part.` });
+    });
     // ── Filing requirement (Form 1040 instructions, Chart A) ──
     if (ev && !state.claimedAsDependent) {
         const status = state.filingStatus;

@@ -88,6 +88,26 @@ export const PANEL_CATALOG = [
         inputIds: []
     },
     {
+        key: 'advanced-federal',
+        section: 'other-income',
+        title: 'Less Common Federal Items',
+        officialTitle: 'Forms 8606, 4797, 8995-A, 6251, 8615 • Line 36',
+        shortExplanation: 'IRA basis and Roth conversions, business property sales, QBI wage limits above the threshold, AMT preferences, the kiddie tax, and applying a refund to next year.',
+        ratingKey: 'capital-gains',
+        size: 'full',
+        inputIds: []
+    },
+    {
+        key: 'special-situations',
+        section: 'other-income',
+        title: 'Situations This App Does Not Handle',
+        officialTitle: 'Detect & refer',
+        shortExplanation: 'Check anything that applies so the Review card can point you to the right form or a professional.',
+        ratingKey: 'capital-gains',
+        size: 'full',
+        inputIds: []
+    },
+    {
         key: 'prior-year-carryovers',
         section: 'other-income',
         title: 'Carryovers From Last Year',

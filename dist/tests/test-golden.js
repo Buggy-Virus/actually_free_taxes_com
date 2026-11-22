@@ -1375,6 +1375,73 @@ const CASES = [
         state: ret({ residentState: 'NY', localityKey: 'NY:NYC', otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 100000, { state: 'NY' })] } }),
         expect: [['MCTMT', st('NY', 'mctmt'), 554]]
     },
+    // ---------------- Federal: P2 items (B25–B42) ----------------
+    {
+        name: 'Qualified charitable distribution excluded from taxable IRA income',
+        source: 'IRC §408(d)(8) / Form 1040 line 4b instructions: $20,000 distribution with $8,000 sent directly to charity → $12,000 taxable',
+        state: ret({ w2s: [w2(30000)], otherIncome: { interest: 0, sources: [src(1, '1099-R', 20000, { distributionCode: '7', iraDistribution: true, qcdAmount: 8000 })] } }),
+        expect: [['QCD excluded', fed('fed.qcdExcluded'), 8000], ['taxable retirement', fed('fed.retirement'), 12000]]
+    },
+    {
+        name: 'Form 8606: nondeductible basis makes part of an IRA distribution nontaxable',
+        source: 'Form 8606 Part I: basis $20,000 ÷ ($70,000 year-end + $10,000 distributed) = 25% → $2,500 nontaxable, $7,500 taxable',
+        state: ret({ w2s: [w2(30000)], otherIncome: { interest: 0, sources: [src(1, '1099-R', 10000, { distributionCode: '7', iraDistribution: true })] }, advanced: { iraBasis: 20000, iraYearEndValue: 70000 } }),
+        expect: [['nontaxable share', fed('fed.iraNontaxableRatio'), 0.25], ['taxable retirement', fed('fed.retirement'), 7500]]
+    },
+    {
+        name: 'Form 8606: Roth conversion taxed except for basis',
+        source: 'Form 8606 Parts I–II: convert $30,000 with $6,000 basis and $0 left in IRAs → 20% nontaxable → $24,000 taxable',
+        state: ret({ w2s: [w2(30000)], advanced: { iraBasis: 6000, iraYearEndValue: 0, rothConversion: 30000 } }),
+        expect: [['taxable conversion', fed('fed.rothConversionTaxable'), 24000], ['taxable retirement', fed('fed.retirement'), 24000]]
+    },
+    {
+        name: 'Form 4797: §1231 gain is long-term, §1245 recapture is ordinary',
+        source: 'Form 4797: $10,000 net §1231 gain → Schedule D line 11; $5,000 Part II ordinary gain → Schedule 1 line 4',
+        state: ret({ w2s: [w2(60000)], advanced: { section1231Gain: 10000, form4797Ordinary: 5000 } }),
+        expect: [['net LTCG', fed('fed.netLtcg'), 10000], ['ordinary gain', fed('fed.form4797Ordinary'), 5000], ['AGI', fed('fed.agi'), 75000]]
+    },
+    {
+        name: 'Form 8995-A: above the phase-in range the QBI deduction is limited to 50% of W-2 wages',
+        source: 'IRC §199A(b)(2) (2024 single threshold $191,950 + $50,000): 20% of QBI far exceeds 50% × $50,000 wages → $25,000',
+        state: ret({ otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 400000)] }, advanced: { qbiW2Wages: 50000 } }),
+        expect: [['QBI deduction', fed('fed.qbi'), 25000]]
+    },
+    {
+        name: 'Form 8995-A: a specified service business above the range gets no QBI deduction',
+        source: 'IRC §199A(d)(3): SSTB income is fully excluded once taxable income passes the phase-in range',
+        state: ret({ otherIncome: { interest: 0, sources: [src(1, '1099-NEC', 400000)] }, advanced: { qbiW2Wages: 50000, qbiSstb: true } }),
+        expect: [['QBI deduction', fed('fed.qbi'), 0]]
+    },
+    {
+        name: 'Foreign Earned Income Tax Worksheet stacks the exclusion',
+        source: 'Form 1040 instructions (2024): $150,000 wages, $126,500 excluded → tax on $135,400 ($25,538.50) − tax on $126,500 ($23,402.50) = $2,136',
+        state: ret({ w2s: [w2(150000)], otherIncome: { interest: 0, sources: [], foreignEarnedIncomeExclusion: 126500 } }),
+        expect: [['taxable income', fed('fed.taxableIncome'), 8900], ['income tax', fed('fed.tax'), 2136]]
+    },
+    {
+        name: 'AMT: incentive stock option spread is an AMT preference',
+        source: 'Form 6251 line 2i: AMTI $500,000 − $85,700 exemption = $414,300 → 26%/28% = $111,352 TMT − $37,538.50 regular tax = $73,813.50',
+        state: ret({ w2s: [w2(200000)], advanced: { isoSpread: 300000 } }),
+        expect: [['AMTI', fed('fed.amti'), 500000], ['AMT', fed('fed.amt'), 73813.5]]
+    },
+    {
+        name: 'Refund applied to next year',
+        source: 'Form 1040 lines 34–36: $3,981 overpaid, $1,000 applied to 2025 estimated tax → $2,981 refunded',
+        state: ret({ w2s: [w2(50000, { fedWithheld: 8000 })], advanced: { applyRefundToNextYear: 1000 } }),
+        expect: [['overpaid', fed('fed.refund'), 3981], ['applied', fed('fed.refundApplied'), 1000], ['refunded', fed('fed.refundPaid'), 2981]]
+    },
+    {
+        name: "Form 8615 kiddie tax: child's unearned income taxed at the parent's rate",
+        source: "Form 8615 (2024): $10,000 interest − $2,600 = $7,400 at the parent's 32% rate ($2,368) + 10% × $1,300 ($130) = $2,498",
+        state: ret({ claimedAsDependent: true, otherIncome: { interest: 10000, sources: [] }, advanced: { parentTaxableIncome: 200000 } }),
+        expect: [['net unearned income', fed('fed.kiddieUnearned'), 7400], ['income tax', fed('fed.tax'), 2498]]
+    },
+    {
+        name: 'State use tax is added to the resident state total',
+        source: 'State use tax line (e.g. CA 540 line 91): $120 use tax increases the CA total by $120',
+        state: ret({ residentState: 'CA', stateUseTax: 120, w2s: [w2(60000, { state: 'CA' })] }),
+        expect: [['CA use tax', st('CA', 'useTax'), 120], ['CA total − net − use', r => r.federalEval.value('st.ca.totalTax') - r.federalEval.value('st.ca.netStateTax') - r.federalEval.value('st.ca.localTax'), 120]]
+    },
 ];
 let passed = 0, gaps = 0;
 const failures = [];

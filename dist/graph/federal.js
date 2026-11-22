@@ -94,6 +94,8 @@ function defineInputs(g) {
                 fedWithheld: f(`${c.label} Federal Tax Withheld`, false, true),
                 penalty: f(`${c.label} Early Distribution (Code 1)`),
                 simple: f(`${c.label} SIMPLE IRA First 2 Years (Code S)`),
+                isIra: { label: `${c.label} IRA/SEP/SIMPLE`, unit: 'count', optional: true, domId: (it) => `input-source-${it.id}-ira` },
+                qcd: { ...k1f('qcdAmount', 'Qualified Charitable Distribution') },
                 isSpouse: { label: `${c.label} Belongs to Spouse`, unit: 'count', optional: true, domId: (it) => `input-source-${it.id}-owner` },
                 k1Rental: { ...k1f('k1Rental', 'Box 2 Rental Real Estate'), allowNegative: true }, k1Guaranteed: k1f('k1Guaranteed', 'Box 4 Guaranteed Payments'),
                 k1Interest: k1f('k1Interest', 'Box 5 Interest'), k1Dividends: k1f('k1Dividends', 'Box 6a Dividends'), k1QualDiv: k1f('k1QualifiedDividends', 'Box 6b Qualified Dividends'),
@@ -136,6 +138,19 @@ function defineInputs(g) {
     co('in.qbiLossCarryover', 'Qualified Business Loss Carryforward', 'qbi-loss');
     co('in.sec179Carryover', 'Section 179 Carryover', 'section-179');
     io('in.ptcHouseholdSize', 'Form 8962 Family Size', 'input-ptc-household-size', 'cred-1095a', 'credits', { unit: 'count', optional: true });
+    // Advanced federal items
+    const adv = (id, label, key, extra = {}) => io(id, label, `input-adv-${key}`, 'advanced-federal', 'other-income', { optional: true, ...extra });
+    adv('in.iraBasis', 'IRA Basis (all nondeductible contributions, incl. this year)', 'ira-basis');
+    adv('in.iraYearEndValue', 'Year-End Value of All Traditional IRAs', 'ira-value');
+    adv('in.rothConversion', 'Roth Conversion Amount', 'roth-conversion');
+    adv('in.form4797Ordinary', 'Form 4797 Ordinary Gain (incl. §1245 recapture)', 'f4797-ordinary', { allowNegative: true });
+    adv('in.section1231Gain', 'Net Section 1231 Gain (Loss)', 'f4797-1231', { allowNegative: true });
+    adv('in.qbiW2Wages', 'W-2 Wages Paid by Qualified Businesses', 'qbi-wages');
+    adv('in.qbiUbia', 'UBIA of Qualified Property', 'qbi-ubia');
+    adv('in.isoSpread', 'ISO Exercise Spread (AMT)', 'iso');
+    adv('in.pabInterest', 'Private Activity Bond Interest (AMT)', 'pab');
+    adv('in.refundToNextYear', 'Refund Applied to Next Year', 'apply-refund');
+    adv('in.parentTaxableIncome', "Parent's Taxable Income (Form 8615)", 'parent-ti');
     // Other income
     io('in.interest', 'Bank Interest (1099-INT Box 1)', 'input-other-interest', '1099-int', 'other-income', { optional: true });
     io('in.schedCExpenses', 'Schedule C Expenses', 'input-sched-c-expenses', 'schedule-c-expenses', 'other-income', { optional: true });
@@ -278,6 +293,12 @@ function defineParams(g) {
     p('fed.fplAddAK', 'Poverty Line, Each Additional Person (Alaska)', 'usd', c => Y(c.year, 6430, 6730, 6880), 'Form 8962 instructions Table 1-2; HHS', ['select-tax-year']);
     p('fed.fplBaseHI', 'Poverty Line, 1 Person (Hawaii)', 'usd', c => Y(c.year, 16770, 17310, 17990), 'Form 8962 instructions Table 1-3; HHS', ['select-tax-year']);
     p('fed.fplAddHI', 'Poverty Line, Each Additional Person (Hawaii)', 'usd', c => Y(c.year, 5910, 6190, 6330), 'Form 8962 instructions Table 1-3; HHS', ['select-tax-year']);
+    p('fed.qcdLimit', 'Qualified Charitable Distribution Limit', 'usd', c => Y(c.year, 105000, 108000, 111000), 'IRC §408(d)(8) (indexed from 2024)', ['select-tax-year']);
+    p('fed.qbiThreshold', 'QBI Threshold (taxable income)', 'usd', c => (c.status === 'married_joint' ? Y(c.year, 383900, 394600, 403500) : Y(c.year, 191950, 197300, 201750)), 'Rev. Proc. 2023-34 / 2024-40 / 2025-32', YEAR_STATUS);
+    p('fed.qbiPhaseRange', 'QBI Phase-In Range', 'usd', c => (c.status === 'married_joint' ? Y(c.year, 100000, 100000, 150000) : Y(c.year, 50000, 50000, 75000)), 'IRC §199A(b)(3)(B) as amended by P.L. 119-21', YEAR_STATUS);
+    p('fed.kiddieThreshold', 'Kiddie Tax Unearned Income Threshold', 'usd', c => Y(c.year, 2600, 2700, 2700), 'Form 8615 line 2', ['select-tax-year']);
+    g.param({ id: 'fed.bracketsJoint', label: 'Tax Brackets (Married Filing Jointly)', unit: 'usd', source: 'IRC §1(j)', domSources: ['select-tax-year'], resolve: c => rules(c.year).brackets.married_joint });
+    g.param({ id: 'fed.bracketsSingleSched', label: 'Tax Brackets (Single)', unit: 'usd', source: 'IRC §1(j)', domSources: ['select-tax-year'], resolve: c => rules(c.year).brackets.single });
     p('fed.adoptionCap', 'Adoption Credit Limit', 'usd', c => Y(c.year, 16810, 17280, 17670), 'Form 8839', ['select-tax-year']);
     p('fed.adoptionPhaseStart', 'Adoption Credit Phase-Out Start (MAGI)', 'usd', c => Y(c.year, 252150, 259190, 265080), 'Form 8839 line 7; Rev. Proc. 2023-34 / 2024-40 / 2025-32', ['select-tax-year']);
     p('fed.adoptionRefundableMax', 'Refundable Adoption Credit Limit', 'usd', c => Y(c.year, 0, 5000, 5120), 'P.L. 119-21 §70402', ['select-tax-year']);
@@ -357,8 +378,12 @@ function defineQuantities(g, year) {
         expr: sumOver('tx', mul(txGain, field('isLong'))) });
     q({ id: 'fed.shortTermGain', label: 'Net Short-Term Gain/Loss', unit: 'usd', form: 'Schedule D Line 7', category: 'capital', optional: true,
         expr: sub(add(R('in.stGain'), R('fed.txShortTerm'), each('src.k1', 'k1St')), R('in.capCarryover')) });
+    // Form 4797: a net §1231 gain is long-term capital gain (Schedule D line 11); a net §1231 loss and Part II ordinary
+    // gains (including §1245 depreciation recapture) are ordinary income (Schedule 1 line 4). Five-year lookback not modeled.
+    q({ id: 'fed.form4797Ordinary', label: 'Form 4797 Ordinary Gain (Loss)', unit: 'usd', form: 'Schedule 1 Line 4', category: 'wages', optional: true,
+        expr: add(R('in.form4797Ordinary'), min(lit(0), R('in.section1231Gain'))) });
     q({ id: 'fed.longTermGain', label: 'Net Long-Term Gain/Loss', unit: 'usd', form: 'Schedule D Line 15', display: 'inline',
-        expr: sub(add(R('in.ltGain'), R('fed.txLongTerm'), each('src.k1', 'k1Lt'), R('fed.capGainDistributions'), R('fed.homeSaleTaxableGain')), R('in.ltCapCarryover')) });
+        expr: sub(add(atLeast0(R('in.section1231Gain')), R('in.ltGain'), R('fed.txLongTerm'), each('src.k1', 'k1Lt'), R('fed.capGainDistributions'), R('fed.homeSaleTaxableGain')), R('in.ltCapCarryover')) });
     q({ id: 'fed.capNet', label: 'Net Capital Gain/Loss', unit: 'usd', form: 'Schedule D Line 16', category: 'capital',
         expr: add(R('fed.shortTermGain'), R('fed.longTermGain')) });
     q({ id: 'fed.capAllowed', label: 'Capital Gain/Loss on Return', unit: 'usd', form: 'Form 1040 Line 7', category: 'capital', optional: true,
@@ -415,8 +440,24 @@ function defineQuantities(g, year) {
         expr: max(R('fed.k1PassiveNet'), neg(atLeast0(R('fed.rentalNet')))) });
     q({ id: 'fed.k1Income', label: 'Schedule K-1 Income', unit: 'usd', form: 'Schedule E Part II', category: 'wages', optional: true,
         expr: add(R('fed.k1Nonpassive'), R('fed.k1PassiveAllowed')) });
+    // Form 8606 Part I: with nondeductible IRA basis, the nontaxable share of IRA distributions and Roth conversions is
+    // basis ÷ (year-end value + distributions + conversions). The basis entered includes this year's nondeductible contributions
+    // (Form 8606 lines 1–3; entering it avoids the IRA-deduction ↔ taxable-distribution loop the Pub. 590-A worksheets resolve by hand).
+    q({ id: 'fed.iraDistributions', label: 'IRA Distributions (not rolled over)', unit: 'usd', display: 'inline', optional: true,
+        expr: sumOver('src.r', mul(mul(field('amount'), field('isIra')), field('nonRollover'))) });
+    q({ id: 'fed.iraTotalBasis', label: 'Total IRA Basis (Form 8606 line 3)', unit: 'usd', display: 'inline', optional: true,
+        expr: R('in.iraBasis') });
+    q({ id: 'fed.iraNontaxableRatio', label: 'Nontaxable Share of IRA Distributions (Form 8606 line 10)', unit: 'rate', category: 'wages', optional: true,
+        appliesWhen: gt(R('fed.iraTotalBasis'), lit(0)),
+        expr: div(round(mul(min(rate(1), div(R('fed.iraTotalBasis'), max(lit(1), add(R('in.iraYearEndValue'), R('fed.iraDistributions'), R('in.rothConversion'))))), lit(100000)), 'dollar'), lit(100000)) });
+    q({ id: 'fed.iraNontaxable', label: 'Nontaxable IRA Distributions (Form 8606)', unit: 'usd', form: 'Form 8606 line 13', category: 'wages', optional: true,
+        expr: when(gt(R('fed.iraTotalBasis'), lit(0)), round(mul(R('fed.iraDistributions'), R('fed.iraNontaxableRatio'))), lit(0)) });
+    q({ id: 'fed.rothConversionTaxable', label: 'Taxable Roth Conversion', unit: 'usd', form: 'Form 8606 line 18', category: 'wages', optional: true,
+        expr: round(mul(R('in.rothConversion'), sub(rate(1), when(gt(R('fed.iraTotalBasis'), lit(0)), R('fed.iraNontaxableRatio'), rate(0))))) });
+    q({ id: 'fed.qcdExcluded', label: 'Qualified Charitable Distributions Excluded', unit: 'usd', form: 'Form 1040 Line 4b (QCD)', category: 'wages', optional: true,
+        expr: min(each('src.r', 'qcd', 'nonRollover'), P('fed.qcdLimit')) });
     q({ id: 'fed.retirement', label: 'Taxable Retirement Distributions', unit: 'usd', form: 'Form 1040 Lines 4b/5b', category: 'wages', optional: true,
-        expr: each('src.r', 'taxable', 'nonRollover') });
+        expr: atLeast0(add(sub(each('src.r', 'taxable', 'nonRollover'), R('fed.iraNontaxable'), R('fed.qcdExcluded')), R('fed.rothConversionTaxable'))) });
     // Form 5329 Part I: early distributions minus amounts that meet an exception (age 55 separation, disability, first home, etc.).
     q({ id: 'fed.earlyDistributions', label: 'Early Distributions Subject to 10% Tax', unit: 'usd', display: 'inline',
         expr: atLeast0(sub(each('src.r', 'taxable', 'penalty'), each('src.r', 'penaltyException', 'penalty'))) });
@@ -431,7 +472,7 @@ function defineQuantities(g, year) {
     q({ id: 'fed.extraWithholding', label: '1099 Federal Tax Withheld', unit: 'usd', form: 'Form 1040 Line 25b', category: 'withholding', optional: true,
         expr: add(...['src.nec', 'src.k', 'src.f', 'src.int', 'src.div', 'src.k1', 'src.r', 'src.ssa', 'src.w2g', 'src.misc', 'src.g', 'src.other'].map(c => each(c, 'fedWithheld'))) });
     q({ id: 'fed.documentIncome', label: '1099 & Business Income', unit: 'usd', display: 'inline',
-        expr: add(R('fed.businessProfit'), R('fed.interest1099'), R('fed.dividends'), R('fed.k1Income'), R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableStateRefund')) });
+        expr: add(R('fed.businessProfit'), R('fed.interest1099'), R('fed.dividends'), R('fed.k1Income'), R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableStateRefund'), R('fed.form4797Ordinary')) });
     // ---------- Self-employment tax (Schedule SE) ----------
     // One Schedule SE per person: each spouse's $400 test and wage base are separate.
     q({ id: 'fed.taxpayerSeEarnings', label: "Taxpayer's Net SE Earnings", unit: 'usd', display: 'inline', optional: true,
@@ -560,7 +601,7 @@ function defineQuantities(g, year) {
     // ---------- Total income & AGI ----------
     q({ id: 'fed.feie', label: 'Foreign Earned Income Exclusion', unit: 'usd', display: 'inline', optional: true, expr: min(R('in.feie'), P('fed.feieLimit')) });
     q({ id: 'fed.totalIncome', label: 'Total Income', unit: 'usd', form: 'Form 1040 Line 9', category: 'wages',
-        expr: round(atLeast0(sub(add(R('fed.wages'), R('fed.depCareTaxable'), R('fed.interestTotal'), R('fed.dividends'), R('fed.businessProfit'), R('fed.k1Income'), R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableStateRefund'), R('fed.taxableSS'), R('fed.capAllowed'), R('fed.rentalAllowed'), R('in.alimonyReceived'), R('in.tips')), R('fed.feie')))) });
+        expr: round(atLeast0(sub(add(R('fed.wages'), R('fed.depCareTaxable'), R('fed.interestTotal'), R('fed.dividends'), R('fed.businessProfit'), R('fed.k1Income'), R('fed.retirement'), R('fed.gambling'), R('fed.otherSourceIncome'), R('fed.taxableStateRefund'), R('fed.taxableSS'), R('fed.capAllowed'), R('fed.rentalAllowed'), R('in.alimonyReceived'), R('in.tips'), R('fed.form4797Ordinary')), R('fed.feie')))) });
     q({ id: 'fed.nolDeduction', label: 'Net Operating Loss Deduction', unit: 'usd', form: 'Schedule 1 Line 8a', category: 'adjustments', optional: true,
         presentIf: gt(R('in.nolCarryover'), lit(0)),
         expr: round(min(R('in.nolCarryover'), mul(atLeast0(sub(R('fed.totalIncome'), R('fed.adjustments'), P('fed.stdBase'))), rate(0.8)))) });
@@ -641,7 +682,22 @@ function defineQuantities(g, year) {
         expr: atLeast0(sub(add(atLeast0(sub(R('fed.businessProfit'), R('fed.halfSeTax'), R('fed.seRetirementDeduction'), R('fed.seHealthDeduction'))), atLeast0(sub(R('fed.k1Income'), R('fed.k1Guaranteed')))), R('in.qbiLossCarryover'))) });
     q({ id: 'fed.qbiIncomeLimit', label: 'QBI Taxable Income Limit Base', unit: 'usd', category: 'adjustments',
         expr: atLeast0(sub(atLeast0(sub(R('fed.agi'), R('fed.deduction'))), add(R('fed.qualifiedDividends'), R('fed.netLtcg')))) });
-    const qbiBase = round(min(mul(R('fed.qbiIncome'), rate(0.2)), mul(R('fed.qbiIncomeLimit'), rate(0.2))));
+    // Form 8995-A: above the threshold the 20% is limited to the greater of 50% of W-2 wages or 25% of wages + 2.5% of UBIA,
+    // phased in over the range; a specified service business's QBI, wages and UBIA shrink to nothing across the same range.
+    q({ id: 'fed.qbiTaxableIncomeBefore', label: 'Taxable Income Before QBI Deduction', unit: 'usd', display: 'inline', expr: atLeast0(sub(R('fed.agi'), R('fed.deduction'))) });
+    q({ id: 'fed.qbiPhaseIn', label: 'QBI Phase-In Percentage', unit: 'rate', category: 'adjustments', optional: true,
+        appliesWhen: gt(R('fed.qbiTaxableIncomeBefore'), P('fed.qbiThreshold')),
+        expr: min(rate(1), div(atLeast0(sub(R('fed.qbiTaxableIncomeBefore'), P('fed.qbiThreshold'))), P('fed.qbiPhaseRange'))) });
+    const sstb = flag('fed.qbiSstb', 'a specified service business', 'not a specified service business', 'check-adv-sstb');
+    const phase = when(gt(R('fed.qbiTaxableIncomeBefore'), P('fed.qbiThreshold')), R('fed.qbiPhaseIn'), rate(0));
+    const applicable = when(sstb, sub(rate(1), phase), rate(1));
+    q({ id: 'fed.qbiTentative', label: '20% of Qualified Business Income', unit: 'usd', display: 'inline', expr: mul(mul(R('fed.qbiIncome'), applicable), rate(0.2)) });
+    q({ id: 'fed.qbiWageLimit', label: 'W-2 Wage / UBIA Limit', unit: 'usd', category: 'adjustments', optional: true,
+        appliesWhen: gt(R('fed.qbiTaxableIncomeBefore'), P('fed.qbiThreshold')),
+        expr: mul(max(mul(R('in.qbiW2Wages'), rate(0.5)), add(mul(R('in.qbiW2Wages'), rate(0.25)), mul(R('in.qbiUbia'), rate(0.025)))), applicable) });
+    q({ id: 'fed.qbiComponent', label: 'QBI Component', unit: 'usd', category: 'adjustments', optional: true,
+        expr: when(lte(R('fed.qbiTaxableIncomeBefore'), P('fed.qbiThreshold')), R('fed.qbiTentative'), sub(R('fed.qbiTentative'), mul(atLeast0(sub(R('fed.qbiTentative'), R('fed.qbiWageLimit'))), R('fed.qbiPhaseIn')))) });
+    const qbiBase = round(min(R('fed.qbiComponent'), mul(R('fed.qbiIncomeLimit'), rate(0.2))));
     q({ id: 'fed.qbi', label: 'QBI Deduction', unit: 'usd', form: 'Form 1040 Line 13', category: 'adjustments', optional: true,
         // P.L. 119-21 §70105: from 2026, at least $400 when QBI from active businesses is $1,000 or more.
         expr: year >= 2026 ? when(gte(R('fed.qbiIncome'), lit(1000)), max(lit(400), qbiBase), qbiBase) : qbiBase });
@@ -693,13 +749,14 @@ function defineQuantities(g, year) {
     const taxOn = (id, label, income, extra = {}) => {
         q({ id: `${id}Row`, label: 'Tax Table Row Midpoint', unit: 'usd', category: 'tax', appliesWhen: lt(R(income), lit(100000)), expr: tableMidpoint(R(income)) });
         q({ id, label, unit: 'usd', category: 'tax', ...extra,
-            expr: when(lt(R(income), lit(100000)), round(brackets(R(`${id}Row`), 'fed.brackets'), 'dollar'), brackets(R(income), 'fed.brackets')) });
+            // Foreign Earned Income Tax Worksheet: with excluded foreign earned income, tax = tax on (income + exclusion) − tax on the exclusion.
+            expr: when(gt(R('fed.feie'), lit(0)), round(sub(brackets(add(R(income), R('fed.feie')), 'fed.brackets'), brackets(R('fed.feie'), 'fed.brackets'))), when(lt(R(income), lit(100000)), round(brackets(R(`${id}Row`), 'fed.brackets'), 'dollar'), brackets(R(income), 'fed.brackets'))) });
     };
     taxOn('fed.ordinaryTax', 'Tax on Ordinary Income', 'fed.ordinaryTaxable');
     q({ id: 'fed.standardPrefIncome', label: 'Qualified Dividends & 0/15/20% Gains', unit: 'usd', display: 'inline',
         expr: min(R('fed.preferentialIncome'), add(R('fed.qualifiedDividends'), R('fed.standardLtcg'))) });
     q({ id: 'fed.standardPrefTax', label: 'Qualified Dividends & Capital Gains Tax', unit: 'usd', category: 'capital', optional: true,
-        expr: brackets(R('fed.standardPrefIncome'), 'fed.ltcgBrackets', R('fed.ordinaryTaxable')) });
+        expr: brackets(R('fed.standardPrefIncome'), 'fed.ltcgBrackets', add(R('fed.ordinaryTaxable'), R('fed.feie'))) });
     q({ id: 'fed.remainingSpecial', label: 'Remaining 25%/28% Gains', unit: 'usd', display: 'inline',
         expr: atLeast0(sub(R('fed.preferentialIncome'), R('fed.standardPrefIncome'))) });
     q({ id: 'fed.applied1250', label: 'Unrecaptured §1250 Gain Taxed', unit: 'usd', display: 'inline', expr: min(R('fed.remainingSpecial'), R('in.unrecap1250')) });
@@ -711,8 +768,19 @@ function defineQuantities(g, year) {
     // QDCG / Schedule D Tax Worksheet: tax is the smaller of the special-rate computation and regular tax on all income
     // (so the 25% / 28% rates are maximums, never above the ordinary rate).
     taxOn('fed.regularTax', 'Regular Tax on All Taxable Income', 'fed.taxableIncome', { appliesWhen: gt(R('fed.preferentialIncome'), lit(0)) });
-    q({ id: 'fed.tax', label: 'Income Tax', unit: 'usd', form: 'Form 1040 Line 16', category: 'tax',
+    // Form 8615: a dependent child's net unearned income above twice the dependent standard deduction minimum is taxed at
+    // the parent's rate: tax(parent TI + child's NUI) − tax(parent TI), plus the child's own-rate tax on the rest.
+    const kiddie = and(flag('fed.claimedAsDependent', 'someone can claim you as a dependent', 'no one can claim you as a dependent', 'check-claimed-as-dependent'), gt(R('in.parentTaxableIncome'), lit(0)));
+    q({ id: 'fed.kiddieUnearned', label: 'Net Unearned Income (Form 8615 line 5)', unit: 'usd', category: 'tax', optional: true, appliesWhen: kiddie,
+        expr: min(R('fed.taxableIncome'), atLeast0(sub(add(R('fed.interestTotal'), R('fed.dividends'), atLeast0(R('fed.capAllowed'))), P('fed.kiddieThreshold')))) });
+    const parentJoint = flag('fed.parentJoint', 'parent files jointly', 'parent files single', 'check-adv-parent-joint');
+    const parentTax = (x) => when(parentJoint, brackets(x, 'fed.bracketsJoint'), brackets(x, 'fed.bracketsSingleSched'));
+    q({ id: 'fed.kiddieTax', label: 'Tax Using Parent\'s Rate (Form 8615 line 18)', unit: 'usd', form: 'Form 8615', category: 'tax', optional: true, appliesWhen: kiddie,
+        expr: round(add(sub(parentTax(add(R('in.parentTaxableIncome'), R('fed.kiddieUnearned'))), parentTax(R('in.parentTaxableIncome'))), brackets(atLeast0(sub(R('fed.taxableIncome'), R('fed.kiddieUnearned'))), 'fed.brackets'))) });
+    q({ id: 'fed.taxBeforeKiddie', label: 'Income Tax (child\'s own rates)', unit: 'usd', display: 'inline',
         expr: when(gt(R('fed.preferentialIncome'), lit(0)), round(min(add(R('fed.ordinaryTax'), R('fed.preferentialTax')), R('fed.regularTax'))), round(R('fed.ordinaryTax'))) });
+    q({ id: 'fed.tax', label: 'Income Tax', unit: 'usd', form: 'Form 1040 Line 16', category: 'tax',
+        expr: when(kiddie, max(R('fed.taxBeforeKiddie'), R('fed.kiddieTax')), R('fed.taxBeforeKiddie')) });
     // ---------- Credits ----------
     q({ id: 'fed.ctcMax', label: 'Child Tax Credit Before Phaseout', unit: 'usd', display: 'inline', expr: mul(R('fed.ctcChildren'), P('fed.ctcPerChild')) });
     q({ id: 'fed.odcMax', label: 'Other Dependent Credit Before Phaseout', unit: 'usd', display: 'inline', expr: mul(R('fed.odcDependents'), P('fed.odcPerDependent')) });
@@ -884,7 +952,7 @@ function defineQuantities(g, year) {
         expr: round(mul(R('fed.niitBase'), P('fed.niitRate'))) });
     q({ id: 'fed.amti', label: 'Alternative Minimum Taxable Income', unit: 'usd', form: 'Form 6251 Line 4', category: 'tax',
         // Form 6251: standard-deduction filers get no deduction against AMTI; itemizers keep everything except SALT.
-        expr: atLeast0(sub(R('fed.agi'), when(gt(R('fed.itemizing'), num(0)), add(R('fed.medicalDeduction'), R('fed.mortgageDeduction'), R('fed.charityDeduction'), R('fed.gamblingLossDeduction')), lit(0)), R('fed.qbi'))) });
+        expr: atLeast0(sub(R('fed.agi'), when(gt(R('fed.itemizing'), num(0)), add(R('fed.medicalDeduction'), R('fed.mortgageDeduction'), R('fed.charityDeduction'), R('fed.gamblingLossDeduction')), lit(0)), R('fed.qbi'), neg(add(R('in.isoSpread'), R('in.pabInterest'))))) });
     q({ id: 'fed.amtExemptionAllowed', label: 'AMT Exemption After Phaseout', unit: 'usd', category: 'tax',
         expr: atLeast0(sub(P('fed.amtExemption'), mul(atLeast0(sub(R('fed.amti'), P('fed.amtPhaseStart'))), P('fed.amtPhaseRate')))) });
     q({ id: 'fed.amtOrdinaryBase', label: 'AMT Base Excluding Preferential Income', unit: 'usd', display: 'inline',
@@ -920,6 +988,10 @@ function defineQuantities(g, year) {
     q({ id: 'fed.netResult', label: 'Payments Minus Tax', unit: 'usd', display: 'inline', expr: round(sub(R('fed.payments'), R('fed.totalTax'))) });
     q({ id: 'fed.refund', label: 'Refund', unit: 'usd', form: 'Form 1040 Line 34', category: 'refund',
         appliesWhen: gte(R('fed.netResult'), lit(0)), expr: round(sub(R('fed.payments'), R('fed.totalTax'))) });
+    q({ id: 'fed.refundApplied', label: 'Refund Applied to Next Year\'s Estimated Tax', unit: 'usd', form: 'Form 1040 Line 36', category: 'refund', optional: true,
+        expr: when(gte(R('fed.netResult'), lit(0)), min(R('in.refundToNextYear'), R('fed.netResult')), lit(0)) });
+    q({ id: 'fed.refundPaid', label: 'Refunded to You', unit: 'usd', form: 'Form 1040 Line 35a', category: 'refund', optional: true,
+        presentIf: gt(R('fed.refundApplied'), lit(0)), expr: when(gte(R('fed.netResult'), lit(0)), sub(R('fed.netResult'), R('fed.refundApplied')), lit(0)) });
     q({ id: 'fed.owed', label: 'Amount You Owe', unit: 'usd', form: 'Form 1040 Line 37', category: 'owed',
         appliesWhen: lt(R('fed.netResult'), lit(0)), expr: round(sub(R('fed.totalTax'), R('fed.payments'))) });
     // ---------- Form 2210 safe harbor (informational; the IRS computes any penalty) ----------
@@ -1034,6 +1106,7 @@ export function federalContext(state) {
                     penalty: r.early && !r.rollover ? 1 : 0,
                     simple: r.early && r.simple && !r.rollover ? 1 : 0,
                     isSpouse: joint && s.owner === 'spouse' ? 1 : 0,
+                    isIra: s.iraDistribution ? 1 : 0, qcd: n(s.qcdAmount),
                     k1Rental: n(s.k1Rental), k1Guaranteed: n(s.k1Guaranteed), k1Interest: n(s.k1Interest), k1Dividends: n(s.k1Dividends),
                     k1QualDiv: n(s.k1QualifiedDividends), k1St: n(s.k1ShortTermGain), k1Lt: n(s.k1LongTermGain), k1Se: n(s.k1SeEarnings), passive: s.passive ? 1 : 0
                 }
@@ -1050,6 +1123,8 @@ export function federalContext(state) {
         status: normalizeFilingStatus(state.filingStatus || 'single'),
         flags: {
             'fed.forceItemized': state.deductionMethod === 'itemized',
+            'fed.qbiSstb': Boolean(state.advanced?.qbiSstb),
+            'fed.parentJoint': Boolean(state.advanced?.parentMarriedJoint),
             'fed.fplAlaska': state.ptcRegion === 'AK',
             'ret.militaryHome': Boolean(state.militaryStationedInHomeState),
             'fed.fplHawaii': state.ptcRegion === 'HI',
@@ -1128,6 +1203,11 @@ export function federalContext(state) {
             'in.adoption': n(d.adoptionCredit),
             'in.elderly': n(d.elderlyDisabledCredit),
             'in.ptc': n(d.premiumTaxCredit),
+            'in.iraBasis': n(state.advanced?.iraBasis), 'in.iraYearEndValue': n(state.advanced?.iraYearEndValue), 'in.rothConversion': n(state.advanced?.rothConversion),
+            'in.form4797Ordinary': n(state.advanced?.form4797Ordinary), 'in.section1231Gain': n(state.advanced?.section1231Gain),
+            'in.qbiW2Wages': n(state.advanced?.qbiW2Wages), 'in.qbiUbia': n(state.advanced?.qbiUbia), 'in.isoSpread': n(state.advanced?.isoSpread),
+            'in.pabInterest': n(state.advanced?.privateActivityBondInterest), 'in.refundToNextYear': n(state.advanced?.applyRefundToNextYear),
+            'in.parentTaxableIncome': n(state.advanced?.parentTaxableIncome),
             'in.ptcHouseholdSize': n(state.ptcHouseholdSize) || (1 + (joint ? 1 : 0) + ((d.list || []).length > 0 ? (d.list || []).length : int(d.childrenCount) + int(d.otherDependentsCount))),
             'in.ltCapCarryover': n(state.carryovers?.longTermCapitalLoss),
             'in.palCarryover': n(state.carryovers?.passiveLoss),

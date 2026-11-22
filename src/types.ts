@@ -101,6 +101,10 @@ export interface IncomeSource {
   rollover?: boolean; // 1099-R distribution code G/H direct rollover (not taxable)
   /** 1099-R box 7 distribution code(s), e.g. '7', '1', '2', 'G', '1B', 'Q', 'S'. When set it decides rollover / early / Roth treatment. */
   distributionCode?: string;
+  /** 1099-R: IRA/SEP/SIMPLE box checked (Form 8606 pro-rata basis applies). */
+  iraDistribution?: boolean;
+  /** 1099-R: qualified charitable distribution sent directly to charity (age 70½+). */
+  qcdAmount?: number;
   // Schedule K-1 boxes (Form 1065 / 1120-S); `amount` is box 1 ordinary business income.
   k1Rental?: number; // box 2 net rental real estate income (loss)
   k1Guaranteed?: number; // 1065 box 4c guaranteed payments (nonpassive, SE income, not QBI)
@@ -240,6 +244,23 @@ export interface MarketplacePolicy {
 }
 
 /** Amounts carried in from last year's return. */
+/** Less common federal items (Forms 8606, 4797, 8995-A, 6251 preferences, 8615). */
+export interface AdvancedFederal {
+  iraBasis?: number; // Form 8606 line 2: basis in traditional IRAs from prior nondeductible contributions
+  iraYearEndValue?: number; // Form 8606 line 6: value of all traditional/SEP/SIMPLE IRAs on Dec 31
+  rothConversion?: number; // Form 8606 line 8
+  form4797Ordinary?: number; // Form 4797 Part II ordinary gain (incl. §1245 recapture)
+  section1231Gain?: number; // Form 4797 Part I net §1231 gain (loss)
+  qbiW2Wages?: number; // Form 8995-A: W-2 wages paid by the qualified businesses
+  qbiUbia?: number; // Form 8995-A: UBIA of qualified property
+  qbiSstb?: boolean; // specified service trade or business
+  isoSpread?: number; // Form 6251 line 2i: incentive stock option bargain element
+  privateActivityBondInterest?: number; // Form 6251 line 2g
+  applyRefundToNextYear?: number; // Form 1040 line 36
+  parentTaxableIncome?: number; // Form 8615 line 6 (kiddie tax)
+  parentMarriedJoint?: boolean; // parent files a joint return
+}
+
 export interface Carryovers {
   shortTermCapitalLoss?: number;
   longTermCapitalLoss?: number;
@@ -321,6 +342,16 @@ export interface TaxAppState {
   /** Poverty-line table: 48 states & DC, Alaska or Hawaii. */
   ptcRegion?: 'contiguous' | 'AK' | 'HI';
   carryovers?: Carryovers;
+  advanced?: AdvancedFederal;
+  /** Situations this app does not compute; flagged in the Review card with a referral (B43/B44). */
+  specialSituations?: string[];
+  /** Use tax owed on out-of-state purchases, added to the resident state's tax (C15). */
+  stateUseTax?: number;
+  /** Direct deposit for the refund (Form 1040 lines 35b–35d) and the IRS Identity Protection PIN (E5). */
+  refundRouting?: string;
+  refundAccount?: string;
+  refundAccountType?: 'checking' | 'savings';
+  ipPin?: string;
   w2s: W2Data[];
   otherIncome: OtherIncome;
   adjustments: Adjustments;

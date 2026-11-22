@@ -106,6 +106,7 @@ function catalogKeyFor(code, itemKey) {
 export function returnContext(state, plan) {
     const ctx = federalContext(state);
     const n = (v) => Number(v) || 0;
+    ctx.inputs['in.stateUseTax'] = n(state.stateUseTax);
     ctx.inputs['in.priorStateMonths'] = plan.priorState ? Math.max(0, Math.min(11, (Number(state.partYear?.moveMonth) || 1) - 1)) : 0;
     const codes = [plan.resident, ...plan.nonresidents].filter(Boolean);
     codes.forEach(code => {
@@ -156,6 +157,7 @@ function defineShared(g) {
     g.param({ id: 'st.taxpayerCount', label: 'Taxpayers on Return', unit: 'count', domSources: ['select-filing-status'],
         resolve: c => (c.status === 'married_joint' ? 2 : 1) });
     // Part-year residency: income other than W-2 wages is allocated by months of residence in each state.
+    g.input({ id: 'in.stateUseTax', label: 'Use Tax on Out-of-State Purchases', unit: 'usd', domId: 'input-state-use-tax', optional: true });
     g.input({ id: 'in.priorStateMonths', label: 'Months in Previous State', unit: 'count', domId: 'select-move-month', max: 11 });
     g.quantity({ id: 'ret.nonWageIncome', label: 'Income Other Than W-2 Wages', unit: 'usd', category: 'state', expr: sub(R('fed.totalIncome'), R('fed.wages')) });
     g.quantity({ id: 'ret.priorShare', label: 'Share of Year in Previous State', unit: 'rate', display: 'inline', expr: div(R('in.priorStateMonths'), num(12)) });
@@ -919,7 +921,9 @@ function defineResident(g, plan) {
     q('refundableCredits', { label: `${code} Refundable Credits`, unit: 'usd', category: 'state_credit', optional: true, expr: refundable.length ? add(...refundable) : lit(0) });
     q('netStateTax', { label: `${code} Net State Tax`, unit: 'usd', category: 'state',
         expr: atLeast0(round(sub(R(S('tentativeTax')), R(S('nonrefundableCredits'))))) });
-    q('totalTax', { label: `${code} Total Tax`, unit: 'usd', category: 'state', expr: round(add(R(S('netStateTax')), R(S('localTax')))) });
+    // Use tax on out-of-state purchases is reported on the resident return (C15).
+    q('useTax', { label: `${code} Use Tax`, unit: 'usd', category: 'state', optional: true, expr: R('in.stateUseTax') });
+    q('totalTax', { label: `${code} Total Tax`, unit: 'usd', category: 'state', expr: round(add(R(S('netStateTax')), R(S('localTax')), R(S('useTax')))) });
     q('totalWithholding', { label: `${code} Total Withholding`, unit: 'usd', category: 'withholding',
         expr: add(when(gt(R(S('localTax')), lit(0)), add(R(S('w2Withheld')), R(S('localWithheld'))), R(S('w2Withheld'))), R(S('estimatedPayments'))) });
     q('net', { label: `${code} Refund / (Owed)`, unit: 'usd', category: 'state',
@@ -1036,7 +1040,7 @@ export function stateBlocks(plan, code, g) {
         const ostc = plan.nonresidents.filter(nr => has(`ostc.${nr.toLowerCase()}`)).map(nr => S(`ostc.${nr.toLowerCase()}`));
         blocks.push({ id: `calc-state-${lc}-card`, stepLabel: `${name} • Credits, Total Tax & Net Outcome`, title: `${rule.formResident} • Bottom Line`, isOutput: true,
             quantities: [...ostc, S('otherStateCredit'), S('stateEitc'), S('exemptionCredit'), ...pick('ssCredit', 'nycSchoolTaxCredit', 'nycRateReduction', 'nycEitc'), S('panelCred'), S('nonrefundableCredits'), { id: S('netStateTax'), show: 'always' },
-                { id: S('totalTax'), show: 'always' }, { id: S('totalWithholding'), show: 'always' }, S('refundableCredits'), { id: S('net'), show: 'always' }] });
+                S('useTax'), { id: S('totalTax'), show: 'always' }, { id: S('totalWithholding'), show: 'always' }, S('refundableCredits'), { id: S('net'), show: 'always' }] });
         return blocks;
     }
     const out = [];

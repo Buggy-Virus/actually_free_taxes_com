@@ -54,26 +54,26 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | B22 | P1 | Premium Tax Credit reconciliation (Form 8962 from 1095-A) | Net PTC entered | 1095-A inputs, FPL table, applicable %; 2026 caps removed | ✅ 1095-A list → Form 8962 annual method: household income, prior-year FPL (48/AK/HI), applicable figure (2024–25 enhanced; 2026 Rev. Proc. 2025-25 with 400% limit), repayment caps (none from 2026). Monthly allocation and shared policies not modeled |
 | B23 | P1 | Schedule K-1 box-level entry (ordinary, guaranteed payments → SE, rental, interest, dividends, gains, §199A, passive flag) | One amount, treated as nonpassive QBI | K-1 record | ✅ K-1 boxes 1, 2, 4, 5, 6a/6b, 8, 9a, 14A + passive flag: interest/dividends/gains to their lines, guaranteed payments SE but not QBI, passive losses limited to passive income |
 | B24 | P1 | Multiple rental properties, personal-use days, depreciation computation | One property, depreciation entered | Property records | ✅ Rental properties list: 27.5-year SL mid-month depreciation from basis, §280A vacation-home allocation and 15-day rule; state sourcing still uses the single-property panel |
-| B25 | P2 | Kiddie tax (Form 8615) | — | Needs A1 + parent's rate | ⬜ |
-| B26 | P2 | Form 8606 nondeductible IRA basis / Roth conversions | — | Basis inputs | ⬜ |
-| B27 | P2 | QCDs, Simplified Method, RRB-1099, SS lump-sum election | — | | ⬜ |
+| B25 | P2 | Kiddie tax (Form 8615) | — | Needs A1 + parent's rate | ✅ Form 8615 when a parent can claim you and the parent's taxable income is entered: net unearned income over $2,600 / $2,700 at the parent's rate (single or joint schedule); age/student test and sibling allocation not checked |
+| B26 | P2 | Form 8606 nondeductible IRA basis / Roth conversions | — | Basis inputs | ✅ Form 8606 pro-rata: basis ÷ (year-end value + IRA distributions + conversions) for 1099-Rs marked IRA, and taxable Roth conversions |
+| B27 | P2 | QCDs, Simplified Method, RRB-1099, SS lump-sum election | — | | ✅ QCDs excluded up to $105,000 / $108,000 / $111,000 (2026 limit per IRS indexing — verify); Simplified Method, RRB-1099 and the SS lump-sum election not modeled |
 | B28 | P2 | §121 home sale exclusion | — | Gain, ownership/use years | ✅ Home-sale panel: $250k / $500k (both spouses meet use test) exclusion, rest to long-term gain; partial exclusions (job move, health) and depreciation recapture not modeled |
-| B29 | P2 | Form 4797 business property sales, §1245/§1250 recapture | — | | ⬜ |
-| B30 | P2 | QBI above threshold (Form 8995-A: SSTB, W-2 wages / UBIA), REIT/PTP | Simple 20% | W-2 wages / UBIA per business | ⬜ |
+| B29 | P2 | Form 4797 business property sales, §1245/§1250 recapture | — | | ✅ Form 4797 inputs: net §1231 gain → long-term gain (loss → ordinary), Part II ordinary gain incl. §1245 recapture; 5-year §1231 lookback not modeled |
+| B30 | P2 | QBI above threshold (Form 8995-A: SSTB, W-2 wages / UBIA), REIT/PTP | Simple 20% | W-2 wages / UBIA per business | ✅ Form 8995-A (aggregated): W-2 wage / UBIA limit and SSTB phase-out across the $50k/$100k (2026: $75k/$150k) range; per-business netting, REIT/PTP not modeled |
 | B31 | P2 | Foreign tax credit limitation (Form 1116) and $300/$600 de minimis | Entered amount | Foreign income/tax inputs | ✅ $300 / $600 de minimis; Form 1116 limit (tax × foreign income ÷ taxable income) once foreign income is entered; Review warns when it is missing. One category, no carryback/forward, no QDCG adjustment |
-| B32 | P2 | FEIE housing exclusion and stacking worksheet | Exclusion capped | Stacking worksheet in tax | ⬜ |
+| B32 | P2 | FEIE housing exclusion and stacking worksheet | Exclusion capped | Stacking worksheet in tax | ✅ Foreign Earned Income Tax Worksheet stacking (ordinary and capital-gain tax figured with the exclusion added back); housing exclusion/deduction not modeled |
 | B33 | P2 | Adoption credit MAGI phase-out and refundable part (2025+) | Capped amount, nonrefundable | | ✅ Form 8839 MAGI phase-out ($252,150 / $259,190 + $40,000), 2025 refundable part up to $5,000; one child, no carryforward |
 | B34 | P2 | Schedule R elderly/disabled credit computed | Entered amount | From A1 | ✅ Schedule R from ages: $5,000 / $7,500 / $3,750 initial amounts, nontaxable SS and ½ AGI over $7,500 / $10,000 / $5,000; under-65 disability uses the entered amount |
 | B35 | P2 | Education credits per student, 4-year AOTC limit | One student | From A2 (students) | ⬜ |
 | B36 | P2 | Schedule H household employment taxes computed | Entered amount | Cash wages paid | ✅ Cash wages → 15.3% FICA at $2,700 / $2,800 threshold + 0.6% FUTA on first $7,000; entered amount still accepted; one employee, no credit-reduction states |
-| B37 | P2 | AMT preferences (ISO spread, PAB interest), Form 8801 credit | Basic AMT | | ⬜ |
+| B37 | P2 | AMT preferences (ISO spread, PAB interest), Form 8801 credit | Basic AMT | | ✅ ISO spread and private activity bond interest added to AMTI; Form 8801 credit from the carryovers panel (A5) |
 | B38 | P2 | NIIT on passive K-1 and royalties | | From B23 | ✅ Passive K-1 income in net investment income; royalties not separately modeled |
 | B39 | P2 | MFS: spouse itemizes → standard deduction $0 | | Checkbox | ✅ "MFS: spouse itemizes" checkbox |
 | B40 | P2 | Filing requirement check ("Do I need to file?") | | Gross income vs thresholds | ✅ Review card: Chart A gross-income threshold (65+ amounts, MFS $5, $400 SE earnings), suggests filing for a refund; dependents filers not yet covered |
 | B41 | P2 | Form 2210 penalty amount (quarterly), annualized method | Required payment + shortfall only | | ⬜ |
-| B42 | P2 | Extension payment (Form 4868), refund applied to next year, split refunds | | | ⬜ |
-| B43 | P3 | §1202 QSBS, §1256 (6781), installment sales, like-kind exchanges, NOL computation, at-risk, §461(l), COD (982) | — | Detect & refer | ⬜ |
-| B44 | P3 | Nonresident alien / dual-status, deceased taxpayer final return | — | Detect & refer | ⬜ |
+| B42 | P2 | Extension payment (Form 4868), refund applied to next year, split refunds | | | ✅ Refund applied to next year (line 36) splits line 35a; extension payments go in estimated payments; split refunds (Form 8888) not modeled |
+| B43 | P3 | §1202 QSBS, §1256 (6781), installment sales, like-kind exchanges, NOL computation, at-risk, §461(l), COD (982) | — | Detect & refer | ✅ 'Situations this app does not handle' panel: QSBS, §1256, installment sales, like-kind exchanges, NOL creation, at-risk/§461(l), COD → Review card referral |
+| B44 | P3 | Nonresident alien / dual-status, deceased taxpayer final return | — | Detect & refer | ✅ Nonresident alien / dual-status, deceased taxpayer and foreign-account reporting flagged with a referral |
 
 ## C. State
 
@@ -98,7 +98,7 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | C12 | P1 | Convenience-of-employer rule (NY, NJ, CT, DE, NE, PA) | — | Work-from-home days | ✅ Work days in state / total days per W-2 state line: nonresident wages allocated by days, except NY/DE/NE/PA (and CT/NJ for residents of convenience-rule states) where remote convenience days stay in-state |
 | C13 | P1 | PFML / SDI payroll contributions and multi-employer excess refunds (CA SDI also federal SALT) | — | W-2 box 14 amounts | ✅ W-2 box 14 state disability / paid-leave contributions added to Schedule A state income taxes. Multi-employer excess refunds (NJ UI/DI/FLI) not modeled — CA SDI has no wage cap from 2024 |
 | C14 | P2 | State AMT (CA, CO, CT, MN) | — | | ⬜ |
-| C15 | P2 | Use tax line | — | Input | ⬜ |
+| C15 | P2 | Use tax line | — | Input | ✅ Use tax input added to the resident state's total tax |
 | C16 | P2 | Community property allocation (9 states) | — | | ⬜ |
 | C17 | P2 | Separate state filing status where allowed/required | — | | ⬜ |
 | C18 | P2 | Credit for taxes paid: per-state limitation formulas, local taxes, reverse credits | One ratio formula | | ⬜ |
@@ -128,8 +128,8 @@ Everything still missing or simplified, in one prioritized list. Detailed requir
 | E1 | P1 | Official Form 1040 + schedules PDF (field mapping from graph quantities) | Summary worksheet | Map `form` metadata on quantities to PDF fields | ✅ Download fills the IRS fillable Form 1040 (2024 and 2025 layouts bundled in assets/forms; 2026 uses 2025 until published) via pdf-lib from jsdelivr; fields mapped by position (src/form1040-fields.ts); tests tie out every line. Name/SSN/address, filing-status boxes, dependents and the schedules' PDFs not filled |
 | E2 | P1 | Line-by-line guide for Free File Fillable Forms | Main lines only | Generate from quantities' `form` labels | ✅ Line-by-line guide: every Form 1040 line plus each supporting-form line from the quantities' form labels (Schedules 1/2/3/A/C/D/E/SE, Forms 6251/8889/8959/8960/8962…), rows jump to the calculation |
 | E3 | P2 | State forms PDFs, e-file integrations | Mock | | ⬜ |
-| E4 | P2 | Amended return (1040-X) | — | Diff two drafts | ⬜ |
-| E5 | P2 | IP PIN, prior-year AGI for e-file signature, bank details | — | | ⬜ |
+| E4 | P2 | Amended return (1040-X) | — | Diff two drafts | ✅ 1040-X columns A/B/C comparing this draft with another saved draft |
+| E5 | P2 | IP PIN, prior-year AGI for e-file signature, bank details | — | | ✅ Refund routing/account (filled into the PDF lines 35b/35d when a refund is due), account type and IP PIN stored locally; prior-year AGI already captured for the safe harbor |
 
 ## F. Verification debt (values entered from memory — confirm against sources)
 

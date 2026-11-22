@@ -77,13 +77,20 @@ export function form1040Lines(ev: Evaluation, year: number): Form1040Line[] {
   add('32', 'Total other payments and refundable credits', line31 + sum('fed.eitc', 'fed.actc', 'fed.aotcRefundable'), ['fed.refundableCredits']);
   add('33', 'Total payments', v('fed.payments'), ['fed.payments']);
   add('34', 'Overpaid', v('fed.refund'), ['fed.refund']);
-  add('35a', 'Refunded to you', v('fed.refund'), ['fed.refund']);
+  add('35a', 'Refunded to you', v('fed.refundApplied') > 0 ? v('fed.refundPaid') : v('fed.refund'), ['fed.refund', 'fed.refundPaid']);
+  add('36', "Applied to next year's estimated tax", v('fed.refundApplied'), ['fed.refundApplied']);
   add('37', 'Amount you owe', v('fed.owed'), ['fed.owed']);
   return out;
 }
 
 /** The Form 1040 layout used for a tax year (2026 uses the 2025 layout until the 2026 form is published). */
 export const form1040Year = (year: number) => (year >= 2025 ? 2025 : 2024);
+
+/** Refund direct-deposit fields (Form 1040 lines 35b and 35d) by layout year. */
+export const REFUND_ACCOUNT_FIELDS: Record<number, { routing: string; account: string }> = {
+  2024: { routing: 'topmostSubform[0].Page2[0].RoutingNo[0].f2_25[0]', account: 'topmostSubform[0].Page2[0].AccountNo[0].f2_26[0]' },
+  2025: { routing: 'topmostSubform[0].Page2[0].RoutingNo[0].f2_32[0]', account: 'topmostSubform[0].Page2[0].AccountNo[0].f2_33[0]' }
+};
 
 /** Field name → text for filling the IRS fillable PDF (whole dollars, blank for zero). */
 export function form1040FieldValues(lines: Form1040Line[], year: number): Record<string, string> {

@@ -56,4 +56,8 @@ assert.ok(!has(base, /filing threshold/));
 assert.ok(!has({ ...low, otherIncome: { interest: 0, sources: [{ id: 9, type: '1099-NEC', payer: 'x', amount: 1000 }] } }, /filing threshold/), '$400+ of SE earnings requires a return');
 assert.ok(has({ ...low, taxpayer: { birthYear: 1950 }, w2s: [{ ...low.w2s[0], box1: 15000, box3: 15000, box5: 15000, box4: 930, box6: 217.5 }] }, /under the \$16,550 filing threshold/), '65+ raises the threshold');
 
-console.log('✓ Review checks: filing status, W-2 consistency, dependents, underpayment heads-up, filing requirement');
+// Detect & refer
+assert.ok(has({ ...base, specialSituations: ['nra'] }, /Form 1040-NR/), 'nonresident alien is referred');
+assert.ok(has({ ...base, specialSituations: ['sec1256'] }, /Form 6781/), 'section 1256 is referred');
+
+console.log('✓ Review checks: filing status, W-2 consistency, dependents, underpayment heads-up, filing requirement, referrals');
