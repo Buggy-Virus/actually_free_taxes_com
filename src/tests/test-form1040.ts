@@ -39,7 +39,7 @@ for (const year of [2024, 2025, 2026] as const) {
     close(L('25a') + L('25b') + L('25c'), L('25d'), `${year} line 25d`);
     close(L('25d') + L('26') + L('32'), L('33'), `${year} line 33 = 25d + 26 + 32`);
     close(Math.max(0, L('33') - L('24')), L('34'), `${year} line 34 = overpaid`);
-    close(Math.max(0, L('24') - L('33')), L('37'), `${year} line 37 = owed`);
+    close(Math.max(0, L('24') + L('38') - L('33')), L('37'), `${year} line 37 = owed (incl. penalty)`);
     // Every computed line has a PDF field in that year's layout.
     const fields = form1040FieldValues(lines, year);
     const layout = FORM_1040_FIELDS[year >= 2025 ? 2025 : 2024];

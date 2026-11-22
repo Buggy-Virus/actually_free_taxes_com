@@ -79,7 +79,8 @@ export function form1040Lines(ev: Evaluation, year: number): Form1040Line[] {
   add('34', 'Overpaid', v('fed.refund'), ['fed.refund']);
   add('35a', 'Refunded to you', v('fed.refundApplied') > 0 ? v('fed.refundPaid') : v('fed.refund'), ['fed.refund', 'fed.refundPaid']);
   add('36', "Applied to next year's estimated tax", v('fed.refundApplied'), ['fed.refundApplied']);
-  add('37', 'Amount you owe', v('fed.owed'), ['fed.owed']);
+  add('37', 'Amount you owe (includes line 38)', v('fed.owed'), ['fed.owed']);
+  add('38', 'Estimated tax penalty', v('fed.estimatedTaxPenalty'), ['fed.estimatedTaxPenalty']);
   return out;
 }
 

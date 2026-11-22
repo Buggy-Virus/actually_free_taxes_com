@@ -1470,6 +1470,12 @@ const CASES: Golden[] = [
     state: ret({ residentState: 'CA', stateUseTax: 120, w2s: [w2(60000, { state: 'CA' })] }),
     expect: [['CA use tax', st('CA', 'useTax'), 120], ['CA total − net − use', r => r.federalEval!.value('st.ca.totalTax') - r.federalEval!.value('st.ca.netStateTax') - r.federalEval!.value('st.ca.localTax'), 120]]
   },
+  {
+    name: 'Form 2210 penalty: no withholding, prior-year safe harbor $10,000',
+    source: 'Form 2210 Penalty Worksheet (2024): $10,000 shortfall in four $2,500 installments at 8%/366 (to 12/31) and 7%/365 (2025) using Table 2 days → $503',
+    state: ret({ w2s: [w2(100000)], priorYearTax: 10000, priorYearAgi: 90000 }),
+    expect: [['shortfall', fed('fed.estimatedTaxShortfall'), 10000], ['penalty', fed('fed.estimatedTaxPenalty'), 503]]
+  },
 ];
 
 let passed = 0, gaps = 0;

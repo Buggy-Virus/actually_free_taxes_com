@@ -1118,7 +1118,16 @@ function defineQuantities(g: FormulaGraph, year: number): void {
     expr: round(add(atLeast0(sub(R('fed.tax'), R('fed.nonrefundableCredits'))), R('fed.otherTaxes'))) });
   q({ id: 'fed.payments', label: 'Total Payments', unit: 'usd', form: 'Form 1040 Line 33', category: 'withholding',
     expr: round(add(R('fed.w2Withholding'), R('fed.extraWithholding'), R('fed.addlMedicareWithheld'), R('in.estimatedPayments'), R('fed.refundableCredits'), R('fed.excessSS'))) });
-  q({ id: 'fed.netResult', label: 'Payments Minus Tax', unit: 'usd', display: 'inline', expr: round(sub(R('fed.payments'), R('fed.totalTax'))) });
+  // Form 2210 Penalty Worksheet (regular method), with withholding and estimates treated as paid evenly on the four due dates
+  // and the underpayment paid on April 15: each installment's quarter of the shortfall × rate × days (Table 2).
+  // 2024: 8% (÷366) to Dec. 31, 7% (÷365) after; 2025: 7%. Factor = Σ over the 4 installments ÷ 4. 2026 reuses 2025 until published.
+  g.param({ id: 'fed.penaltyFactor', label: 'Estimated Tax Penalty Factor (Penalty Worksheet)', unit: 'rate', source: 'Instructions for Form 2210, Penalty Worksheet & Table 2',
+    domSources: ['select-tax-year'], resolve: c => (c.year <= 2024
+      ? ((260 + 199 + 107) / 366 * 0.08 + 3 * 105 / 365 * 0.07 + 90 / 365 * 0.07) / 4
+      : ((365 + 304 + 212 + 90) / 365 * 0.07) / 4) });
+  q({ id: 'fed.estimatedTaxPenalty', label: 'Estimated Tax Penalty (Form 2210)', unit: 'usd', form: 'Form 1040 Line 38', category: 'owed', optional: true,
+    expr: when(and(gt(R('in.priorYearTax'), lit(0)), gte(sub(R('fed.totalTax'), R('fed.payments')), lit(1000))), round(mul(R('fed.estimatedTaxShortfall'), P('fed.penaltyFactor')), 'dollar'), lit(0)) });
+  q({ id: 'fed.netResult', label: 'Payments Minus Tax', unit: 'usd', display: 'inline', expr: round(sub(R('fed.payments'), add(R('fed.totalTax'), R('fed.estimatedTaxPenalty')))) });
   q({ id: 'fed.refund', label: 'Refund', unit: 'usd', form: 'Form 1040 Line 34', category: 'refund',
     appliesWhen: gte(R('fed.netResult'), lit(0)), expr: round(sub(R('fed.payments'), R('fed.totalTax'))) });
   q({ id: 'fed.refundApplied', label: 'Refund Applied to Next Year\'s Estimated Tax', unit: 'usd', form: 'Form 1040 Line 36', category: 'refund', optional: true,
@@ -1126,7 +1135,7 @@ function defineQuantities(g: FormulaGraph, year: number): void {
   q({ id: 'fed.refundPaid', label: 'Refunded to You', unit: 'usd', form: 'Form 1040 Line 35a', category: 'refund', optional: true,
     presentIf: gt(R('fed.refundApplied'), lit(0)), expr: when(gte(R('fed.netResult'), lit(0)), sub(R('fed.netResult'), R('fed.refundApplied')), lit(0)) });
   q({ id: 'fed.owed', label: 'Amount You Owe', unit: 'usd', form: 'Form 1040 Line 37', category: 'owed',
-    appliesWhen: lt(R('fed.netResult'), lit(0)), expr: round(sub(R('fed.totalTax'), R('fed.payments'))) });
+    appliesWhen: lt(R('fed.netResult'), lit(0)), expr: round(sub(add(R('fed.totalTax'), R('fed.estimatedTaxPenalty')), R('fed.payments'))) });
   // ---------- Form 2210 safe harbor (informational; the IRS computes any penalty) ----------
   q({ id: 'fed.priorYearSafeHarbor', label: "Prior-Year Safe Harbor (100%, or 110% if last year's AGI > $150,000)", unit: 'usd', display: 'inline',
     expr: mul(R('in.priorYearTax'), when(gt(R('in.priorYearAgi'), when(statusIs('married_separate'), lit(75000), lit(150000))), rate(1.1), rate(1))) });
@@ -1387,7 +1396,7 @@ export const FEDERAL_BLOCKS: BlockSpec[] = [
     quantities: ['fed.seEarnings', 'fed.seSsTax', 'fed.seMedTax', 'fed.seTax', 'fed.halfSeTax', 'fed.excessMedicareWages', 'fed.additionalMedicareTax',
       'fed.netInvestmentIncome', 'fed.niitBase', 'fed.niit', 'fed.amt', 'fed.earlyDistributionPenalty', 'fed.hsaExcise', 'fed.tipsFica', 'fed.householdFica', 'fed.householdFuta', 'fed.householdTax', 'fed.excessAptcRepayment', 'fed.otherTaxes', 'fed.excessSS'] },
   { id: 'calc-final-verdict', stepLabel: 'Step 8 • Federal Bottom Line', title: 'Total Tax, Payments & Federal Refund / Owed', isOutput: true,
-    quantities: [{ id: 'fed.totalTax', show: 'always' }, 'fed.addlMedicareWithheld', { id: 'fed.payments', show: 'always' }, 'fed.requiredAnnualPayment', 'fed.estimatedTaxShortfall', { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
+    quantities: [{ id: 'fed.totalTax', show: 'always' }, 'fed.addlMedicareWithheld', { id: 'fed.payments', show: 'always' }, 'fed.requiredAnnualPayment', 'fed.estimatedTaxShortfall', 'fed.estimatedTaxPenalty', { id: 'fed.refund', show: 'always' }, { id: 'fed.owed', show: 'always' }] }
 ];
 
 /**
